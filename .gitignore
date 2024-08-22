@@ -1,8 +1,9 @@
 models/
 !/InstanSeg/utils/models/
 InstanSeg/datasets/
-InstanSeg/examples/
-!/InstanSeg/examples/HE_example.tif
+InstanSeg/examples/*
+!InstanSeg/examples/
+!InstanSeg/examples/HE_example.tif
 InstanSeg/tensorboard_logs/
 logs/
 InstanSeg/scripts/experiment.sh
