@@ -140,9 +140,9 @@ class Augmentations(object):
             labels = _move_channel_axis(labels)
 
         out = out.squeeze()
+        out = _move_channel_axis(torch.atleast_3d(out))
 
-        
-
+    
         if self.debug:
             print("Tensor")
             show_images([orig, out], titles=["Original", "Transformed"])
@@ -208,40 +208,6 @@ class Augmentations(object):
 
         if self.debug:
             print("Stain normalization")
-            show_images([orig, out], titles=["Original", "Transformed"])
-
-        return out, labels
-
-    def pseudo_background(self, image: torch.Tensor, labels=None, amount=0, metadata=None):
-        # image should be 3 channel RGB between 0 and 255 (float32)
-        if metadata is not None and metadata["image_modality"] != "Brightfield":
-            return image, labels
-
-        import torchstain
-        if self.debug:
-            orig = torch.clone(image)
-
-        image = (image / image.max()) * 255
-
-        tensor = torch.clamp(image, 0., 255.)
-
-        normalizer = torchstain.normalizers.MacenkoNormalizer(backend='torch')
-
-        normalizer.HERef += (torch.rand_like(normalizer.HERef) - 0.5) * normalizer.HERef * amount
-        normalizer.maxCRef += (torch.rand_like(normalizer.maxCRef) - 0.5) * normalizer.maxCRef * amount
-        norm, H, E = normalizer.normalize(I=tensor, stains=True, Io=240)
-
-        out = _move_channel_axis(E) / 255.
-
-        out[out < 0.8] = 0.8
-
-        if labels is not None:
-            labels = torch.zeros_like(labels)
-        else:
-            labels = torch.zeros_like(image[0]).int()
-
-        if self.debug:
-            print("Stain separation")
             show_images([orig, out], titles=["Original", "Transformed"])
 
         return out, labels
@@ -342,29 +308,6 @@ class Augmentations(object):
             show_images([orig, out], titles=["Original", "Transformed"])
         return out, labels
     
-
-    def draw_shapes(self, image, labels=None, amount=0, metadata=None):
-        if self.debug:
-            orig = torch.clone(image)
-
-        _, h, w = image.shape
-        img = np.zeros((h, w), dtype=np.uint8)
-        shape = np.random.randint(0, h // 2, 6)
-        rr, cc = bezier_curve(0, shape[1] + h // 2, shape[2], shape[3], shape[4] + h // 2, 0, 5)
-        img[rr, cc] = 1
-        x = skimage.filters.gaussian(img, sigma=np.random.randint(1, 30), mode='constant')
-        x = x / x.max()
-        x = torch.Tensor(x)
-        if random.random() > 0.5:
-            x = TF.hflip(x)
-        if random.random() > 0.5:
-            x = TF.vflip(x)
-        out = amount * (np.random.random() * x) + image
-        if self.debug:
-            print("Bezier")
-            show_images([orig, out], titles=["Original", "Transformed"])
-        return torch.Tensor(out), labels
-
     def flips(self, image, labels, amount=0, metadata=None):
 
         amount = 0.5
@@ -635,10 +578,6 @@ class Augmentations(object):
 
         return out, labels
 
-
-
-
-
     # @measure_time
     def add_gradient(self, image, labels=None, amount=0, metadata=None):
         if self.debug:
@@ -659,32 +598,6 @@ class Augmentations(object):
         if self.debug:
             print("Gradient")
             show_images([orig, out], titles=["Original", "Transformed"])
-
-        return torch.Tensor(out), labels
-
-    # @measure_time
-    def generate_background(self, image, labels=None, amount=0, metadata=None):
-        if len(self.bg_images) > 0 and amount > 0:
-            B = torch.Tensor(np.zeros(self.shape))
-            my_img = torch.Tensor(image.float())
-            for images in self.bg_images:
-                images = torch.Tensor(images.float())
-                img = images[:self.shape[0], :self.shape[1]]
-                img = img / img.max()
-                if random.random() > 0.5:
-                    img = TF.hflip(img)
-                if random.random() > 0.5:
-                    img = TF.vflip(img)
-                B += img * random.random()
-            B = B / B.max()
-            out = (amount * B[None,].detach() + my_img)
-            out = out / out.max()
-        else:
-            out = image
-
-        if self.debug:
-            print("Background")
-            show_images([image, out], titles=["Original", "Transformed"])
 
         return torch.Tensor(out), labels
 

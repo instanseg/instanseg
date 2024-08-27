@@ -165,8 +165,6 @@ def export_bioimageio(model: torch.jit._script.RecursiveScriptModule,
         dim_in = model_dict["dim_in"]
         step = 0
 
-    print(step, dim_in)
-
     Augmenter=Augmentations()
 
     input_tensor,_ = Augmenter.to_tensor(input_data,normalize=False) #this converts the input data to a tensor and does percentile normalization (no clipping)
@@ -203,7 +201,6 @@ def export_bioimageio(model: torch.jit._script.RecursiveScriptModule,
     else:
         train_data = "Not specified"
 
-    
 
     # create readme
     readme(output_name, model_dict)
@@ -234,7 +231,7 @@ def export_bioimageio(model: torch.jit._script.RecursiveScriptModule,
         description = "InstanSeg Fluorescence",
         # additional metadata about authors, licenses, citation etc.
         authors = [{"name": "Thibaut Goldsborough et al. TODO"}],
-        license = "CC-BY-4.0",
+        license = "Apache 2.0",
         documentation = os.path.join(output_name, output_name + "_README.md"),
         tags = ["cell-segmentation"],  # the tags are used to make models more findable on the website
         cite = [{"text": "Thibaut Goldsborough et al.", "doi": "TODO"}],
