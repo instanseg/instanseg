@@ -93,7 +93,7 @@ cd InstanSeg/scripts
 python train.py -data segmentation_dataset.pth -source "[CPDMI_2023]" --num_epochs 250 --experiment_str my_first_instanseg -target NC --channel_invariant True --requested_pixel_size 0.5
 ```
 
-Each each epoch should take approximately 1 to 3 minutes to complete (with mps or cuda support)
+Each epoch should take approximately 1 to 3 minutes to complete (with mps or cuda support).
 
 For more options and configurations, refer to the parser arguments in the train.py file.
 

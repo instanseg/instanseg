@@ -15,50 +15,10 @@ from monai.networks.blocks.convolutions import Convolution, ResidualUnit
 
 
 
-class MyUNet(monai.networks.nets.UNet):
-    def __init__(self, *args, device='cuda', norm = None, **kwargs):
-
-        if norm is not None and norm.lower() in ["instance_invariant", "custom_instance_invariant"]:
-            _norm = "INSTANCE"
-        else:
-            _norm = norm
-        super().__init__(norm = _norm,*args, **kwargs)
-
-
-      # self.set_running_stats(device)
-        
-    def set_running_stats(self, device, model=None):
-        if not model:
-            model = self
-        for child_name, child in model.named_children():
-            if isinstance(child, torch.nn.InstanceNorm2d):
-                child.track_running_stats = True
-                child.register_buffer('running_mean', torch.zeros(child.num_features, device=device))
-                child.register_buffer('running_var', torch.ones(child.num_features, device=device))
-                child.register_buffer('num_batches_tracked', torch.ones(1, device=device))
-            else:
-                self.set_running_stats(device, child)  
-
-
 def build_monai_model(model_str: str, build_model_dictionary: dict):
 
 
-    if model_str == "UNet":
-        from monai.networks.nets import UNet
-
-        if build_model_dictionary["dim_in"] == 0 or build_model_dictionary["dim_in"] is None:
-            dim_in = 3  # Channel invariance currently outputs a 3 channel image
-        else:
-            dim_in = build_model_dictionary["dim_in"]
-
-        model = MyUNet(spatial_dims=2, in_channels=int(dim_in), out_channels=build_model_dictionary["dim_out"], \
-                    dropout=build_model_dictionary["dropprob"], channels=build_model_dictionary["layers"], \
-                    strides=tuple([2 for _ in build_model_dictionary["layers"][:-2]] + [2]), num_res_units=4,
-                    up_kernel_size=3, norm=build_model_dictionary["norm"])
-        
-
-
-    elif model_str == "AttentionUNet":
+    if model_str == "AttentionUNet":
         from monai.networks.nets import AttentionUnet
 
         model = AttentionUnet(spatial_dims=2, in_channels=int(build_model_dictionary["dim_in"]),
@@ -159,14 +119,7 @@ def build_model_from_dict(build_model_dictionary):
     if "dropprob" not in build_model_dictionary.keys():
         build_model_dictionary["dropprob"] = 0.0
 
-    if build_model_dictionary["model_str"] == "cellpose":
-        from InstanSeg.utils.models.cellpose_model import CPnet
-        print("Generating cellpose")
-
-        model = CPnet(nbase=[dim_in] + list(build_model_dictionary["layers"]),
-                      nout=build_model_dictionary["dim_out"], sz=3)
-
-    elif build_model_dictionary["model_str"] == "SimpleUNet" or build_model_dictionary["model_str"] == "InstanSeg_UNet":
+    if build_model_dictionary["model_str"] == "InstanSeg_UNet":
             from InstanSeg.utils.models.InstanSeg_UNet import InstanSeg_UNet
             print("Generating InstanSeg_UNet")
             multihead = build_model_dictionary["multihead"]
@@ -206,24 +159,6 @@ def remove_module_prefix_from_dict(dictionary):
     """
     modified_dict = {}
     for key, value in dictionary.items():
-
-    #     if key.startswith("model.model."):
-    #         modified_key = key[len("model."):]
-    #         modified_dict[modified_key] = value
-
-    #     elif key.startswith("module.model.AdaptorNet."):
-    #         modified_key = key[len("module."):]
-    #         modified_dict[modified_key] = value
-
-    #     # elif key.startswith("module.model.model."):
-    #     #     modified_key = key[len("module."):]
-    #     #     modified_dict[modified_key] = value
-
-    #     elif key.startswith("module."):
-    #         modified_key = key[len("module."):]
-    #         modified_dict[modified_key] = value
-
-    #     else:
         modified_dict[key] = value
     return modified_dict
 
@@ -281,7 +216,6 @@ def load_model_weights(model, device, folder, path=r"../models/", dict = None):
     model.to(device)
 
     return model, model_dict
-
 
 def load_model(folder,path=r"../models/", device='cpu'):
     build_model_dictionary = read_model_args_from_csv(path=path, folder=folder)

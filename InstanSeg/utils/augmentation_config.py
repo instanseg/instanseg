@@ -65,7 +65,6 @@ def get_augmentation_dict(dim_in,nuclei_channel,amount,pixel_size=0.5, augmentat
                     ("to_tensor", [1]), #Probability
                     ("normalize_HE_stains", [0.1, amount*0]), #Probability/Amount, make sure this goes in front of normalize
                     ("extract_eosin_stain", [0.1, amount*0]), #Probability/Amount ,make sure this goes in front of normalize
-                    ("pseudo_background", [0, amount*0]), #Probability/Amount ,make sure this goes in front of normalize
                     ("normalize", [1]), #Probability
                     ("torch_rescale", [1,pixel_size, 0]),#in microns per pixel
                     ("randomJPEGcompression", [0.2, amount]),  #Probability/Amount
