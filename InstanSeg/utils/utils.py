@@ -644,8 +644,34 @@ def read_pixel_size(image_path):
     return img_pixel_size
 
 
+def set_export_paths():
+    from pathlib import Path
+    if os.environ.get('INSTANSEG_BIOIMAGEIO_PATH'):
+        path = Path(os.environ['INSTANSEG_BIOIMAGEIO_PATH'])
+    else:
+        path = Path(os.path.join(os.path.dirname(__file__),"../bioimageio_models/"))
+        os.environ['INSTANSEG_BIOIMAGEIO_PATH'] = str(path)
 
+    if not path.exists():
+        path.mkdir(exist_ok=True,parents=True)
 
+    if os.environ.get('INSTANSEG_TORCHSCRIPT_PATH'):
+        path = Path(os.environ['INSTANSEG_TORCHSCRIPT_PATH'])
+    else:
+        path = Path(os.path.join(os.path.dirname(__file__),"../torchscripts/"))
+        os.environ['INSTANSEG_TORCHSCRIPT_PATH'] = str(path)
+
+    if not path.exists():
+        path.mkdir(exist_ok=True,parents=True)
+
+    if os.environ.get('INSTANSEG_MODEL_PATH'):
+        path = Path(os.environ['INSTANSEG_MODEL_PATH'])
+    else:
+        path = Path(os.path.join(os.path.dirname(__file__),"../models/"))
+        os.environ['INSTANSEG_MODEL_PATH'] = str(path)
+
+    if not path.exists():
+        path.mkdir(exist_ok=True,parents=True)
 
 
 def export_to_torchscript(model_str: str, show_example: bool = False, output_dir: str = "../torchscripts",
@@ -655,8 +681,11 @@ def export_to_torchscript(model_str: str, show_example: bool = False, output_dir
     import math
 
     import os
-    current_dir = os.getcwd()
-    os.chdir(os.path.dirname(__file__))
+    set_export_paths()
+    output_dir = os.environ.get('INSTANSEG_TORCHSCRIPT_PATH')
+    model_path = os.environ.get('INSTANSEG_MODEL_PATH')
+    example_path = os.environ.get('EXAMPLE_IMAGE_PATH') 
+
 
     import pandas as pd
 
@@ -678,7 +707,7 @@ def export_to_torchscript(model_str: str, show_example: bool = False, output_dir
     n_sigma = model_dict['n_sigma']
 
 
-    input_data = tifffile.imread("../examples/HE_example.tif")
+    input_data = tifffile.imread(os.path.join(example_path,"HE_example.tif"))
     #input_data = tifffile.imread("../examples/LuCa1.tif")
     from InstanSeg.utils.augmentations import Augmentations
     Augmenter = Augmentations()
@@ -705,6 +734,8 @@ def export_to_torchscript(model_str: str, show_example: bool = False, output_dir
                                         backbone_dim_in= dim_in, 
                                         to_centre = bool(model_dict["to_centre"]),
                                         mixed_precision = mixed_predicision).to(device)
+    
+
     out = super_model(input_tensor[None,])
     if show_example:
         show_images([input_tensor] + [i for i in out.squeeze(0)], labels=[i + 1 for i in range(len(out.squeeze(0)))])
@@ -720,7 +751,7 @@ def export_to_torchscript(model_str: str, show_example: bool = False, output_dir
 
     torch.jit.save(traced_cpu, os.path.join(output_dir, torchscript_name + ".pt"))
     print("Saved torchscript model to", os.path.join(output_dir, torchscript_name + ".pt"))
-    os.chdir(current_dir)
+
 
 
 def drag_and_drop_file():
