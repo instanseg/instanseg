@@ -782,3 +782,33 @@ def drag_and_drop_file():
     save_button.pack(pady=10)
     root.mainloop()
     return entry_var.get()
+
+
+
+
+def download_model(model_str: str):
+    import os
+    import requests
+    import zipfile
+    from io import BytesIO
+
+    if not os.environ.get("INSTANSEG_BIOIMAGEIO_PATH"):
+        os.environ["INSTANSEG_BIOIMAGEIO_PATH"] = os.path.join(os.path.dirname(__file__),"../bioimageio_models/")
+
+    bioimageio_path = os.environ.get("INSTANSEG_BIOIMAGEIO_PATH")
+
+    # Ensure the directory exists
+    os.makedirs(bioimageio_path, exist_ok=True)
+    
+    # URL of the file to download
+    url = r"https://github.com/instanseg/instanseg/releases/download/instanseg_models_v1/{}.zip".format(model_str)
+    
+    # Download the file
+    response = requests.get(url)
+    response.raise_for_status()  # Raise an error for bad responses
+    
+    # Unzip the file into the bioimageio path
+    with zipfile.ZipFile(BytesIO(response.content)) as z:
+        z.extractall(bioimageio_path)
+
+    print(f"Model {model_str} downloaded and extracted to {bioimageio_path}")

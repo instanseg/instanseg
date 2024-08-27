@@ -26,7 +26,7 @@ parser.add_argument('-source', '--source_dataset', default="all", type=str, help
 parser.add_argument("-m_f", "--model_folder", type=str, default=None, help = "Name of the model to resume training. This must be a folder inside model_path")
 parser.add_argument("-m_p", "--model_path", type=str, default=r"../models", help = "Path to the folder containing the models")
 parser.add_argument("-o_p", "--output_path", type=str, default=r"../models", help = "Path to the folder where the results will be saved")
-parser.add_argument("-e_s", "--experiment_str", type=str, default="My_first_InstanSeg", help = "String to identify the experiment")
+parser.add_argument("-e_s", "--experiment_str", type=str, default="my_first_instanSeg", help = "String to identify the experiment")
 parser.add_argument("-d", "--device", type=str, default=torch.device("cuda:0" if torch.cuda.is_available() else "cpu"))
 parser.add_argument('-num_workers', '--num_workers', default=3, type=int, help = "Number of CPU cores to use for data loading")
 parser.add_argument('-ci', '--channel_invariant', default=False, type=lambda x: (str(x).lower() == 'true'), help = "Whether to add a channel invariant model to the pipeline")
