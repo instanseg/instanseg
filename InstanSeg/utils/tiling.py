@@ -491,7 +491,6 @@ def recover_padding(x: torch.Tensor, pad: torch.Tensor):
 from InstanSeg.utils.utils import timer
 from tqdm import tqdm
 
-
 #@timer
 def sliding_window_inference(input_tensor, predictor, window_size=(512, 512), overlap = 100, max_cell_size = 20, sw_device='cuda',
                              device='cpu', output_channels=1, show_progress = True, **kwargs):
@@ -500,7 +499,6 @@ def sliding_window_inference(input_tensor, predictor, window_size=(512, 512), ov
 
     tuple_index = chops(input_tensor.shape, shape=window_size, overlap=2 * (overlap + max_cell_size))
     tile_list = tiles_from_chops(input_tensor, shape=window_size, tuple_index=tuple_index)
-
     
         
     #print("Number of tiles: ", len(tile_list))
@@ -523,119 +521,3 @@ def sliding_window_inference(input_tensor, predictor, window_size=(512, 512), ov
 
     return lab[None]  # 1,C,H,W
 
-
-if __name__ == "__main__":
-
-    import torch
-    from InstanSeg.utils.tiling import sliding_window_inference
-    from InstanSeg.utils.augmentations import Augmentations
-    from InstanSeg import show_images
-    Augmenter=Augmentations()
-
-    instanseg = torch.jit.load("../torchscripts/1827669.pt")
-
-    import tifffile as tifffile
-
-    if "arr" not in locals():
-        arr = tifffile.imread("../../Datasets/Unannotated/Tonsil/tonsil.ome.tif")
-
-    if "input_tensor" not in locals():
-        input_tensor = Augmenter.to_tensor(arr,normalize=False)[0]
-        input_tensor = Augmenter.normalize(input_tensor, percentile=0.01, subsampling_factor=10)[0]
-
-    #if "lab" not in locals():
-    lab = sliding_window_inference(input_tensor[:,:700,:700], instanseg,window_size= (512,512), sw_device= "cuda", overlap= 50, output_channels= 2)
-
-
-
-    pdb.set_trace()
-
-    from tqdm import tqdm
-    import sys
-
-    from InstanSeg.utils.utils import show_images, _choose_device
-    import torch
-
-    from skimage import io
-
-    import time
-
-    instanseg = torch.jit.load("../examples/torchscript_models/instanseg_experiment.pt")
-    device = 'cpu'
-    instanseg.to(device)
-
-  #  input_data=io.imread("../examples/LuCa1.tif")
-    input_data = io.imread("../examples/HE_example.tif")
-    from InstanSeg.utils.augmentations import Augmentations
-
-    Augmenter = Augmentations()
-    input_tensor, _ = Augmenter.to_tensor(input_data, normalize=True)
-    # out=instanseg(input_tensor[None,].to(device)[:,:,:500,:1000])
-
-    input_tensor = input_tensor[:, 0:512, 0:512]
-
-    rgb = input_tensor #Augmenter.colourize(input_tensor, c_nuclei=6, metadata={"image_modality": "Fluorescence"})[0]
-
-    device = "cpu"
-    instanseg.to(device)
-    gt = instanseg(input_tensor[None].to(device))[0, 0].cpu()
-
-    device = _choose_device()
-    instanseg.to(device)
-
-    start = time.time()
-
-    lab = sliding_window_inference(input_tensor, instanseg, window_size=(256, 256), overlap_size= 32 / 256,
-                                   sw_device=device, device='cpu', output_channels=1)
-    
-    
-    la2 = sliding_window_inference(input_tensor,instanseg, window_size = (256,256),overlap_size = 128/1024,sw_device = device,device = 'cpu', output_channels = 1)
-
-    show_images(lab, gt, (lab > 0).int() - (gt > 0).int(), la2, gt, (la2 > 0).int() - (gt > 0).int(),
-                labels=[0, 1, 3, 4], titles=["Tiled", "One Pass", "Difference", "Tiled", "One Pass", "Difference"],
-                n_cols=3)
-
-    end = time.time()
-
-    print("Time for dual channel output sliding window: ", end - start)
-
-    start = time.time()
-
-    tuple_index = chops(input_tensor, shape=(256, 256), overlap=0.2)
-    tile_list = tiles_from_chops(input_tensor, shape=(256, 256), tuple_index=tuple_index)
-    label_list = [instanseg(tile[None].to(device))[0, 0].cpu() for tile in tile_list]
-    lab = stitch(label_list, shape=(256, 256), chop_list=tuple_index,
-                 final_shape=(1, input_tensor.shape[1], input_tensor.shape[2]))
-
-    end = time.time()
-
-    print("Time for 256x256 tiling: ", end - start)
-
-    start = time.time()
-
-    tuple_index = chops(input_tensor, shape=(512, 512), overlap=0.2)
-    tile_list = tiles_from_chops(input_tensor, shape=(512, 512), tuple_index=tuple_index)
-    label_list = [instanseg(tile[None].to(device))[0, 0].cpu() for tile in tile_list]
-    lab2 = stitch(label_list, shape=(512, 512), chop_list=tuple_index,
-                  final_shape=(1, input_tensor.shape[1], input_tensor.shape[2]))
-
-    end = time.time()
-    print("Time for 512x512 tiling: ", end - start)
-
-    show_images(lab, gt, (lab > 0).int() - (gt > 0).int(), labels=[0, 1], titles=["Tiled", "One Pass", "Difference"])
-    show_images(lab, lab2, (lab > 0).int() - (lab2 > 0).int(), rgb, labels=[0, 1],
-                titles=["Tile 256", "Tile 512", "Difference", "original"])
-
-    start = time.time()
-
-    lab = sliding_window_inference(input_tensor, instanseg, window_size=(512, 512), overlap_size=0.2, sw_device='cpu',
-                                   device='cpu', output_channels=1)
-
-    end = time.time()
-
-    print("Time for dual channel output sliding window: ", end - start)
-
-# show_images([i for i in lab]+[i for i in lab],labels=[0,1])
-
-
-# pdb.set_trace()

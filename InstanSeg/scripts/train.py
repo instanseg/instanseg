@@ -338,10 +338,6 @@ if __name__ == "__main__":
     model.eval()
     model.to(device)
 
-    params = optimize_hyperparameters(model,postprocessing_fn = method.postprocessing,data_loader= test_loader,verbose = not args.on_cluster, device = device)
-    pd.DataFrame.from_dict(params, orient='index').to_csv(args.output_path / "best_params.csv",
-                                                         header=False)
-
     df = pd.DataFrame({"train_loss": train_losses, "test_loss": test_losses, "f1_score": f1_list})
     df.to_csv(args.output_path / "experiment_metrics.csv", index=False, header=True)
 
@@ -364,16 +360,7 @@ if __name__ == "__main__":
         plt.savefig(args.output_path / "f1_metric.png")
         plt.close()
 
-
-    from InstanSeg.utils.utils import export_to_torchscript
-
     if not args.on_cluster and args.experiment_str is None:
         experiment_str = "experiment"
     elif args.experiment_str is not None:
         experiment_str = args.experiment_str
-
-
-
-    export_to_torchscript(model_str=args.experiment_str, model_path=args.model_path,
-                        torchscript_name=experiment_str)
-    
