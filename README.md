@@ -10,6 +10,7 @@
 
 InstanSeg is a pytorch based cell and nucleus segmentation pipeline for fluorescent and brightfield microscopy images. This README provides instructions for setting up the environment, installing dependencies, and using the provided tools and models.
 
+If you use InstanSeg in your research, please cite our [preprint](https://arxiv.org/abs/2408.15954).
 
 <p align="center">
   <img src="./images/instanseg_main_figure.png" alt="Instanseg Main Figure" width="50%">
