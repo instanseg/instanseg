@@ -240,7 +240,6 @@ def zarr_to_json_export(path_to_zarr, cell_size = 30, size = 1024, scale = 1, n_
 
 
 
-
 def segment_image_larger_than_memory(instanseg_folder: str, 
                                      image_path: str, 
                                      shape: tuple = (512,512), 
@@ -249,7 +248,7 @@ def segment_image_larger_than_memory(instanseg_folder: str,
                                     threshold: int = 200, 
                                     to_geojson = False, 
                                     driver = "AUTO", 
-                                    use_torchscript = False,
+                                    torchscript = None,
                                     pixel_size: float = None):
     
     """This function uses slideio to read an image and then segments it using the instanseg model. 
@@ -267,6 +266,12 @@ def segment_image_larger_than_memory(instanseg_folder: str,
     from InstanSeg.utils.pytorch_utils import torch_fastremap, match_labels
 
     device = 'cuda'
+
+    if torchscript is None:
+        use_torchscript = False
+    else:
+        use_torchscript = True
+        instanseg = torchscript
 
     if not use_torchscript:
     
@@ -290,7 +295,6 @@ def segment_image_larger_than_memory(instanseg_folder: str,
         model.to(device)
 
     else:
-        instanseg = torch.jit.load("../torchscripts/" + instanseg_folder + ".pt")
         instanseg.to(device)
         
         n_dim = 2 if instanseg.cells_and_nuclei else 1
@@ -337,6 +341,8 @@ def segment_image_larger_than_memory(instanseg_folder: str,
 
     total = len(chop_list[0]) * len(chop_list[1])
     for _, ((i, window_i), (j, window_j)) in tqdm(enumerate(product(enumerate(chop_list[0]), enumerate(chop_list[1]))), total=total):
+
+
         
         input_data = scene.read_block((int(window_j*scale_factor), int(window_i*scale_factor), int(shape[0]*scale_factor), int(shape[1]*scale_factor)), size = shape)
 

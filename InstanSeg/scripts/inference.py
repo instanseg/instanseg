@@ -25,7 +25,7 @@ parser.add_argument("-ignore_segmented", "--ignore_segmented",default=False, typ
 #advanced usage
 parser.add_argument("-driver", "--driver", type=str, default= "AUTO", help="Driver for slideio, default is AUTO. Only useful for large images")
 parser.add_argument("-tile_size", "--tile_size", type=int, default= 512, help="tile size in pixels, only useful for large images")
-
+parser.add_argument("-output_geojson", "--output_geojson", type=lambda x: (str(x).lower() == 'true'), default= False, help="Output geojson files of the segmentation")
 
 def file_matches_requirement(root,file, exclude_str):
     if not os.path.isfile(os.path.join(root,file)):
@@ -53,6 +53,7 @@ if __name__ == "__main__":
     if parser.image_path is None or not os.path.exists(parser.image_path):
         from InstanSeg.utils.utils import drag_and_drop_file
         parser.image_path = drag_and_drop_file()
+        print("Using image path: ", parser.image_path)
 
 
     if parser.model_folder is None:
@@ -60,11 +61,16 @@ if __name__ == "__main__":
 
     device = _choose_device(parser.device)
 
-    if not os.path.exists("../torchscripts/{}.pt".format(parser.model_folder)):
-        print("Exporting model to torchscript")
-        export_to_torchscript(parser.model_folder)
-    instanseg = torch.jit.load("../torchscripts/" + parser.model_folder + ".pt").to(device)
-    output_dimension =  2 if instanseg.cells_and_nuclei else 1
+    if parser.model_folder in ["brightfield_nuclei","fluorescence_nuclei_and_cells"]:
+        from InstanSeg.utils.utils import download_model
+        instanseg = download_model(parser.model_folder, return_model=True)
+        output_dimension =  2 if instanseg.cells_and_nuclei else 1
+    else:
+        if not os.path.exists("../torchscripts/{}.pt".format(parser.model_folder)):
+            print("Exporting model to torchscript")
+            export_to_torchscript(parser.model_folder)
+        instanseg = torch.jit.load("../torchscripts/" + parser.model_folder + ".pt").to(device)
+        output_dimension =  2 if instanseg.cells_and_nuclei else 1
 
     if not parser.recursive:
         print("Loading files from: ", parser.image_path)
@@ -103,7 +109,7 @@ if __name__ == "__main__":
             channel_number = img.dims.C
             num_pixels = np.cumprod(img.shape)[-1]
 
-            if num_pixels < 3 * 15000 * 15000:       
+            if num_pixels < 3 * 15 * 15:       
                 if "S" in img.dims.order and img.dims.S > img.dims.C:
                     channel_number = img.dims.S
                     input_data = img.get_image_data("SYX")
@@ -124,8 +130,8 @@ if __name__ == "__main__":
                     labels = sliding_window_inference(input_tensor,
                                 instanseg, 
                                 window_size = (parser.tile_size,parser.tile_size),
-                                overlap= 100, 
-                                max_cell_size= 50,
+                                overlap= 50, 
+                                max_cell_size= 20,
                                 sw_device = device,
                                 device = 'cpu', 
                                 output_channels = output_dimension,
@@ -140,15 +146,18 @@ if __name__ == "__main__":
             else:
                 print("Image {} is too large, attempting using a zarr array".format(stem))
                 from InstanSeg.utils.tiling import segment_image_larger_than_memory
+
                 segment_image_larger_than_memory(instanseg_folder= parser.model_folder, 
                                                 image_path= file, 
                                                 shape = (parser.tile_size,parser.tile_size), 
-                                                threshold= 255, 
-                                                cell_size = 30, 
-                                                to_geojson= True, 
+                                                threshold= 230, 
+                                                cell_size = 50, 
+                                                overlap= 50,
+                                                to_geojson= parser.output_geojson, 
                                                 driver = parser.driver,
-                                                use_torchscript = True,
+                                                torchscript = instanseg,
                                                 pixel_size = parser.pixel_size)
+
                 continue
 
             labels = torchvision.transforms.Resize(original_shape,interpolation = InterpolationMode.NEAREST)(labels)
@@ -158,6 +167,20 @@ if __name__ == "__main__":
             new_stem = stem + prediction_tag
 
             io.imsave(Path(file).parent / (new_stem + ".tiff"), labels.squeeze().astype(np.int32), check_contrast=False)
+
+            if parser.output_geojson:
+                from InstanSeg.utils.utils import labels_to_features
+                import json
+                if output_dimension == 1:
+                    features = labels_to_features(labels[0,0],object_type = "detection")
+
+                elif output_dimension == 2:
+                    features = labels_to_features(labels[0,0],object_type = "detection",classification="Nuclei") + labels_to_features(labels[0,1],object_type = "detection",classification = "Cells")
+                geojson = json.dumps(features)
+
+                geojson_path = Path(file).parent / (new_stem + ".geojson")
+                with open(os.path.join(geojson_path), "w") as outfile:
+                    outfile.write(geojson)
 
 
 
