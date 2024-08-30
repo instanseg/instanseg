@@ -673,6 +673,14 @@ def set_export_paths():
     if not path.exists():
         path.mkdir(exist_ok=True,parents=True)
 
+    if os.environ.get('EXAMPLE_IMAGE_PATH'):
+        path = Path(os.environ['EXAMPLE_IMAGE_PATH'])
+    else:
+        path = Path(os.path.join(os.path.dirname(__file__),"../examples/"))
+        os.environ['EXAMPLE_IMAGE_PATH'] = str(path)
+
+        
+
 
 def export_to_torchscript(model_str: str, show_example: bool = False, output_dir: str = "../torchscripts",
                           model_path: str = "../models", torchscript_name: str = None, mixed_predicision = False):
@@ -786,7 +794,7 @@ def drag_and_drop_file():
 
 
 
-def download_model(model_str: str):
+def download_model(model_str: str, return_model = False):
     import os
     import requests
     import zipfile
@@ -810,5 +818,11 @@ def download_model(model_str: str):
     # Unzip the file into the bioimageio path
     with zipfile.ZipFile(BytesIO(response.content)) as z:
         z.extractall(bioimageio_path)
+
+    if return_model:
+        import torch
+        path_to_torchscript_model = bioimageio_path + f"{model_str}/instanseg.pt"
+        return torch.jit.load(path_to_torchscript_model)
+
 
     print(f"Model {model_str} downloaded and extracted to {bioimageio_path}")

@@ -228,13 +228,13 @@ def export_bioimageio(model: torch.jit._script.RecursiveScriptModule,
         # where to save the model zip, how to call the model and a short description of it
         output_path = str(os.path.join(output_path, output_name + ".zip")),
         name = output_name,
-        description = "InstanSeg Fluorescence",
+        description = "InstanSeg",
         # additional metadata about authors, licenses, citation etc.
-        authors = [{"name": "Thibaut Goldsborough et al. TODO"}],
-        license = "Apache 2.0",
+        authors = [{"name": "Goldsborough, T., Philps, B., O’Callaghan, A., Inglis, F., Leplat, L., Filby, A., Bilen, H., Bankhead, P."}],
+        license = "Apache-2.0",
         documentation = os.path.join(output_name, output_name + "_README.md"),
         tags = ["cell-segmentation"],  # the tags are used to make models more findable on the website
-        cite = [{"text": "Thibaut Goldsborough et al.", "doi": "TODO"}],
+        cite = [{"text": "Goldsborough, T., Philps, B., O’Callaghan, A., Inglis, F., Leplat, L., Filby, A., Bilen, H., Bankhead, P.: InstanSeg: an embedding-based instance segmentation algorithm optimized for accurate, efficient and portable cell segmentation. arXiv", "doi": "http://www.arxiv.org/abs/2408.15954"}],
         # description of the tensors
         # these are passed as list because we support multiple inputs / outputs per model
         input_names = ["raw"],
