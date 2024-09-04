@@ -10,7 +10,7 @@ import monai
 from aicsimageio import AICSImage
 
 from InstanSeg.utils.augmentations import Augmentations
-from InstanSeg.utils.utils import _choose_device
+from InstanSeg.utils.utils import _choose_device, show_images
 from InstanSeg.utils.model_loader import load_model
 
 
@@ -86,7 +86,13 @@ def readme(model_name: str, model_dict: dict = None):
           #  f.write(str(model_dict["source_dataset"]))
 
 
-def modify_yaml_for_qupath_config(yaml_path, pixel_size: float):
+def modify_yaml_for_qupath_config(yaml_path, pixel_size: float, dim_in: int = 3, dim_out: int = 2):
+
+    #copy ijm files
+    import shutil
+    shutil.copyfile(os.path.join(os.path.dirname(__file__),"./rdf_scripts/instanseg_preprocess.ijm"), os.path.join(os.path.dirname(yaml_path), "instanseg_preprocess.ijm"))
+    shutil.copyfile(os.path.join(os.path.dirname(__file__),"./rdf_scripts/instanseg_postprocess.ijm"), os.path.join(os.path.dirname(yaml_path), "instanseg_postprocess.ijm"))
+
     import yaml
     with open(yaml_path, 'r') as file:
         data = yaml.safe_load(file)
@@ -96,7 +102,43 @@ def modify_yaml_for_qupath_config(yaml_path, pixel_size: float):
         'axes': [
             {'role': 'x', 'step': pixel_size, 'unit': 'um'},
             {'role': 'y', 'step': pixel_size, 'unit': 'um'}
+        ]}
+
+    data['config']['deepimagej'] = {
+    'allow_tiling': True,
+    'model_keys': None,
+    'prediction': {
+        'preprocess': [
+            {'kwargs': 'instanseg_preprocess.ijm'}
+        ],
+        'postprocess': [
+            {'kwargs': 'instanseg_postprocess.ijm'}
         ]
+    },
+    'pyramidal_model': False,
+    'test_information': {
+        'inputs': [
+            {
+                'name': 'test-input.npy',
+                'pixel_size': {
+                    'x': 1.0,
+                    'y': 1.0,
+                    'z': 1.0
+                },
+                'size': f'256 x 256 x 1 x {dim_in}'
+            }
+        ],
+        'memory_peak': None,
+        'outputs': [
+            {
+                'name': 'test-output.npy',
+                'size': f'256 x 256 x 1 x {dim_out}',
+                'type': 'image'
+            }
+        ],
+        'runtime': None
+    }
+
     }
 
     with open(yaml_path, 'w') as file:
@@ -114,7 +156,7 @@ def make_archive(source, destination):
 
 
 
-def export_bioimageio(model: torch.jit._script.RecursiveScriptModule, 
+def export_bioimageio(torchsript: torch.jit._script.RecursiveScriptModule, 
                       model_name: str, 
                       test_img_path: str, 
                       model_dict: dict = None, 
@@ -130,9 +172,9 @@ def export_bioimageio(model: torch.jit._script.RecursiveScriptModule,
     # create a directory to store bioimage.io model files
     os.makedirs(output_name, exist_ok=True)
     # save the model weights
-    model.save(os.path.join(output_name, "instanseg.pt"))
+    torchsript.save(os.path.join(output_name, "instanseg.pt"))
 
-    model_pixel_size = model.pixel_size
+    model_pixel_size = torchsript.pixel_size
     print("Model pixel size: ", model_pixel_size)
 
 
@@ -141,9 +183,9 @@ def export_bioimageio(model: torch.jit._script.RecursiveScriptModule,
     except:
         raise Exception("Model configuration files could not be loaded")
 
-    model.eval()
+    torchsript.eval()
     device = _choose_device()
-    model.to(device)
+    torchsript.to(device)
 
     img = AICSImage(test_img_path)
     if "S" in img.dims.order and img.dims.S > img.dims.C:
@@ -168,18 +210,14 @@ def export_bioimageio(model: torch.jit._script.RecursiveScriptModule,
     Augmenter=Augmentations()
 
     input_tensor,_ = Augmenter.to_tensor(input_data,normalize=False) #this converts the input data to a tensor and does percentile normalization (no clipping)
-
     input_tensor,_ = Augmenter.normalize(input_tensor, percentile=0.)
-
     import math
     if math.isnan(model_pixel_size):
         model_pixel_size_tmp = pixel_size
     else:
         model_pixel_size_tmp = model_pixel_size
     input_crop,_ = Augmenter.torch_rescale(input_tensor,labels=None,current_pixel_size=pixel_size,requested_pixel_size=model_pixel_size_tmp,crop = True, random_seed=1)
-
     input_crop = input_crop.unsqueeze(0) # add batch dimension
-
     if input_crop.shape[1] != dim_in and not model_dict["channel_invariant"]:
         input_crop = torch.zeros((1,dim_in,input_crop.shape[2],input_crop.shape[3]),dtype=torch.float32, device = input_crop.device)
 
@@ -193,8 +231,15 @@ def export_bioimageio(model: torch.jit._script.RecursiveScriptModule,
     np.save(os.path.join(output_name, "test-input.npy"), input_crop.numpy())
 
     with torch.no_grad():
-        output = model(input_crop.to(device))
+        output = torchsript(input_crop.to(device))
+        dim_out = output.shape[1]
     np.save(os.path.join(output_name, "test-output.npy"), output.cpu().numpy())
+
+    from InstanSeg.utils.utils import display_overlay
+
+    cover = display_overlay(input_crop[0], output)
+    show_images(cover, colorbar=False)
+    show_images(cover, colorbar=False, save_str= os.path.join(output_name, "cover"))
 
     if model_dict is not None and "source_dataset" in model_dict.keys():
         train_data = str(model_dict["source_dataset"])
@@ -218,23 +263,27 @@ def export_bioimageio(model: torch.jit._script.RecursiveScriptModule,
     # that will be used to add metadata to the rdf.yaml file in the model zip
     # we only use a subset of the available options here, please refer to the advanced examples and to the
     # function signature of build_model in order to get an overview of the full functionality
+
+    preprocessing = [[{"name": "scale_range", "kwargs": {"min_percentile": 0.1, "max_percentile": 99.9, "eps": 1e-6, "axes": "xy", "mode": "per_sample"}}]]
+
     _ = build_model(
         # the weight file and the type of the weights
         weight_uri = os.path.join(output_name, "instanseg.pt"),
         weight_type = "torchscript",
         # the test input and output data
+        covers = [os.path.join(output_name, "cover.png")],
         test_inputs = [os.path.join(output_name, "test-input.npy")],
         test_outputs = [os.path.join(output_name, "test-output.npy")],
         # where to save the model zip, how to call the model and a short description of it
         output_path = str(os.path.join(output_path, output_name + ".zip")),
         name = output_name,
-        description = "InstanSeg",
+        description = "InstanSeg model",
         # additional metadata about authors, licenses, citation etc.
-        authors = [{"name": "Goldsborough, T., Philps, B., O’Callaghan, A., Inglis, F., Leplat, L., Filby, A., Bilen, H., Bankhead, P."}],
+        authors = [{"name": "Goldsborough, T., Philps, B., O Callaghan, A., Inglis, F., Leplat, L., Filby, A., Bilen, H., Bankhead, P."}],
         license = "Apache-2.0",
         documentation = os.path.join(output_name, output_name + "_README.md"),
-        tags = ["cell-segmentation"],  # the tags are used to make models more findable on the website
-        cite = [{"text": "Goldsborough, T., Philps, B., O’Callaghan, A., Inglis, F., Leplat, L., Filby, A., Bilen, H., Bankhead, P.: InstanSeg: an embedding-based instance segmentation algorithm optimized for accurate, efficient and portable cell segmentation. arXiv", "doi": "http://www.arxiv.org/abs/2408.15954"}],
+        tags = ["cell-segmentation","nuclei","cells","unet","fiji","qupath","pytorch","instanseg","whole-slide-imaging"],  # the tags are used to make models more findable on the website
+        cite = [{"text": "Goldsborough, T., Philps, B., O Callaghan, A., Inglis, F., Leplat, L., Filby, A., Bilen, H., Bankhead, P.: InstanSeg: an embedding-based instance segmentation algorithm optimized for accurate, efficient and portable cell segmentation. arXiv.arXiv:2408.15954 [cs] (2024)", "doi": "https://doi.org/10.48550/arXiv.2408.15954"}],
         # description of the tensors
         # these are passed as list because we support multiple inputs / outputs per model
         input_names = ["raw"],
@@ -244,10 +293,13 @@ def export_bioimageio(model: torch.jit._script.RecursiveScriptModule,
         output_names = ["instance"],
         output_axes=["bcyx"],
         output_reference = ["raw"],
-        output_scale = [[1.0, 1.0, 1.0, 1.0]],
-        output_offset = [[0.0, 0.0, 0.0, 0.0]],
-        preprocessing = None,
-        pytorch_version = str(torch.__version__),
+        output_scale = [[1.0, 0.0, 1.0, 1.0]],
+        output_offset = [[0.0, dim_out /2, 0.0, 0.0]],
+        git_repo = "https://github.com/instanseg/instanseg",
+
+        preprocessing = preprocessing,
+
+        pytorch_version = "2.0.0", #str(torch.__version__),
         add_deepimagej_config = True,
       #  pixel_sizes = [{"x":float(model_pixel_size),"y":float(model_pixel_size)}],
     )
@@ -261,13 +313,19 @@ def export_bioimageio(model: torch.jit._script.RecursiveScriptModule,
 
     #Cleanup 
 
-    os.remove("cover.png")
-    os.remove("test-output.npy")
-    os.remove("test-input.npy")
-    os.remove("instanseg.pt")
-    os.remove(output_name + "_README.md")
-    os.remove("sample_output_0.tif")
-    os.remove("sample_input_0.tif")
+    files_to_remove = [
+        "cover.png",
+        "test-output.npy",
+        "test-input.npy",
+        "instanseg.pt",
+        output_name + "_README.md",
+        "sample_output_0.tif",
+        "sample_input_0.tif"
+    ]
+
+    for file in files_to_remove:
+        if os.path.exists(file):
+            os.remove(file)
 
     #unzip the folder
 
@@ -281,7 +339,7 @@ def export_bioimageio(model: torch.jit._script.RecursiveScriptModule,
         zip_ref.extractall(destination)
     
     yaml_path = os.path.join(destination, 'rdf.yaml')
-    modify_yaml_for_qupath_config(yaml_path, pixel_size=model_pixel_size)
+    modify_yaml_for_qupath_config(yaml_path, pixel_size=model_pixel_size, dim_in=dim_in, dim_out=dim_out)
 
     
     make_archive(destination, input)

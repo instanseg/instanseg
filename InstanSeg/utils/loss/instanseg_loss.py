@@ -45,7 +45,7 @@ def convert(prob_input: torch.Tensor, coords_input: torch.Tensor, size: Tuple[in
         return torch.zeros(size, dtype=torch.float32, device=labels.device)
 
     # Create an array of [linear index, y, x, label], skipping low-probability values
-    arr = torch.zeros((int(n_thresholded), 5), dtype=torch.int32, device=labels.device)
+    arr = torch.zeros((int(n_thresholded), 5), dtype=coords_input.dtype, device=labels.device)
     arr[:, 1] = y[inds_prob]
     arr[:, 2] = x[inds_prob]
     arr[:, 0] = arr[:, 1] * size[1] + arr[:, 2]
@@ -90,7 +90,7 @@ def find_all_local_maxima(image: torch.Tensor, neighbourhood_size: int, minimum_
 
 
 def torch_peak_local_max(image: torch.Tensor, neighbourhood_size: int, minimum_value: float,
-                             return_map: bool = False) -> torch.Tensor:
+                             return_map: bool = False, dtype: torch.dtype = torch.int) -> torch.Tensor:
     """
     UPDATED FOR PERFORMANCE TESTING - NOT IDENTICAL, AS USES *FIRST* MAX, NOT FURTHEST FROM ORIGIN
     """
@@ -102,7 +102,7 @@ def torch_peak_local_max(image: torch.Tensor, neighbourhood_size: int, minimum_v
     pooled, max_inds = F.max_pool2d(image, kernel_size=kernel_size, stride=1, padding=neighbourhood_size,
                                     return_indices=True)
 
-    inds = torch.arange(0, image.numel(), device=device, dtype=torch.int32).reshape(image.shape)
+    inds = torch.arange(0, image.numel(), device=device, dtype=dtype).reshape(image.shape)
 
     peak_local_max = (max_inds == inds) * (pooled > minimum_value)
 
@@ -110,7 +110,7 @@ def torch_peak_local_max(image: torch.Tensor, neighbourhood_size: int, minimum_v
         return peak_local_max
 
     # Non-zero causes host-device synchronization, which is a bottleneck
-    return torch.nonzero(peak_local_max.squeeze()).int()
+    return torch.nonzero(peak_local_max.squeeze()).to(dtype)
 
 def torch_peak_local_max_LEGACY(image: torch.Tensor, neighbourhood_size: int, minimum_value: float, return_map: bool = False) -> torch.Tensor:
     """
@@ -173,10 +173,10 @@ def centre_crop(centroids: torch.Tensor, window_size: int, h:int, w:int) -> torc
     centres the crop around the centroid, ensuring that the crop does not exceed the image dimensions.
     """
     C = centroids.shape[0]
-    centroids = centroids.clone().int()  # C,2
+    centroids = centroids.clone()  # C,2
     centroids[:,0] = centroids[:, 0].clamp(min=window_size //2 , max=h - window_size //2)
     centroids[:, 1] = centroids[:,1].clamp(min=window_size //2, max=w - window_size //2)
-    window_slices = (centroids[:, None] + torch.tensor([[-1, -1], [1, 1]], device = centroids.device) * (window_size //2)).int()
+    window_slices = (centroids[:, None] + torch.tensor([[-1, -1], [1, 1]], device = centroids.device) * (window_size //2))
 
 
     grid_x, grid_y = torch.meshgrid(
@@ -1207,6 +1207,8 @@ class InstanSeg_Torchscript(nn.Module):
         self.to_centre = to_centre
         self.feature_engineering, self.feature_engineering_width = feature_engineering_generator(feature_engineering_function)
         self.params = params,
+    
+        self.label_dtype = torch.long #torch.int
 
         # self.traced_feature_engineering = torch.jit.trace(self.feature_engineering, 
         #                                                   (torch.ones(self.dim_coords,256,256).float(), 
@@ -1235,8 +1237,8 @@ class InstanSeg_Torchscript(nn.Module):
                 ) -> torch.Tensor:
         
 
-        torch.clamp_max_(x, 1.5) #Safety check, please normalize inputs properly!
-        torch.clamp_min_(x, -0.5)
+        torch.clamp_max_(x, 3) #Safety check, please normalize inputs properly!
+        torch.clamp_min_(x, -2)
 
         x, pad = instanseg_padding(x, extra_pad=0)
       
@@ -1287,7 +1289,7 @@ class InstanSeg_Torchscript(nn.Module):
                     mask_map = torch.sigmoid(x[self.dim_coords + self.n_sigma])
 
                     centroids_idx = torch_peak_local_max(mask_map, neighbourhood_size=peak_distance,
-                                                        minimum_value=seed_threshold)  # .to(prediction.device)
+                                                        minimum_value=seed_threshold, dtype= self.label_dtype)  # .to(prediction.device)
                     #num_initial_centroids = centroids_idx.shape[0]
 
 
@@ -1307,7 +1309,7 @@ class InstanSeg_Torchscript(nn.Module):
                     S = sigma.shape[0]
 
                     if C == 0:
-                        label = torch.zeros(mask_map.shape, dtype=torch.int, device=mask_map.device).squeeze()
+                        label = torch.zeros(mask_map.shape, dtype=self.label_dtype, device=mask_map.device).squeeze()
                         labels_list.append(label)
                         continue
 
@@ -1315,15 +1317,15 @@ class InstanSeg_Torchscript(nn.Module):
                     centroids = centroids_idx.clone().cpu()  # C,2
                     centroids[:, 0].clamp_(min=window_size, max=h - window_size)
                     centroids[:, 1].clamp_(min=window_size, max=w - window_size)
-                    window_slices = centroids[:, None].to(x.device) + torch.tensor([[-1, -1], [1, 1]] , device = x.device) * window_size
-                    window_slices = window_slices.long()  # C,2,2
+                    window_slices = centroids[:, None].to(x.device) + torch.tensor([[-1, -1], [1, 1]] , device = x.device, dtype=centroids.dtype) * window_size
+                    window_slices = window_slices  # C,2,2
 
                     slice_size = window_size * 2
 
                     # Create grids of indices for slice windows
                     grid_x, grid_y = torch.meshgrid(
-                        torch.arange(slice_size, device=x.device),
-                        torch.arange(slice_size, device=x.device), indexing="ij")
+                        torch.arange(slice_size, device=x.device, dtype=self.label_dtype),
+                        torch.arange(slice_size, device=x.device, dtype=self.label_dtype), indexing="ij")
                     mesh = torch.stack((grid_x, grid_y))
 
                     mesh_grid = mesh.expand(C, 2, slice_size, slice_size)  # C,2,2*window_size,2*window_size
@@ -1343,7 +1345,7 @@ class InstanSeg_Torchscript(nn.Module):
                     C = x.shape[0]
 
                     if C == 0:
-                        label = torch.zeros(mask_map.shape, dtype=torch.int, device=mask_map.device).squeeze()
+                        label = torch.zeros(mask_map.shape, dtype=self.label_dtype, device=mask_map.device).squeeze()
                         labels_list.append(label)
                         continue
 
@@ -1368,8 +1370,9 @@ class InstanSeg_Torchscript(nn.Module):
                     labels = convert(x, coords, size=(h, w), mask_threshold=mask_threshold)[None]
 
 
-                    idx = torch.arange(1, C + 1, device=x.device)
-                    stack_ID = torch.ones((C, slice_size, slice_size), device=x.device, dtype=torch.int32)
+
+                    idx = torch.arange(1, C + 1, device=x.device, dtype = self.label_dtype)
+                    stack_ID = torch.ones((C, slice_size, slice_size), device=x.device, dtype=self.label_dtype)
                     stack_ID = stack_ID * (idx[:, None, None] - 1)
 
                     iidd = torch.stack((stack_ID.flatten(), mesh_grid_flat[0] * w + mesh_grid_flat[1]))
@@ -1391,9 +1394,10 @@ class InstanSeg_Torchscript(nn.Module):
 
                     iou = fast_sparse_iou(sparse_onehot)
 
-                    remapping = find_connected_components((iou > overlap_threshold).int())
+                    remapping = find_connected_components((iou > overlap_threshold).to(self.label_dtype))
                     
                     labels = remap_values(remapping, labels)
+
 
                     labels_to_remove = (torch.arange(0, len(objects_to_remove), device=objects_to_remove.device) + 1)[
                         objects_to_remove]

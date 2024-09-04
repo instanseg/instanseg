@@ -497,33 +497,32 @@ def recover_padding(x: torch.Tensor, pad: torch.Tensor):
 from InstanSeg.utils.utils import timer
 from tqdm import tqdm
 
-#@timer
 def sliding_window_inference(input_tensor, predictor, window_size=(512, 512), overlap = 100, max_cell_size = 20, sw_device='cuda',
-                             device='cpu', output_channels=1, show_progress = True, **kwargs):
+                             device='cpu', output_channels=1, show_progress = True, batch_size = 1,**kwargs):
     input_tensor = input_tensor.to(device)
     predictor = predictor.to(sw_device)
-
+ 
     tuple_index = chops(input_tensor.shape, shape=window_size, overlap=2 * (overlap + max_cell_size))
     tile_list = tiles_from_chops(input_tensor, shape=window_size, tuple_index=tuple_index)
-    
-        
+ 
+ 
     #print("Number of tiles: ", len(tile_list))
    # print("Shape of tiles: ", tile_list[0].shape)
-
-
+ 
+ 
     with torch.no_grad():
         with torch.cuda.amp.autocast():
-            label_list = [predictor(tile[None].to(sw_device),**kwargs).squeeze(0).to(device) for tile in tqdm(tile_list, disable= not show_progress)]
-
-    
+            batch_list = [torch.stack(tile_list[batch_size * i:batch_size * (i+1)]) for i in range(int(np.ceil(len(tile_list)/batch_size)))]
+            label_list = torch.cat([predictor(tile.to(sw_device),**kwargs).to(device) for tile in tqdm(batch_list, disable= not show_progress)])
+ 
+ 
     lab = torch.cat([stitch([lab[i] for lab in label_list],
                             shape=window_size,
                             chop_list=tuple_index,
                             offset = overlap,
                             final_shape=(1, input_tensor.shape[1], input_tensor.shape[2])) 
-                            
+ 
                     for i in range(output_channels)], dim=0)
-    
-
+ 
+ 
     return lab[None]  # 1,C,H,W
-
