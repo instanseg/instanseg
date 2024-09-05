@@ -69,9 +69,8 @@ def readme(model_name: str, model_dict: dict = None):
     # and also what to take into consideration when running the model, especially how to validate the model
     # here, we just create a stub documentation
 
-    print(model_dict.keys())
     with open(os.path.join(model_name, model_name + "_README.md"), "w") as f:
-        f.write("# This is an InstanSeg model. \n")
+        f.write("# This is an InstanSeg model. \n The InstanSeg method is shared with an Apache-2.0 license.\n")
 
         f.write("This model was trained on the following datasets: \n")
         
@@ -79,9 +78,9 @@ def readme(model_name: str, model_dict: dict = None):
             for dataset in (model_dict["source_dataset"]).replace("[","").replace("]","").replace("'","").split(", "):
                 f.write(f"- {dataset} \n")
                 f.write(f"  - License: {dataset_dict[dataset][0]} \n")
-                f.write(f"  - Link: {dataset_dict[dataset][1]} \n")
+                f.write(f"  - URL: {dataset_dict[dataset][1]} \n")
 
-        f.write("The user is responsible for ensuring that the model is used in accordance with the licenses of the source datasets. \n")
+        f.write("\n The user is responsible for ensuring that the model is used in accordance with the licenses of the source datasets. \n")
 
           #  f.write(str(model_dict["source_dataset"]))
 
