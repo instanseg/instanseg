@@ -69,9 +69,8 @@ def readme(model_name: str, model_dict: dict = None):
     # and also what to take into consideration when running the model, especially how to validate the model
     # here, we just create a stub documentation
 
-    print(model_dict.keys())
     with open(os.path.join(model_name, model_name + "_README.md"), "w") as f:
-        f.write("# This is an InstanSeg model. \n InstanSeg method is shared with an Apache-2.0 license.\n")
+        f.write("# This is an InstanSeg model. \n The InstanSeg method is shared with an Apache-2.0 license.\n")
 
         f.write("This model was trained on the following datasets: \n")
         
