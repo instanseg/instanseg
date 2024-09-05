@@ -48,7 +48,8 @@ def convert(prob_input: torch.Tensor, coords_input: torch.Tensor, size: Tuple[in
     arr = torch.zeros((int(n_thresholded), 5), dtype=coords_input.dtype, device=labels.device)
     arr[:, 1] = y[inds_prob]
     arr[:, 2] = x[inds_prob]
-    arr[:, 0] = arr[:, 1] * size[1] + arr[:, 2]
+    # NOTE: UNEXPECTED Y,X ORDER!
+    arr[:, 0] = arr[:, 2] * size[1] + arr[:, 1]
     arr[:, 3] = labels[inds_prob]
 
     # Sort first by descending probability
@@ -68,6 +69,7 @@ def convert(prob_input: torch.Tensor, coords_input: torch.Tensor, size: Tuple[in
     output = torch.zeros(size, dtype=torch.float32, device=labels.device)
     # NOTE: UNEXPECTED Y,X ORDER!
     output[arr[inds_unique, 2], arr[inds_unique, 1]] = arr[inds_unique, 3].float()
+
     return output
 
 
@@ -1241,7 +1243,7 @@ class InstanSeg_Torchscript(nn.Module):
         torch.clamp_min_(x, -2)
 
         x, pad = instanseg_padding(x, extra_pad=0)
-      
+
 
        # with torch.autocast(device_type='cuda', dtype=torch.float16):
         with torch.no_grad():
@@ -1366,10 +1368,11 @@ class InstanSeg_Torchscript(nn.Module):
                         in_mask = cc == labels_to_keep[:,None,None,None]
                         x *= in_mask
 
+                
 
                     labels = convert(x, coords, size=(h, w), mask_threshold=mask_threshold)[None]
 
-
+            
 
                     idx = torch.arange(1, C + 1, device=x.device, dtype = self.label_dtype)
                     stack_ID = torch.ones((C, slice_size, slice_size), device=x.device, dtype=self.label_dtype)
@@ -1403,6 +1406,8 @@ class InstanSeg_Torchscript(nn.Module):
                         objects_to_remove]
                     labels[torch.isin(labels, labels_to_remove)] = 0
 
+                    
+
 
                     labels_list.append(labels.squeeze())
 
@@ -1417,6 +1422,8 @@ class InstanSeg_Torchscript(nn.Module):
                 output_labels_list.append(lab[0])
             
             lab = torch.stack(output_labels_list) # B,C,H,W
+
+            
 
 
             return lab # B,C,H,W
