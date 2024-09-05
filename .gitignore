@@ -4,12 +4,14 @@ InstanSeg/datasets/
 InstanSeg/examples/*
 !InstanSeg/examples/
 !InstanSeg/examples/HE_example.tif
+!InstanSeg/examples/Fluorescence_example.tif
 InstanSeg/tensorboard_logs/
 logs/
 InstanSeg/scripts/experiment.sh
 InstanSeg/torchscripts/
 InstanSeg/bioimageio_models/
 notebooks/scratch.ipynb
+notebooks/per_sample_scale_range.ijm
 InstanSeg.egg-info/
 Raw_Datasets/
 .DS_Store

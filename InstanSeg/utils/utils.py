@@ -493,11 +493,32 @@ def display_cells_and_nuclei(lab):
 def display_colourized(mIF):
     from InstanSeg.utils.augmentations import Augmentations
     Augmenter=Augmentations()
+
     mIF = Augmenter.to_tensor(mIF, normalize=False)[0]
-    colour_render,_ = Augmenter.colourize(mIF, random_seed = 0)
+    if mIF.shape[0]!=3:
+        colour_render,_ = Augmenter.colourize(mIF, random_seed = 0)
+    else:
+        colour_render = Augmenter.to_tensor(mIF, normalize=True)[0]
     colour_render = torch.clamp_(colour_render, 0, 1)
     colour_render = _move_channel_axis(colour_render,to_back = True).detach().numpy()*255
     return colour_render.astype(np.uint8)
+
+def display_overlay(im, lab):
+    assert lab.ndim == 4, "lab must be 4D"
+    assert im.ndim == 3, "im must be 3D"
+    output_dimension = lab.shape[1]
+
+    im_for_display = display_colourized(im)
+
+    if output_dimension ==1: #Nucleus or cell mask]
+        labels_for_display = lab[0,0].cpu().numpy() #Shape is 1,H,W
+        image_overlay = save_image_with_label_overlay(im_for_display,lab=labels_for_display,return_image=True, label_boundary_mode="thick", label_colors=None,thickness=10,alpha=0.5)
+    elif output_dimension ==2: #Nucleus and cell mask
+        nuclei_labels_for_display = lab[0,0].cpu().numpy()
+        cell_labels_for_display = lab[0,1].cpu().numpy() #Shape is 1,H,W
+        image_overlay = save_image_with_label_overlay(im_for_display,lab=nuclei_labels_for_display,return_image=True, label_boundary_mode="thick", label_colors="red",thickness=10)
+        image_overlay = save_image_with_label_overlay(image_overlay,lab=cell_labels_for_display,return_image=True, label_boundary_mode="inner", label_colors="green",thickness=1)
+    return image_overlay
 
 def _to_rgb_channels_last(im: np.ndarray,
                           clip_percentile: float = 1.0,
