@@ -1210,7 +1210,7 @@ class InstanSeg_Torchscript(nn.Module):
         self.feature_engineering, self.feature_engineering_width = feature_engineering_generator(feature_engineering_function)
         self.params = params,
     
-        self.label_dtype = torch.long #torch.int
+        self.index_dtype = torch.long #torch.int
 
         # self.traced_feature_engineering = torch.jit.trace(self.feature_engineering, 
         #                                                   (torch.ones(self.dim_coords,256,256).float(), 
@@ -1291,7 +1291,7 @@ class InstanSeg_Torchscript(nn.Module):
                     mask_map = torch.sigmoid(x[self.dim_coords + self.n_sigma])
 
                     centroids_idx = torch_peak_local_max(mask_map, neighbourhood_size=peak_distance,
-                                                        minimum_value=seed_threshold, dtype= self.label_dtype)  # .to(prediction.device)
+                                                        minimum_value=seed_threshold, dtype= self.index_dtype)  # .to(prediction.device)
                     #num_initial_centroids = centroids_idx.shape[0]
 
 
@@ -1311,7 +1311,7 @@ class InstanSeg_Torchscript(nn.Module):
                     S = sigma.shape[0]
 
                     if C == 0:
-                        label = torch.zeros(mask_map.shape, dtype=self.label_dtype, device=mask_map.device).squeeze()
+                        label = torch.zeros(mask_map.shape, dtype= torch.float32, device=mask_map.device).squeeze()
                         labels_list.append(label)
                         continue
 
@@ -1326,8 +1326,8 @@ class InstanSeg_Torchscript(nn.Module):
 
                     # Create grids of indices for slice windows
                     grid_x, grid_y = torch.meshgrid(
-                        torch.arange(slice_size, device=x.device, dtype=self.label_dtype),
-                        torch.arange(slice_size, device=x.device, dtype=self.label_dtype), indexing="ij")
+                        torch.arange(slice_size, device=x.device, dtype=self.index_dtype),
+                        torch.arange(slice_size, device=x.device, dtype=self.index_dtype), indexing="ij")
                     mesh = torch.stack((grid_x, grid_y))
 
                     mesh_grid = mesh.expand(C, 2, slice_size, slice_size)  # C,2,2*window_size,2*window_size
@@ -1347,7 +1347,7 @@ class InstanSeg_Torchscript(nn.Module):
                     C = x.shape[0]
 
                     if C == 0:
-                        label = torch.zeros(mask_map.shape, dtype=self.label_dtype, device=mask_map.device).squeeze()
+                        label = torch.zeros(mask_map.shape, dtype= torch.float32, device=mask_map.device).squeeze()
                         labels_list.append(label)
                         continue
 
@@ -1374,8 +1374,8 @@ class InstanSeg_Torchscript(nn.Module):
 
             
 
-                    idx = torch.arange(1, C + 1, device=x.device, dtype = self.label_dtype)
-                    stack_ID = torch.ones((C, slice_size, slice_size), device=x.device, dtype=self.label_dtype)
+                    idx = torch.arange(1, C + 1, device=x.device, dtype = self.index_dtype)
+                    stack_ID = torch.ones((C, slice_size, slice_size), device=x.device, dtype=self.index_dtype)
                     stack_ID = stack_ID * (idx[:, None, None] - 1)
 
                     iidd = torch.stack((stack_ID.flatten(), mesh_grid_flat[0] * w + mesh_grid_flat[1]))
@@ -1397,7 +1397,7 @@ class InstanSeg_Torchscript(nn.Module):
 
                     iou = fast_sparse_iou(sparse_onehot)
 
-                    remapping = find_connected_components((iou > overlap_threshold).to(self.label_dtype))
+                    remapping = find_connected_components((iou > overlap_threshold).to(self.index_dtype))
                     
                     labels = remap_values(remapping, labels)
 
@@ -1426,7 +1426,7 @@ class InstanSeg_Torchscript(nn.Module):
             
 
 
-            return lab # B,C,H,W
+            return lab.to(torch.float32) # B,C,H,W
 
 if __name__ == "__main__":
 
