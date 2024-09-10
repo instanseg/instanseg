@@ -70,9 +70,10 @@ def readme(model_name: str, model_dict: dict = None):
     # here, we just create a stub documentation
 
     with open(os.path.join(model_name, model_name + "_README.md"), "w") as f:
-        f.write("# This is an InstanSeg model. \n The InstanSeg method is shared with an Apache-2.0 license.\n")
-
-        f.write("This model was trained on the following datasets: \n")
+        f.write("# This is an InstanSeg model. \n")
+        f.write("The InstanSeg method is shared with an Apache-2.0 license.\n\n")
+        f.write("""For an introduction & comparison to other approaches for nucleus segmentation in brightfield histology images, see: \n > Goldsborough, T. et al. (2024) InstanSeg: an embedding-based instance segmentation algorithm optimized for accurate, efficient and portable cell segmentation. _arXiv_. Available at: https://doi.org/10.48550/arXiv.2408.15954. \n\n To read about InstanSeg's extension to nucleus + full cell segmentation and support for fluorescence & multiplexed images, see: \n > Goldsborough, T. et al. (2024) A novel channel invariant architecture for the segmentation of cells and nuclei in multiplexed images using InstanSeg. _bioRxiv_, p. 2024.09.04.611150. Available at: https://doi.org/10.1101/2024.09.04.611150. \n""")
+        f.write("\n This model was trained on the following datasets: \n")
         
         if model_dict is not None and "source_dataset" in model_dict.keys():
             for dataset in (model_dict["source_dataset"]).replace("[","").replace("]","").replace("'","").split(", "):
@@ -278,11 +279,16 @@ def export_bioimageio(torchsript: torch.jit._script.RecursiveScriptModule,
         name = output_name,
         description = "InstanSeg model",
         # additional metadata about authors, licenses, citation etc.
-        authors = [{"name": "Goldsborough, T., Philps, B., O Callaghan, A., Inglis, F., Leplat, L., Filby, A., Bilen, H., Bankhead, P."}],
+        authors = [{"name": "Thibaut Goldsborough"}],
         license = "Apache-2.0",
         documentation = os.path.join(output_name, output_name + "_README.md"),
         tags = ["cell-segmentation","nuclei","cells","unet","fiji","qupath","pytorch","instanseg","whole-slide-imaging"],  # the tags are used to make models more findable on the website
-        cite = [{"text": "Goldsborough, T., Philps, B., O Callaghan, A., Inglis, F., Leplat, L., Filby, A., Bilen, H., Bankhead, P.: InstanSeg: an embedding-based instance segmentation algorithm optimized for accurate, efficient and portable cell segmentation. arXiv.arXiv:2408.15954 [cs] (2024)", "doi": "https://doi.org/10.48550/arXiv.2408.15954"}],
+        cite = [{"text": 
+                 "Goldsborough, T. et al. (2024) InstanSeg: an embedding-based instance segmentation algorithm optimized for accurate, efficient and portable cell segmentation. _arXiv_. Available at: https://doi.org/10.48550/arXiv.2408.15954",
+                 "doi": "https://doi.org/10.48550/arXiv.2408.15954"},
+                {"text": 
+                "Goldsborough, T. et al. (2024) A novel channel invariant architecture for the segmentation of cells and nuclei in multiplexed images using InstanSeg. _bioRxiv_, p. 2024.09.04.611150. Available at: https://doi.org/10.1101/2024.09.04.611150.",
+                "doi": "https://doi.org/10.1101/2024.09.04.611150"}],
         # description of the tensors
         # these are passed as list because we support multiple inputs / outputs per model
         input_names = ["raw"],
