@@ -907,7 +907,7 @@ def load_CPDMI_Vectra(Segmentation_Dataset: dict):
             assert len(out_channels)==image.shape[0], print(len(out_channels),image.shape[0])
 
             item['channel_names']=out_channels
-            item['nucleus_masks']=[i for i,val in enumerate(out_channels) if "dapi" in val.lower()]
+            item['nuclei_channels']=[i for i,val in enumerate(out_channels) if "dapi" in val.lower()]
 
 
             if len(nuclei_mask_path)>0:

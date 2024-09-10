@@ -10,7 +10,27 @@
 
 InstanSeg is a pytorch based cell and nucleus segmentation pipeline for fluorescent and brightfield microscopy images. This README provides instructions for setting up the environment, installing dependencies, and using the provided tools and models.
 
-If you use InstanSeg in your research, please cite our [preprint](https://arxiv.org/abs/2408.15954).
+## Why should I use InstanSeg?
+
+1. InstanSeg is fully open-source
+2. It's much faster than other cell segmentation methods
+3. Instanseg is highly accurate for both nucleus and cell segmentation
+5. InstanSeg can be entirely (_including prostprocessing!_) compiled in TorchScript, which means it's easy to use in Python and DeepImageJ. This allows you to run InstanSeg directly in [QuPath](https://qupath.github.io/)!
+6. InstanSeg can simultaneously detect nuclei and cells
+7. You can use InstanSeg on multiplexed images (images that have more than three channels) on novel biomarker panels, without retraining or manual intervention.
+8. We plan to release more InstanSeg models trained on public datasets. If there's a _public_ dataset (_i.e._ one with a recognized license) that we missed, let us know and we may be able to increase our InstanSeg model zoo.
+
+## How to cite InstanSeg:
+
+If you use InstanSeg for nucleus segmentation if brightfield histology images, please cite:
+
+> Goldsborough, T. et al. (2024) ‘InstanSeg: an embedding-based instance segmentation algorithm optimized for accurate, efficient and portable cell segmentation’. _arXiv_. Available at: https://doi.org/10.48550/arXiv.2408.15954.
+
+If you use InstanSeg for nucleus and / or cell segmentation in fluorescence images, please cite:
+
+> Goldsborough, T. et al. (2024) ‘A novel channel invariant architecture for the segmentation of cells and nuclei in multiplexed images using InstanSeg’. _bioRxiv_, p. 2024.09.04.611150. Available at: https://doi.org/10.1101/2024.09.04.611150.
+
+
 
 <p align="center">
   <img src="./images/instanseg_main_figure.png" alt="Instanseg Main Figure" width="50%">
