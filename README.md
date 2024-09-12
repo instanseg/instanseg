@@ -20,6 +20,10 @@ InstanSeg is a pytorch based cell and nucleus segmentation pipeline for fluoresc
 7. You can use InstanSeg on multiplexed images (images that have more than three channels) on novel biomarker panels, without retraining or manual intervention.
 8. We plan to release more InstanSeg models trained on public datasets. If there's a _public_ dataset (_i.e._ one with a recognized license) that we missed, let us know and we may be able to increase our InstanSeg model zoo.
 
+## InstanSeg has its own QuPath extension!
+
+InstanSeg is introduced in the [QuPath pre-release v0.6.0-rc1](https://github.com/qupath/qupath/releases/tag/v0.6.0-rc1), so you can start using InstanSeg immediately. You can find the standalone QuPath extension [here](https://github.com/qupath/qupath-extension-instanseg).
+
 ## How to cite InstanSeg:
 
 If you use InstanSeg for nucleus segmentation if brightfield histology images, please cite:
