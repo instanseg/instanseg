@@ -21,6 +21,7 @@ jobs:
           pip install .
       - name: basic smoke test
         run: |
+          cd notebooks # because the folder InstanSeg and the module InstanSeg are treated the same (thanks python!)
           python -c 'import InstanSeg'
           python -c 'from InstanSeg.utils.loss.lovasz_losses import binary_xloss'
           python -c 'from InstanSeg.utils.models.InstanSeg_UNet import DecoderBlock, EncoderBlock, conv_norm_act'
