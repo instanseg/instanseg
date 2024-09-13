@@ -4,7 +4,7 @@ import torch.nn.functional as F
 
 import pdb
 
-from InstanSeg import show_images
+from InstanSeg.utils.utils import show_images
 
 
 
