@@ -16,7 +16,10 @@ classifiers = [
     "License :: OSI Approved :: Apache Software License",
     "Operating System :: OS Independent",
 ]
-dependencies = [
+dynamic = ["dependencies"]
+[tool.setuptools.dynamic]
+dependencies = {file = ["requirements.txt"]}
+[
   "ipykernel>=6.28.0",
   "ipywidgets>=8.1.1",
   "jupyterlab>=4.0.10",
