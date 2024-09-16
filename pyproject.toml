@@ -19,39 +19,6 @@ classifiers = [
 dynamic = ["dependencies"]
 [tool.setuptools.dynamic]
 dependencies = {file = ["requirements.txt"]}
-[
-  "ipykernel>=6.28.0",
-  "ipywidgets>=8.1.1",
-  "jupyterlab>=4.0.10",
-  "tqdm>=4.66.1",
-  "imagecodecs>=2024.1.1",
-  "seaborn>=0.13.1",
-  "matplotlib>=3.8.2",
-  "numba>=0.58.1",
-  "colorcet>=3.0.1",
-  "fastremap>=1.14.0",
-  "scipy>=1.11.4",
-  "scikit-learn>=1.3.2",
-  "rasterio>=1.3.9",
-  "tifffile>=2023.12.9",
-  "scikit-image>=0.22.0",
-  "opencv-python>=4.9.0",
-  "hyperopt>=0.2.7",
-  "pip>=23.3.2",
-  "einops>=0.7.0",
-  "aicsimageio>=4.10.0",
-  "bioimageio.core>=0.5.11",
-  "bioimageio.spec>=0.4.9",
-  "onnx>=1.15.0",
-  "tensorboard>=2.17.0",
-  "torchstain>=1.3.0",
-  "cucim>=23.10.00",
-  "stardist>=0.8.5",
-  "torchvision>=0.16.1",
-  "kornia>=0.7.0",
-  "monai>=1.3.0",
-  "edt"
-]
 
 [project.urls]
 Homepage = "https://github.com/instanseg/instanseg"
