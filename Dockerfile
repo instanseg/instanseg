@@ -16,9 +16,9 @@ RUN wget https://github.com/instanseg/instanseg/releases/download/instanseg_mode
     unzip fluorescence_nuclei_and_cells.zip && \
     rm fluorescence_nuclei_and_cells.zip
 
-RUN git clone https://github.com/Alanocallaghan/instanseg.git
-
 RUN conda update conda
+
+ADD . instanseg
 
 RUN conda env create -f ./instanseg/env.yml
 
