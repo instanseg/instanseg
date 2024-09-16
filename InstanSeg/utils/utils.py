@@ -242,6 +242,7 @@ def _scale_area(size: float, pixel_size: float, do_round=True) -> float:
 
 def _move_channel_axis(img: Union[np.ndarray, torch.Tensor], to_back: bool = False):
     if isinstance(img, np.ndarray):
+        img = img.squeeze()
         if img.ndim != 3:
             if img.ndim == 2:
                 img = img[None,]
@@ -490,13 +491,13 @@ def save_image_with_label_overlay(im: np.ndarray,
 def display_cells_and_nuclei(lab):
     display = save_image_with_label_overlay(torch.zeros((lab.shape[-2],lab.shape[-1],3)), lab, return_image= True, label_boundary_mode=None,alpha = 1)
     return display
-def display_colourized(mIF):
+def display_colourized(mIF, random_seed = 0):
     from InstanSeg.utils.augmentations import Augmentations
     Augmenter=Augmentations()
 
     mIF = Augmenter.to_tensor(mIF, normalize=False)[0]
     if mIF.shape[0]!=3:
-        colour_render,_ = Augmenter.colourize(mIF, random_seed = 0)
+        colour_render,_ = Augmenter.colourize(mIF, random_seed = random_seed)
     else:
         colour_render = Augmenter.to_tensor(mIF, normalize=True)[0]
     colour_render = torch.clamp_(colour_render, 0, 1)
@@ -659,9 +660,13 @@ def read_pixel_size(image_path):
         slide = slideio.open_slide(image_path, driver = "AUTO")
         scene  = slide.get_scene(0)
         img_pixel_size = scene.resolution[0] * 10**6
-
         if img_pixel_size is None or img_pixel_size ==0:
-            raise ValueError("Could not read pixel size from image metadata")
+            from tiffslide import TiffSlide
+            slide = TiffSlide(image_path)
+            img_pixel_size = slide.properties['tiffslide.mpp-x']
+            if img_pixel_size is None or img_pixel_size ==0:
+                
+                raise ValueError("Could not read pixel size from image metadata")
     return img_pixel_size
 
 
