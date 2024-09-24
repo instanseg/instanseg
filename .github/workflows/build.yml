@@ -1,0 +1,27 @@
+name: Python package
+
+on: [push]
+
+jobs:
+  build:
+    defaults:
+      run:
+        shell: bash -l {0}
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: conda-incubator/setup-miniconda@v3
+        with:
+          activate-environment: instanseg
+          environment-file: env.yml
+      - name: Install
+        run: |
+          pip install .
+      - name: basic smoke test
+        run: |
+          cd notebooks # because the folder InstanSeg and the module InstanSeg are treated the same (thanks python!)
+          python -c 'import InstanSeg'
+          python -c 'from InstanSeg.utils.loss.lovasz_losses import binary_xloss'
+          python -c 'from InstanSeg.utils.models.InstanSeg_UNet import DecoderBlock, EncoderBlock, conv_norm_act'
