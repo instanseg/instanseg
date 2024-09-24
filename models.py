@@ -147,15 +147,13 @@ class InstanSegModel:
 
         channel_number = img.dims.C
         self.num_pixels = np.cumprod(img.shape)[-1]
-        print("Number of image pixels: {self.num_pixels}")
-
+        print(f"Number of image pixels: {self.num_pixels}")
+        if "S" in img.dims.order and img.dims.S > img.dims.C:
+            channel_number = img.dims.S
+            input_data = img.get_image_data("SYX")
+        else:
+            input_data = img.get_image_data("CYX")
         if self.process_with_zarr == False:
-            if "S" in img.dims.order and img.dims.S > img.dims.C:
-                channel_number = img.dims.S
-                input_data = img.get_image_data("SYX")
-            else:
-                input_data = img.get_image_data("CYX")
-
             input_tensor = self.augmenter.to_tensor(
                 input_data, normalize=self.normalize
             )[0].to(self.device)
@@ -219,8 +217,9 @@ class InstanSegModel:
         elif isinstance(input_data, np.ndarray):
             return self._predict_from_array(image=input_data)
 
+
+im = io.imread("brightfield_nuclei/sample_input_0.tif")
 if __name__ == "__main__":
-    im = io.imread("brightfield_nuclei/sample_input_0.tif")
     IS_model = InstanSegModel(model_folder="brightfield_nuclei", gpu=False)
     labels_cpu = IS_model.predict(
         "brightfield_nuclei/sample_input_0.tif", pixel_size=0.4
@@ -232,4 +231,3 @@ if __name__ == "__main__":
     )
     labels_gpu_from_array = IS_model.predict(im, pixel_size=0.4)
     io.imshow(labels_gpu_from_array[0])
-
