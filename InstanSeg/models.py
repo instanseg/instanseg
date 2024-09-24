@@ -9,10 +9,6 @@ import torch
 import os
 from InstanSeg.utils.utils import download_model, _choose_device
 from InstanSeg.utils.augmentations import Augmentations
-import pandas as pd
-from tqdm.auto import tqdm
-from pathlib import Path
-import argparse
 import numpy as np
 from skimage import io
 from aicsimageio import AICSImage
@@ -23,7 +19,7 @@ import math
 
 
 class InstanSegModel:
-    def __init__(self, model_folder=None, gpu=None):
+    def __init__(self, model_folder, gpu=None):
         self.model_folder = model_folder
         if (gpu == True) or (gpu == None):
             self.device = torch.device(_choose_device(None))
@@ -33,13 +29,13 @@ class InstanSegModel:
 
         print(f"### Device set: {self.device} ###")
 
-        known_model_types = [
+        known_models = [
             "fluorescence_nuclei_and_cells",
             "brightfield_nuclei",
         ]
         self.model_path = os.path.join(model_folder, "instanseg.pt")
 
-        if self.model_folder in known_model_types:
+        if self.model_folder in known_models:
             if not os.path.isdir(self.model_folder):
                 self.instanseg = download_model(
                     model_folder, return_model=True
@@ -73,7 +69,8 @@ class InstanSegModel:
                 print(
                     f"Number of unique labels = {len(np.unique(slice_2D))-1}"
                 )
-        print("")
+        else:
+            cpu_labels_2D = cpu_labels
         return cpu_labels_2D
 
     def _predict_small_image(self, input_tensor):
@@ -109,8 +106,8 @@ class InstanSegModel:
             )
 
         else:
-            print(f"Processing without tiling")
-            with torch.cuda.amp.autocast():
+            print("Processing without tiling")
+            with torch.amp.autocast("cuda"):
                 labels = self.instanseg(input_tensor[None])
         return labels
 
@@ -205,7 +202,9 @@ class InstanSegModel:
         output_geojson=True,
         process_with_zarr=False,
     ):
-        print("### Starting Prediction ###")
+        """
+        Select
+        """
         self.augmenter = Augmentations()
         self.pixel_size = pixel_size
         self.normalize = normalize
@@ -213,13 +212,16 @@ class InstanSegModel:
         self.output_geojson = output_geojson
         self.process_with_zarr = process_with_zarr
         if isinstance(input_data, str):
+            print("### Predicting from filepath using AICSimage ###")
             return self._predict_from_filepath(image_path=input_data)
         elif isinstance(input_data, np.ndarray):
+            print("### Predicting from image array ###")
             return self._predict_from_array(image=input_data)
 
 
-im = io.imread("brightfield_nuclei/sample_input_0.tif")
 if __name__ == "__main__":
+    # some testing code
+    im = io.imread("brightfield_nuclei/sample_input_0.tif")
     IS_model = InstanSegModel(model_folder="brightfield_nuclei", gpu=False)
     labels_cpu = IS_model.predict(
         "brightfield_nuclei/sample_input_0.tif", pixel_size=0.4
