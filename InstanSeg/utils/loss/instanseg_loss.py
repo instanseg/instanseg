@@ -1367,6 +1367,8 @@ class InstanSeg_Torchscript(nn.Module):
                         labels_list.append(label)
                         continue
 
+                    original_device = x.device
+
                     if x.is_mps:
                         device = 'cpu'
                         mesh_grid_flat = mesh_grid_flat.to(device)
@@ -1425,7 +1427,7 @@ class InstanSeg_Torchscript(nn.Module):
                     
 
 
-                    labels_list.append(labels.squeeze())
+                    labels_list.append(labels.squeeze().to(original_device))
 
                 if len(labels_list) == 1:
                     lab = labels_list[0][None, None]  # 1,1,H,W
