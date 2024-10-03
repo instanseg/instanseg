@@ -23,7 +23,7 @@ parser.add_argument("-recursive", "--recursive",default=False, type=lambda x: (s
 parser.add_argument("-ignore_segmented", "--ignore_segmented",default=False, type=lambda x: (str(x).lower() == 'true'),help="Whether to ignore previously segmented images in the image path")
 
 #advanced usage
-parser.add_argument("-tile_size", "--tile_size", type=int, default= 512, help="tile size in pixels, only useful for large images")
+parser.add_argument("-tile_size", "--tile_size", type=int, default= 512, help="tile size in pixels given to the model, only used for large images.")
 parser.add_argument("-ram_tile_size", "--ram_tile_size", type=int, default= 5000, help="tile size in pixels to be read in ram, only useful for WSIs")
 
 parser.add_argument("-batch_size", "--batch_size", type=int, default= 3, help="batch size, only useful for large images")

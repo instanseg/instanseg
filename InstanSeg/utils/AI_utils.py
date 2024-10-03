@@ -38,7 +38,7 @@ def train_epoch(train_model,
         image_batch = image_batch.to(train_device)
         labels = labels_batch.to(train_device)
         output = train_model(image_batch)
-        loss = train_loss_fn(output, labels).mean()
+        loss = train_loss_fn(output, labels.clone()).mean()
         train_optimizer.zero_grad()
         loss.backward()
 
@@ -81,8 +81,8 @@ def test_epoch(test_model,
         for image_batch, labels_batch, _ in tqdm(test_dataloader, disable=args.on_cluster):
             image_batch = image_batch.to(test_device)
             labels = labels_batch.to(test_device) 
-            output = test_model(image_batch)
-            loss = test_loss_fn(output, labels).mean()
+            output = test_model(image_batch)  
+            loss = test_loss_fn(output, labels.clone()).mean()
             test_loss.append(loss.detach().cpu().numpy())
             writer.add_scalar('test_loss', loss, global_step_test)
 

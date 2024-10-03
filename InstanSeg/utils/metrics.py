@@ -18,10 +18,18 @@ def _robust_f1_mean_calculator(nan_list: Union[list, np.ndarray]):
 
 def _robust_average_precision(labels, predicted, threshold):
 
+    for i in range(len(labels)):
+        if labels[i].min() < 0 and not (labels[i] < 0).all():
+            labels[i][labels[i] < 0] = 0 #sparse labels
+            predicted[i][labels[i] < 0] = 0 
 
     if labels[0].shape[0] != 2: #cells or nuclei
         labels = [labels[i].detach().cpu().numpy().astype(np.int32) for i, l in enumerate(labels) if labels[i].min() >= 0 and labels[i].max() > 0]
         predicted = [predicted[i].detach().cpu().numpy().astype(np.int32) for i, l in enumerate(labels) if labels[i].min() >= 0 and labels[i].max() > 0]
+
+        if len(labels)==0:
+            return np.nan
+        
 
         stats = matching.matching_dataset([l for l in labels], [p for p in predicted], thresh=threshold, show_progress = False)
         f1i = [stat.f1 for stat in stats]
@@ -36,7 +44,6 @@ def _robust_average_precision(labels, predicted, threshold):
                 f1is.append(np.nan)
                 continue
 
-            
             stats = matching.matching_dataset([l for l in labels_tmp], [p for p in predicted_tmp],thresh=threshold, show_progress = False)
             f1i = [stat.f1 for stat in stats]
 
