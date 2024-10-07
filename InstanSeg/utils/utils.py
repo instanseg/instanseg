@@ -224,6 +224,40 @@ def show_images(*img_list, clip_pct=None, titles=None, save_str=False, n_cols=3,
         return None
 
 
+
+
+def display_as_grid(display_list, ncols,padding = 2, left_titles = None, top_titles = None, right_side = None, title_height = 20, fontsize = 12):
+
+    from InstanSeg.utils.augmentations import Augmentations
+    Augmenter = Augmentations()
+
+    tensor_list = []
+    for i in display_list:
+        disp_tensor = Augmenter.to_tensor(i,normalize = False)[0].to("cpu")
+        h,w = disp_tensor.shape[1:]
+        tensor_list.append(disp_tensor / disp_tensor.max())
+
+    from torchvision.utils import make_grid
+
+    grid = make_grid(tensor_list, nrow=ncols, padding=padding, pad_value=1)
+
+    fig  = plt.figure(figsize=(10, 10))
+    plt.imshow(grid.numpy().transpose(1, 2, 0))
+    plt.axis('off')
+
+
+    if left_titles is not None:
+        for idx, dataset in enumerate(left_titles):
+            plt.text(-title_height, idx * h + int((h/2)) + 2 * idx , dataset, fontsize=fontsize, color='black', verticalalignment='center', rotation = "vertical")
+    if top_titles is not None:
+        for idx, dataset in enumerate(top_titles):
+            plt.text(idx * w + int((w/2)),  -title_height , dataset, fontsize=fontsize, color='black', verticalalignment = 'center', horizontalalignment='center', rotation = "horizontal")
+    if right_side is not None:
+        for idx, dataset in enumerate(right_side):
+            plt.text(5 * w + 10, idx * h + int((h/2)) + 2 * idx , dataset, fontsize = fontsize, color='black', verticalalignment='center', rotation = 270)
+    
+    return fig
+
 def _scale_length(size: float, pixel_size: float, do_round=True) -> float:
     """
     Convert length in calibrated units to a length in pixels

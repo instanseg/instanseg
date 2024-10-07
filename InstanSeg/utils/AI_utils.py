@@ -89,7 +89,7 @@ def test_epoch(test_model,
 
             if labels.type() != 'torch.cuda.FloatTensor' and labels.type() != 'torch.FloatTensor':
                 predicted_labels = torch.stack([postprocessing_fn(out) for out in output])
-                f1i = _robust_average_precision(labels, predicted_labels,
+                f1i = _robust_average_precision(labels.clone(), predicted_labels.clone(),
                                                threshold=iou_threshold)
 
                 current_f1_list.append((f1i))
