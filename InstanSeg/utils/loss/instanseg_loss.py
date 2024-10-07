@@ -693,21 +693,33 @@ class InstanSeg(nn.Module):
 
     def update_seed_loss(self,seed_loss_fn):
         if seed_loss_fn in ["binary_xloss"]:
-            binary_loss = torch.nn.BCEWithLogitsLoss()
-            def seed_loss(x,y):
-                return binary_loss(x, (y > 0).float())
+            binary_loss = torch.nn.BCEWithLogitsLoss(reduction='none')
+
+            def seed_loss(x,y, mask = None):
+                if mask is not None:
+                    mask = mask.float()  # Ensure the mask is float for multiplication
+                    loss = binary_loss(x, (y > 0).float())  # Calculate the element-wise binary loss
+                    masked_loss = loss * mask  # Apply the mask to the loss
+                    return masked_loss.sum() / mask.sum()
+                else:
+                    return binary_loss(x, (y > 0).float()).mean()
+                
             self.seed_loss = seed_loss
+
         elif seed_loss_fn in ["l1_distance"]:
             from InstanSeg.utils.pytorch_utils import instance_wise_edt
-            distance_loss = torch.nn.L1Loss()
-            def seed_loss(x,y):
-
-             
-              #  assert (instance_wise_edt(y.float(),edt_type = 'edt') == instance_wise_edt(y.float(),edt_type = 'monai')).all(), pdb.set_trace()
-
+            distance_loss = torch.nn.L1Loss(reduction='none')
+            def seed_loss(x,y, mask = None):
                 edt = (instance_wise_edt(y.float(), edt_type= 'edt') - 0.5 ) * 15 #This is to mimick the range of CELoss
-                l = distance_loss((x), (edt[None])) 
-                return l
+                loss = distance_loss((x), (edt[None]))
+
+                if mask is not None:
+                    mask = mask.float()
+                    masked_loss = loss * mask
+                    return masked_loss.sum() / mask.sum()
+                else:
+                    return loss.mean()
+                
             self.seed_loss = seed_loss
         else:
             raise NotImplementedError("Seedloss function",seed_loss_fn,"is not implemented")
@@ -774,11 +786,15 @@ class InstanSeg(nn.Module):
                 seed_loss = 0
 
                 instance = instances_batch[b, mask_channel].unsqueeze(0)  # 1 x h x w
-                if instance.min() < 0:
-                    continue
+
+                if instance.min() < 0: #label is sparse
+                    mask = instance >=0
+                    instance[instance < 0] = 0
+                else:
+                    mask = None
 
 
-                seed_loss_tmp = self.seed_loss(seed_map,instance)
+                seed_loss_tmp = self.seed_loss(seed_map,instance, mask = mask)
 
                 seed_loss += seed_loss_tmp
 
@@ -1351,6 +1367,8 @@ class InstanSeg_Torchscript(nn.Module):
                         labels_list.append(label)
                         continue
 
+                    original_device = x.device
+
                     if x.is_mps:
                         device = 'cpu'
                         mesh_grid_flat = mesh_grid_flat.to(device)
@@ -1409,7 +1427,7 @@ class InstanSeg_Torchscript(nn.Module):
                     
 
 
-                    labels_list.append(labels.squeeze())
+                    labels_list.append(labels.squeeze().to(original_device))
 
                 if len(labels_list) == 1:
                     lab = labels_list[0][None, None]  # 1,1,H,W

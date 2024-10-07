@@ -1112,3 +1112,61 @@ def load_CPDMI_CODEX(Segmentation_Dataset: dict):
     Segmentation_Dataset['Test']+=items
 
     return Segmentation_Dataset
+
+
+
+def load_BSST265(Segmentation_Dataset: dict, verbose: bool = True) -> dict:
+    bsst265_dir = create_raw_datasets_dir("Nucleus_Segmentation", "BSST265")
+    zip_file_path = bsst265_dir / "BSST265.zip"
+    download_url = "https://www.ebi.ac.uk/biostudies/files/S-BSST265/dataset.zip"
+    if not zip_file_path.exists():
+        # Download the dataset using requests
+        if verbose:
+            print(f"Downloading dataset from {download_url} to {zip_file_path}...")
+        response = requests.get(download_url, stream=True)
+        response.raise_for_status()
+        with open(zip_file_path, 'wb') as f:
+            for chunk in response.iter_content(chunk_size=8192):
+                f.write(chunk)
+        if verbose:
+            print(f"Download completed.")
+        # Unzip the dataset
+        if verbose:
+            print(f"Unzipping dataset to {bsst265_dir / 'BSST265'}...")
+        with zipfile.ZipFile(zip_file_path, 'r') as zip_ref:
+            zip_ref.extractall(bsst265_dir / 'BSST265')
+        if verbose:
+            print("Unzipping completed.")
+    import pandas as pd
+    metadata = pd.read_csv(bsst265_dir / "BSST265" / "image_description.csv", sep=";")
+    
+    file_path = Path(f"{bsst265_dir}/BSST265/rawimages")
+    files = sorted(list(file_path.iterdir()))
+    items = []
+    for i, file in enumerate(tqdm(files)):
+        metadata_row = metadata[metadata["Image_Name"] == file.stem]
+        magnification = metadata_row["Magnification"].values[0]
+        if magnification == "20x":
+            pixel_size = 0.323
+        elif magnification == "40x":
+            pixel_size = 0.161
+        elif magnification == "63x":
+            pixel_size = 0.102
+        img_file = str(file)
+        mask_file = img_file.replace("rawimages", "groundtruth")
+        item = {}
+        image = io.imread(img_file)
+        masks = io.imread(mask_file)
+        item['nucleus_masks'] = fastremap.refit(masks)
+        item['image'] = image
+        item["parent_dataset"] = "BSST265"
+        item['licence'] = "CC0"
+        item['pixel_size'] = pixel_size
+        item['nuclei_channels'] = [0]  
+        items.append(item)
+    np.random.seed(42) 
+    np.random.shuffle(items)
+    Segmentation_Dataset['Train']+=items[:int(len(items)*0.8)]
+    Segmentation_Dataset['Validation']+=items[int(len(items)*0.8):int(len(items)*0.9)]
+    Segmentation_Dataset['Test']+=items[int(len(items)*0.9):]
+    return Segmentation_Dataset

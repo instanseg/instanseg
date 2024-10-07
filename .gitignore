@@ -32,3 +32,4 @@ InstanSeg/utils/models/patch_classifier/
 *.pth
 InstanSeg/utils/models/bash.sh
 Raw_Datasets
+InstanSeg/bio_2_delete/

@@ -2,20 +2,20 @@
 import torch
 import numpy as np
 import warnings
-
 def _keep_images(item, args):
-    if item["parent_dataset"] == "Aleynik" and args.target_segmentation == "N":
-        if "nucleus_masks" not in item.keys():
-            return False
     if args.source_dataset != "all" and item[
         'parent_dataset'] not in args.source_dataset:  # remove items that are not of the desired dataset
         return False
     elif 'duplicate' in item.keys() and item['duplicate']:  # remove items that are duplicates
         return False
+    elif args.target_segmentation == "N" and "nucleus_masks" not in item.keys():
+        return False
+    elif args.target_segmentation == "C" and "cell_masks" not in item.keys():
+        return False
     else:
         return True
     
-
+ 
 def _format_labels(item,target_segmentation):
             
     if "cell_masks" in item.keys():
@@ -23,15 +23,22 @@ def _format_labels(item,target_segmentation):
     
     if "nucleus_masks" in item.keys():
         item["nucleus_masks"] = get_image(item["nucleus_masks"])
-
+ 
     elif "masks" in item.keys():
         item["nucleus_masks"] = get_image(item["masks"])
     
     if target_segmentation == "N":
-
-        labels = item["nucleus_masks"]
+        if "nucleus_masks" not in item.keys():
+            c,h,w = item['image'].shape
+            labels = np.zeros((h,w)) -1
+        else:
+            labels = item["nucleus_masks"]
     elif target_segmentation == "C":
-        labels = item["cell_masks"]
+        if "cell_masks" not in item.keys():
+            c,h,w = item['image'].shape
+            labels = np.zeros((h,w)) -1
+        else:
+            labels = item["cell_masks"]
     elif "N" in target_segmentation and "C" in target_segmentation:
             if "nucleus_masks" in item.keys() and "cell_masks" in item.keys():
                 labels = np.stack((item["nucleus_masks"], item["cell_masks"]))
@@ -46,9 +53,9 @@ def _format_labels(item,target_segmentation):
     else:
         raise NotImplementedError("Target segmentation not recognized", target_segmentation)
     
-
+ 
     return labels
-
+ 
 
 
 def export_dataset_dict_as_folder(dataset,destination = "benchmarking_data"):
