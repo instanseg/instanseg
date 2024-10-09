@@ -132,7 +132,7 @@ class Augmentations(object):
                 labels = _move_channel_axis(labels)
                 for n, lab in enumerate(labels):
 
-                    if not (lab == -1).all():  # convention is to skip labels with a value of -1
+                    if not (lab == -1).any():  # convention is to skip labels with a value of -1
                         labels[n] = fastremap.renumber(lab)[0]
 
                 labels = torch.tensor(labels.astype(np.int32), dtype=torch.int32)

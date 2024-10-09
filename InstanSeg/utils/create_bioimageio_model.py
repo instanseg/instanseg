@@ -55,7 +55,9 @@ dataset_dict = {
     "IHC_TMA": ["CC BY 4.0","https://zenodo.org/records/7647846"],
     "CPDMI_2023": ["CC BY 4.0","https://www.nature.com/articles/s41597-023-02108-z"],
     "cellpose": ["NC","https://www.cellpose.org/dataset"],
-    "TissueNet": ["Modified Apache, Non-Commercial", "https://datasets.deepcell.org/"]
+    "TissueNet": ["Modified Apache, Non-Commercial", "https://datasets.deepcell.org/"],
+    "CIL": ["CC BY 3.0", "https://www.cellimagelibrary.org/images/CCDB_6843"],
+    "BSST265": ["CC0","https://www.ebi.ac.uk/biostudies/bioimages/studies/S-BSST265"],
 }
 
 
@@ -219,6 +221,7 @@ def export_bioimageio(torchsript: torch.jit._script.RecursiveScriptModule,
     input_crop,_ = Augmenter.torch_rescale(input_tensor,labels=None,current_pixel_size=pixel_size,requested_pixel_size=model_pixel_size_tmp,crop = True, random_seed=1)
     input_crop = input_crop.unsqueeze(0) # add batch dimension
     if input_crop.shape[1] != dim_in and not model_dict["channel_invariant"]:
+        #input_crop = input_crop[:,1:2,:,:]
         input_crop = torch.zeros((1,dim_in,input_crop.shape[2],input_crop.shape[3]),dtype=torch.float32, device = input_crop.device)
 
     print("Input tensor shape: ", input_crop.shape)

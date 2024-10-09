@@ -224,6 +224,40 @@ def show_images(*img_list, clip_pct=None, titles=None, save_str=False, n_cols=3,
         return None
 
 
+
+
+def display_as_grid(display_list, ncols,padding = 2, left_titles = None, top_titles = None, right_side = None, title_height = 20, fontsize = 12):
+
+    from InstanSeg.utils.augmentations import Augmentations
+    Augmenter = Augmentations()
+
+    tensor_list = []
+    for i in display_list:
+        disp_tensor = Augmenter.to_tensor(i,normalize = False)[0].to("cpu")
+        h,w = disp_tensor.shape[1:]
+        tensor_list.append(disp_tensor / disp_tensor.max())
+
+    from torchvision.utils import make_grid
+
+    grid = make_grid(tensor_list, nrow=ncols, padding=padding, pad_value=1)
+
+    fig  = plt.figure(figsize=(10, 10))
+    plt.imshow(grid.numpy().transpose(1, 2, 0))
+    plt.axis('off')
+
+
+    if left_titles is not None:
+        for idx, dataset in enumerate(left_titles):
+            plt.text(-title_height, idx * h + int((h/2)) + 2 * idx , dataset, fontsize=fontsize, color='black', verticalalignment='center', rotation = "vertical")
+    if top_titles is not None:
+        for idx, dataset in enumerate(top_titles):
+            plt.text(idx * w + int((w/2)),  -title_height , dataset, fontsize=fontsize, color='black', verticalalignment = 'center', horizontalalignment='center', rotation = "horizontal")
+    if right_side is not None:
+        for idx, dataset in enumerate(right_side):
+            plt.text(5 * w + 10, idx * h + int((h/2)) + 2 * idx , dataset, fontsize = fontsize, color='black', verticalalignment='center', rotation = 270)
+    
+    return fig
+
 def _scale_length(size: float, pixel_size: float, do_round=True) -> float:
     """
     Convert length in calibrated units to a length in pixels
@@ -242,6 +276,7 @@ def _scale_area(size: float, pixel_size: float, do_round=True) -> float:
 
 def _move_channel_axis(img: Union[np.ndarray, torch.Tensor], to_back: bool = False):
     if isinstance(img, np.ndarray):
+        img = img.squeeze()
         if img.ndim != 3:
             if img.ndim == 2:
                 img = img[None,]
@@ -490,13 +525,13 @@ def save_image_with_label_overlay(im: np.ndarray,
 def display_cells_and_nuclei(lab):
     display = save_image_with_label_overlay(torch.zeros((lab.shape[-2],lab.shape[-1],3)), lab, return_image= True, label_boundary_mode=None,alpha = 1)
     return display
-def display_colourized(mIF):
+def display_colourized(mIF, random_seed = 0):
     from InstanSeg.utils.augmentations import Augmentations
     Augmenter=Augmentations()
 
     mIF = Augmenter.to_tensor(mIF, normalize=False)[0]
     if mIF.shape[0]!=3:
-        colour_render,_ = Augmenter.colourize(mIF, random_seed = 0)
+        colour_render,_ = Augmenter.colourize(mIF, random_seed = random_seed)
     else:
         colour_render = Augmenter.to_tensor(mIF, normalize=True)[0]
     colour_render = torch.clamp_(colour_render, 0, 1)
@@ -659,9 +694,13 @@ def read_pixel_size(image_path):
         slide = slideio.open_slide(image_path, driver = "AUTO")
         scene  = slide.get_scene(0)
         img_pixel_size = scene.resolution[0] * 10**6
-
         if img_pixel_size is None or img_pixel_size ==0:
-            raise ValueError("Could not read pixel size from image metadata")
+            from tiffslide import TiffSlide
+            slide = TiffSlide(image_path)
+            img_pixel_size = slide.properties['tiffslide.mpp-x']
+            if img_pixel_size is None or img_pixel_size ==0:
+                
+                raise ValueError("Could not read pixel size from image metadata")
     return img_pixel_size
 
 

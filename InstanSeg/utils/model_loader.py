@@ -123,7 +123,7 @@ def build_model_from_dict(build_model_dictionary):
             from InstanSeg.utils.models.InstanSeg_UNet import InstanSeg_UNet
             print("Generating InstanSeg_UNet")
             multihead = build_model_dictionary["multihead"]
-            
+
             if build_model_dictionary["cells_and_nuclei"]:
                 if not multihead:
                     from itertools import chain

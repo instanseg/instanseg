@@ -23,9 +23,13 @@ parser.add_argument("-recursive", "--recursive",default=False, type=lambda x: (s
 parser.add_argument("-ignore_segmented", "--ignore_segmented",default=False, type=lambda x: (str(x).lower() == 'true'),help="Whether to ignore previously segmented images in the image path")
 
 #advanced usage
-parser.add_argument("-driver", "--driver", type=str, default= "AUTO", help="Driver for slideio, default is AUTO. Only useful for large images")
-parser.add_argument("-tile_size", "--tile_size", type=int, default= 512, help="tile size in pixels, only useful for large images")
+parser.add_argument("-tile_size", "--tile_size", type=int, default= 512, help="tile size in pixels given to the model, only used for large images.")
+parser.add_argument("-ram_tile_size", "--ram_tile_size", type=int, default= 5000, help="tile size in pixels to be read in ram, only useful for WSIs")
+
+parser.add_argument("-batch_size", "--batch_size", type=int, default= 3, help="batch size, only useful for large images")
 parser.add_argument("-output_geojson", "--output_geojson", type=lambda x: (str(x).lower() == 'true'), default= False, help="Output geojson files of the segmentation")
+parser.add_argument("-overlap", "--overlap_size",default=60, type=int,help="Overlap size in pixels for the sliding window inference")
+parser.add_argument("-max_cell_size", "--max_cell_size",default=30, type=int,help="Diameter (in pixels at the model's pixel size) of the largest cell in the image. Used for tiling.")
 
 def file_matches_requirement(root,file, exclude_str):
     if not os.path.isfile(os.path.join(root,file)):
@@ -109,7 +113,7 @@ if __name__ == "__main__":
             channel_number = img.dims.C
             num_pixels = np.cumprod(img.shape)[-1]
 
-            if num_pixels < 3 * 15 * 15:       
+            if num_pixels < 3 * 15000 * 15000:       
                 if "S" in img.dims.order and img.dims.S > img.dims.C:
                     channel_number = img.dims.S
                     input_data = img.get_image_data("SYX")
@@ -130,10 +134,11 @@ if __name__ == "__main__":
                     labels = sliding_window_inference(input_tensor,
                                 instanseg, 
                                 window_size = (parser.tile_size,parser.tile_size),
-                                overlap= 50, 
-                                max_cell_size= 20,
+                                overlap= parser.overlap_size, 
+                                max_cell_size= parser.max_cell_size,
                                 sw_device = device,
                                 device = 'cpu', 
+                                batch_size= parser.batch_size,
                                 output_channels = output_dimension,
                                 resolve_cell_and_nucleus = False)
                     
@@ -146,17 +151,20 @@ if __name__ == "__main__":
             else:
                 print("Image {} is too large, attempting using a zarr array".format(stem))
                 from InstanSeg.utils.tiling import segment_image_larger_than_memory
+                                 
 
                 segment_image_larger_than_memory(instanseg_folder= parser.model_folder, 
                                                 image_path= file, 
-                                                shape = (parser.tile_size,parser.tile_size), 
-                                                threshold= 230, 
-                                                cell_size = 50, 
-                                                overlap= 50,
+                                                memory_block_size = (parser.ram_tile_size,parser.ram_tile_size),  #this is the size of the image that will be read in memory
+                                                inference_tile_size = (parser.tile_size,parser.tile_size), #this is the size of the image that will be passed to the model
+                                                threshold= 255, 
+                                                cell_size = parser.max_cell_size, 
+                                                overlap= parser.overlap_size,
+                                                batch_size= parser.batch_size,
                                                 to_geojson= parser.output_geojson, 
-                                                driver = parser.driver,
                                                 torchscript = instanseg,
-                                                pixel_size = parser.pixel_size)
+                                                pixel_size = parser.pixel_size,
+                                                prediction_tag = prediction_tag)
 
                 continue
 

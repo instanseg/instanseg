@@ -342,34 +342,39 @@ def get_patches(lab: torch.Tensor, image: torch.Tensor, patch_size: int = 64, re
     mesh_flat = mesh_flat + idx
     mesh_flater = torch.flatten(mesh_flat, 1)  # 2,N*2*window_size*2*window_size
 
+
     out = image[:, mesh_flater[0], mesh_flater[1]].reshape(C, N, -1)
     out = out.reshape(C, N, patch_size, patch_size)
     out = out.permute(1, 0, 2, 3)
 
+
     if return_lab_ids:
         return out, label_ids
 
-    return out  # N,C,patch_size,patch_size
+    return out,label_ids  # N,C,patch_size,patch_size
 
 
-def get_masked_patches(lab: torch.Tensor, image: torch.Tensor, patch_size: int = 64, return_mask: bool = False):
+def get_masked_patches(lab: torch.Tensor, image: torch.Tensor, patch_size: int = 64):
     # lab is 1,H,W
     # image is C,H,W
 
-    lab_patches, label_ids = get_patches(lab, lab[0], patch_size, return_lab_ids=True)
+    # if lab.max() == 0:
+    #     if return_mask:
+    #         return None,None
+    #     return None
+
+    lab_patches, label_ids = get_patches(lab, lab[0], patch_size)
     mask_patches = lab_patches == label_ids[1:, None, None, None]
 
-    image_patches = get_patches(lab, image, patch_size)
+    image_patches,_ = get_patches(lab, image, patch_size)
 
-    if return_mask:
-        return image_patches, mask_patches
+    # canvas = torch.ones_like(image_patches) * (~mask_patches).float()
 
-    canvas = torch.ones_like(image_patches) * (~mask_patches).float()
+    # image_patches = image_patches * mask_patches.float() + canvas
 
-    image_patches = image_patches * mask_patches.float() + canvas
+   # pdb.set_trace()
 
-    return image_patches  # N,C,patch_size,patch_size
-
+    return image_patches,mask_patches  # N,C,patch_size,patch_size
 
 def feature_extractor():
     import torch

@@ -135,4 +135,4 @@ python test.py --model_folder my_first_instanseg -test_set Test --params best_pa
 ```bash
 python inference.py --model_folder my_first_instanseg --image_path ../examples
 ```
-Replace "../examples" with the path to your images. If InstanSeg cannot read the image pixel size from the image metadata, the user is required to provide a --pixel_size parameter. InstanSeg provides (limited) support for whole slide images (WSIs), with the [slideio](https://www.slideio.com/) library. For more options and configurations, refer to the parser arguments in the inference.py file.
+Replace "../examples" with the path to your images. If InstanSeg cannot read the image pixel size from the image metadata, the user is required to provide a --pixel_size parameter. InstanSeg provides (limited) support for whole slide images (WSIs). For more options and configurations, refer to the parser arguments in the inference.py file.
