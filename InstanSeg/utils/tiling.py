@@ -239,18 +239,18 @@ def zarr_to_json_export(path_to_zarr, cell_size = 30, size = 1024, scale = 1, n_
         outfile.write(']')
 
 
-def segment_image_larger_than_memory(instanseg_folder: str, 
-                                     image_path: str, 
+def segment_image_larger_than_memory(instanseg_class, # instanseg class method
+                                    image_path: str,  
                                      memory_block_size: tuple = (3000,3000), #this is the size of the image that will be read in memory
                                      inference_tile_size: tuple = (512,512), #this is the size of the image that will be passed to the model
                                      overlap = 100,
                                     cell_size = 20, 
-                                    threshold: int = 200, 
                                     to_geojson = False, 
-                                    torchscript = None,
                                     batch_size = 3,
                                     prediction_tag: str = "_instanseg_prediction",
-                                    pixel_size: float = None):
+                                    pixel_size: float = None,
+                                    normalisation_subsampling_factor = 10,
+                                    **kwargs):
     
     """This function uses slideio to read an image and then segments it using the instanseg model. 
     The segmentation is done in a tiled manner to avoid memory issues. 
@@ -267,50 +267,17 @@ def segment_image_larger_than_memory(instanseg_folder: str,
     from InstanSeg.utils.pytorch_utils import torch_fastremap, match_labels
     from pathlib import Path
     
+    instanseg = instanseg_class.instanseg
 
-    device = 'cuda'
+    image_path, img_pixel_size = instanseg_class.read_image(image_path)
+    slide = instanseg_class.read_slide(image_path)
 
-    if torchscript is None:
-        use_torchscript = False
-    else:
-        use_torchscript = True
-        instanseg = torchscript
-
-    if not use_torchscript:
-    
-        model, model_dict = load_model(folder= instanseg_folder)
-
-        
-        method = InstanSeg( n_sigma=model_dict["n_sigma"],
-                            cells_and_nuclei=model_dict["cells_and_nuclei"], 
-                            to_centre = model_dict["to_centre"], 
-                            window_size = 64, 
-                            dim_coords= 2,
-                            feature_engineering_function = model_dict["feature_engineering"], 
-                            device = device)
-        
-        n_dim = 2 if model_dict["cells_and_nuclei"] else 1
-        model_pixel_size = model_dict["pixel_size"]
-
-        method.initialize_pixel_classifier(model)
-
-        model.eval()
-        model.to(device)
-
-    else:
-        instanseg.to(device)
-        
-        n_dim = 2 if instanseg.cells_and_nuclei else 1
-        model_pixel_size = instanseg.pixel_size
+    n_dim = 2 if instanseg.cells_and_nuclei else 1
+    model_pixel_size = instanseg.pixel_size
 
     new_stem = Path(image_path).stem + prediction_tag
-         
     file_with_zarr_extension = Path(image_path).parent / (new_stem + ".zarr")
 
-    slide = TiffSlide(image_path)
-   
-
-    img_pixel_size = read_pixel_size(image_path)
 
     if img_pixel_size > 1 or img_pixel_size < 0.1:
         import warnings
@@ -336,17 +303,12 @@ def segment_image_larger_than_memory(instanseg_folder: str,
     store = zarr.DirectoryStore(file_with_zarr_extension) 
     canvas = zarr.zeros((n_dim,dims[0],dims[1]), chunks=chunk_shape, dtype=np.int32, store=store, overwrite = True)
 
-    Augmenter=Augmentations()
-
     running_max = 0
 
     total = len(chop_list[0]) * len(chop_list[1])
-    for _, ((i, window_i), (j, window_j)) in tqdm(enumerate(product(enumerate(chop_list[0]), enumerate(chop_list[1]))), total=total):
+    for _, ((i, window_i), (j, window_j)) in tqdm(enumerate(product(enumerate(chop_list[0]), enumerate(chop_list[1]))), total=total, colour = "green", desc = "Slide progress: "):
 
-
-        
       #  input_data = scene.read_block((int(window_j*scale_factor), int(window_i*scale_factor), int(shape[0]*scale_factor), int(shape[1]*scale_factor)), size = shape)
-
 
         best_level = slide.get_best_level_for_downsample(scale_factor)
         downsample_factor = slide.level_downsamples[best_level]
@@ -362,35 +324,22 @@ def segment_image_larger_than_memory(instanseg_folder: str,
 
         input_data = slide.read_region((int(window_j*scale_factor), int(window_i*scale_factor)), best_level, (int(intermediate_shape[0]) , int(intermediate_shape[1])), as_array=True)
     
-        if input_data.mean() > threshold: #image is too bright corresponds to white space
-            continue
+        input_tensor = instanseg_class._to_tensor(input_data)
+
+        new_tile = instanseg_class.eval_medium_image(input_tensor,
+                                          pixel_size = itermediate_pixel_size,
+                                          tile_size = inference_tile_size[0],
+                                          batch_size = batch_size,
+                                          return_image_tensor = False,
+                                          normalisation_subsampling_factor = normalisation_subsampling_factor,
+                                          )
         
-        input_tensor,_ =Augmenter.to_tensor(input_data,normalize=False) #this converts the input data to a tensor
-        input_tensor,_ = Augmenter.normalize(input_tensor, subsampling_factor=10)
+    
 
+        from torch.nn.functional import interpolate
+        new_tile = interpolate(new_tile, size=shape[-2:], mode="nearest").int()[0]
 
-        from torchvision.transforms import Resize
-        input_tensor = Resize(shape, antialias=False)(input_tensor)
-
-        with torch.cuda.amp.autocast():
-            with torch.no_grad():
-                if not use_torchscript:
-                    new_tile = method.postprocessing(model(input_tensor.to(device)), max_seeds = 100000).to("cpu")
-                else:
-
-                    new_tile = sliding_window_inference(input_tensor,
-                                instanseg, 
-                                window_size =inference_tile_size,
-                                overlap= overlap, 
-                                max_cell_size= cell_size,
-                                sw_device = device,
-                                device = 'cpu', 
-                                output_channels = 1,
-                                show_progress = False,
-                                batch_size= batch_size,
-                                resolve_cell_and_nucleus = False)[0]
-                    
-                   # new_tile = instanseg(input_tensor.to(device))[0].to("cpu")
+       # pdb.set_trace()
 
         num_iter = new_tile.shape[0]
 
@@ -541,7 +490,7 @@ def sliding_window_inference(input_tensor, predictor, window_size=(512, 512), ov
     with torch.no_grad():
         with torch.cuda.amp.autocast():
             batch_list = [torch.stack(tile_list[batch_size * i:batch_size * (i+1)]) for i in range(int(np.ceil(len(tile_list)/batch_size)))]
-            label_list = torch.cat([predictor(tile.to(sw_device),**kwargs).to(device) for tile in tqdm(batch_list, disable= not show_progress)])
+            label_list = torch.cat([predictor(tile.to(sw_device),**kwargs).to(device) for tile in tqdm(batch_list, disable= not show_progress,leave = False, colour = "blue")])
  
  
     lab = torch.cat([stitch([lab[i] for lab in label_list],

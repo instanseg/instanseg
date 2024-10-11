@@ -686,21 +686,23 @@ def timer(func):
 
 def read_pixel_size(image_path):
     from aicsimageio import AICSImage
-    img = AICSImage(image_path)
-    img_pixel_size = img.physical_pixel_sizes.X
-
-    if img_pixel_size is None or img_pixel_size ==0:
-        import slideio
-        slide = slideio.open_slide(image_path, driver = "AUTO")
-        scene  = slide.get_scene(0)
-        img_pixel_size = scene.resolution[0] * 10**6
+    img_pixel_size = None
+    try:
+        img = AICSImage(image_path)
+        img_pixel_size = img.physical_pixel_sizes.X
+    except:
         if img_pixel_size is None or img_pixel_size ==0:
-            from tiffslide import TiffSlide
-            slide = TiffSlide(image_path)
-            img_pixel_size = slide.properties['tiffslide.mpp-x']
+            import slideio
+            slide = slideio.open_slide(image_path, driver = "AUTO")
+            scene  = slide.get_scene(0)
+            img_pixel_size = scene.resolution[0] * 10**6
             if img_pixel_size is None or img_pixel_size ==0:
-                
-                raise ValueError("Could not read pixel size from image metadata")
+                from tiffslide import TiffSlide
+                slide = TiffSlide(image_path)
+                img_pixel_size = slide.properties['tiffslide.mpp-x']
+                if img_pixel_size is None or img_pixel_size ==0:
+                    
+                    raise ValueError("Could not read pixel size from image metadata")
     return img_pixel_size
 
 

@@ -7,7 +7,6 @@ import argparse
 import numpy as np
 import pdb
 from skimage import io
-from aicsimageio import AICSImage
 import warnings
 import torchvision
 from torchvision.transforms import InterpolationMode
@@ -46,7 +45,7 @@ prediction_tag = "_instanseg_prediction"
 
 
 if __name__ == "__main__":
-    from InstanSeg.utils.utils import show_images, save_image_with_label_overlay, _choose_device
+    from InstanSeg.utils.utils import show_images, save_image_with_label_overlay, _choose_device, read_pixel_size
     from InstanSeg.utils.model_loader import load_model
     from InstanSeg.utils.utils import export_to_torchscript
     from InstanSeg.utils.augmentations import Augmentations
@@ -98,17 +97,11 @@ if __name__ == "__main__":
 
             print("Processing file: ", file)
 
-            img = AICSImage(file)
-            if parser.pixel_size is None and img.physical_pixel_sizes.X is None:
+            pixel_size = read_pixel_size(file)
 
-                warnings.warn("Pixel size was not found in the metadata, please set the pixel size of the input image in microns manually")
-            elif parser.pixel_size is None and img.physical_pixel_sizes.X is not None:
-                pixel_size = img.physical_pixel_sizes.X
-                if pixel_size < 0.1 or pixel_size > 0.9:
-                    warnings.warn("Pixel size {} doesn't seem to be in microns, - ignoring the metadata pixel size".format(pixel_size))
-                    pixel_size = parser.pixel_size
-            else:
-                pixel_size = parser.pixel_size
+
+            pdb.set_trace()
+
 
             channel_number = img.dims.C
             num_pixels = np.cumprod(img.shape)[-1]
