@@ -48,7 +48,13 @@ class InstanSeg():
     Main class for running InstanSeg.
 """
 
-    def __init__(self, model_type: str = "brightfield_nuclei", device: Optional[str] = None, image_reader: str = "tiffslide", verbose = True):
+    def __init__(self, 
+                 model_type: str = "brightfield_nuclei", 
+                 device: Optional[str] = None, 
+                 image_reader: str = "tiffslide",
+                verbose = True,
+                target = "all_outputs", #or "nuclei" or "cells"
+                ):
         from InstanSeg.utils.utils import download_model, _choose_device
         self.instanseg = download_model(model_type, return_model=True)
         self.inference_device = _choose_device(device)
@@ -57,6 +63,8 @@ class InstanSeg():
         self.prefered_image_reader = image_reader
         self.small_image_threshold = 3 * 1500 * 1500
         self.medium_image_threshold = 5000 * 5000
+
+        self.target = target
 
         self.prediction_tag = "_instanseg_prediction"
 
@@ -94,10 +102,12 @@ class InstanSeg():
             from InstanSeg.utils.utils import read_pixel_size
             img_pixel_size = read_pixel_size(image_str)
 
-
         if img_pixel_size is not None:
-            assert float(img_pixel_size) > 0 and float(img_pixel_size) < 2, f"Pixel size {img_pixel_size} microns per pixel is invalid."
-        
+            import warnings
+            if float(img_pixel_size) > 0 and float(img_pixel_size) < 2:
+                warnings.warn(f"Pixel size {img_pixel_size} microns per pixel is invalid.")
+                img_pixel_size = None
+
         return image_array, img_pixel_size
     
 
@@ -165,7 +175,6 @@ class InstanSeg():
                 
             if not isinstance(image_array, str):
                 
-
                 num_pixels = np.cumprod(image_array.shape)[-1]
                 if num_pixels < self.small_image_threshold:
                     instances = self.eval_small_image(image = image_array, 
@@ -228,13 +237,24 @@ class InstanSeg():
             else:
                 image = torch.stack([percentile_normalize(i) for i in image])
 
+        
+        if self.target != "all_outputs":
+            assert self.target in ["nuclei", "cells"], "Target must be 'nuclei', 'cells' or 'all_outputs'."
+            if self.target == "nuclei":
+                target_segmentation = torch.tensor([1,0])
+            else:
+                target_segmentation = torch.tensor([0,1])
+        else:
+            target_segmentation = torch.tensor([1,1])
+
         with torch.cuda.amp.autocast():
-            instances = self.instanseg(image, **kwargs)
+            instances = self.instanseg(image,target_segmentation = target_segmentation, **kwargs)
 
         if pixel_size is not None and img_has_been_rescaled:  
             instances = interpolate(instances, size=original_shape[-2:], mode="nearest")
 
-        
+            if return_image_tensor:
+                image = interpolate(image, size=original_shape[-2:], mode="bilinear")
         if return_image_tensor:
             return instances.cpu(), image.cpu()
         else:
@@ -254,7 +274,6 @@ class InstanSeg():
         from InstanSeg.utils.tiling import sliding_window_inference
         original_shape = image.shape
 
-        
         if pixel_size is None:
             import warnings
             warnings.warn("Pixel size not provided, this may lead to innacurate results.")
@@ -273,6 +292,16 @@ class InstanSeg():
 
         output_dimension = 2 if self.instanseg.cells_and_nuclei else 1
 
+        if self.target != "all_outputs":
+            assert self.target in ["nuclei", "cells"], "Target must be 'nuclei', 'cells' or 'all_outputs'."
+            if self.target == "nuclei":
+                target_segmentation = torch.tensor([1,0])
+            else:
+                target_segmentation = torch.tensor([0,1])
+            output_dimension = 1
+        else:
+            target_segmentation = torch.tensor([1,1])
+
         instances = sliding_window_inference(image,
                     self.instanseg, 
                     window_size = (tile_size,tile_size),
@@ -281,13 +310,14 @@ class InstanSeg():
                     batch_size= batch_size,
                     output_channels = output_dimension,
                     show_progress= self.verbose,
+                    target_segmentation = target_segmentation,
                     **kwargs).float()
         
         if pixel_size is not None and img_has_been_rescaled:  
             instances = interpolate(instances, size=original_shape[-2:], mode="nearest")
 
             if return_image_tensor:
-                image = interpolate(image, size=original_shape[-2:], mode="linear")
+                image = interpolate(image, size=original_shape[-2:], mode="bilinear")
         if return_image_tensor:
             return instances.cpu(), image.cpu()
         else:
@@ -323,9 +353,9 @@ class InstanSeg():
 
         output_dimension = instances.shape[1]
 
-        if output_dimension ==1: #Nucleus or cell mask]
+        if output_dimension ==1: #Nucleus or cell mask
             labels_for_display = instances[0,0].cpu().numpy() #Shape is 1,H,W
-            image_overlay = save_image_with_label_overlay(im_for_display,lab=labels_for_display,return_image=True, label_boundary_mode="thick", label_colors=None,thickness=10,alpha=0.5)
+            image_overlay = save_image_with_label_overlay(im_for_display,lab=labels_for_display,return_image=True, label_boundary_mode="thick", label_colors=None,thickness=10,alpha=0.9)
         elif output_dimension ==2: #Nucleus and cell mask
             nuclei_labels_for_display = instances[0,0].cpu().numpy()
             cell_labels_for_display = instances[0,1].cpu().numpy() #Shape is 1,H,W
@@ -341,6 +371,16 @@ if __name__ == "__main__":
     from InstanSeg.utils.utils import show_images
 
     example_image_folder = Path(os.path.join(os.path.dirname(__file__),"./examples/"))
+
+    instanseg_brightfield = InstanSeg("brightfield_nuclei")
+
+    image_array, pixel_size = instanseg_brightfield.read_image(example_image_folder/"HE_example.tif")
+
+    labeled_output, image_tensor  = instanseg_brightfield.eval_small_image(image_array, 0.2)
+
+    display = instanseg_brightfield.display(image_tensor, labeled_output)
+    show_images(image_tensor,display, colorbar=False)
+
 
     instanseg = InstanSeg("brightfield_nuclei")
     # instances = instanseg.eval_whole_slide_image(example_image_folder / "HE_Hamamatsu.tiff")
