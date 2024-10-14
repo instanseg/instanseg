@@ -1,8 +1,10 @@
 
-
+<!-- 
 <p align="center">
   <img src="./assets/instanseg_logo.png" alt="Instanseg Logo" width="25%">
-</p>
+</p> -->
+![](https://github.com/ThibautGoldsborough/instanseg_thibaut/blob/main/assets/instanseg_logo.png)
+
 
 
 
@@ -22,7 +24,7 @@ InstanSeg is a pytorch based cell and nucleus segmentation pipeline for fluoresc
 
 ## InstanSeg has its own QuPath extension!
 
-InstanSeg is introduced in the [QuPath pre-release v0.6.0-rc1](https://github.com/qupath/qupath/releases/tag/v0.6.0-rc1), so you can start using InstanSeg immediately. You can find the standalone QuPath extension [here](https://github.com/qupath/qupath-extension-instanseg).
+InstanSeg is introduced in the [QuPath pre-release v0.6.0-rc2](https://github.com/qupath/qupath/releases/tag/v0.6.0-rc2), so you can start using InstanSeg immediately. You can find the standalone QuPath extension [here](https://github.com/qupath/qupath-extension-instanseg).
 
 ## How to cite InstanSeg:
 
@@ -35,12 +37,13 @@ If you use InstanSeg for nucleus and / or cell segmentation in fluorescence imag
 > Goldsborough, T. et al. (2024) ‘A novel channel invariant architecture for the segmentation of cells and nuclei in multiplexed images using InstanSeg’. _bioRxiv_, p. 2024.09.04.611150. Available at: https://doi.org/10.1101/2024.09.04.611150.
 
 
-
+<!-- 
 <p align="center">
   <img src="./assets/instanseg_main_figure.png" alt="Instanseg Main Figure" width="50%">
-</p>
+</p> -->
 
 
+![](https://github.com/ThibautGoldsborough/instanseg_thibaut/blob/main/assets/instanseg_main_figure.png)
 
 ## Table of Contents
 
