@@ -1,12 +1,8 @@
 
-<!-- 
+!-- 
 <p align="center">
-  <img src="./assets/instanseg_logo.png" alt="Instanseg Logo" width="25%">
+  <img src="https://github.com/ThibautGoldsborough/instanseg_thibaut/blob/main/assets/instanseg_logo.png?raw=True" alt="Instanseg Logo" width="25%">
 </p> -->
-
-
-<img src="https://github.com/ThibautGoldsborough/instanseg_thibaut/blob/main/assets/instanseg_logo.png?raw=True" title="xx" width="25%" align="center">
-
 
 
 
@@ -39,13 +35,11 @@ If you use InstanSeg for nucleus and / or cell segmentation in fluorescence imag
 > Goldsborough, T. et al. (2024) ‘A novel channel invariant architecture for the segmentation of cells and nuclei in multiplexed images using InstanSeg’. _bioRxiv_, p. 2024.09.04.611150. Available at: https://doi.org/10.1101/2024.09.04.611150.
 
 
-<!-- 
+!-- 
 <p align="center">
-  <img src="./assets/instanseg_main_figure.png" alt="Instanseg Main Figure" width="50%">
+  <img src="https://github.com/ThibautGoldsborough/instanseg_thibaut/blob/main/assets/instanseg_main_figure.png?raw=True" alt="Instanseg Main Figure" width="50%">
 </p> -->
 
-
-<img src="https://github.com/ThibautGoldsborough/instanseg_thibaut/blob/main/assets/instanseg_main_figure.png?raw=True" title="xx" width="50%" align="center">
 
 
 
