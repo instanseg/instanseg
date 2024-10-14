@@ -65,15 +65,13 @@ labeled_output = instanseg_brightfield.eval(image = "../instanseg/examples/HE_ex
 Alternatively, if you want more control over the intermediate steps:
 
 ```python
-
-from instanseg.utils.utils import show_images
-
 image_array, pixel_size = instanseg_brightfield.read_image("../instanseg/examples/HE_example.tif")
 
 labeled_output, image_tensor  = instanseg_brightfield.eval_small_image(image_array, pixel_size)
 
 display = instanseg_brightfield.display(image_tensor, labeled_output)
 
+from instanseg.utils.utils import show_images
 show_images(image_tensor,display, colorbar=False, titles = ["Normalized Image", "Image with segmentation"])
 ```
 
