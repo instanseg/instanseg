@@ -1,4 +1,5 @@
 [build-system]
+<<<<<<< HEAD
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
@@ -9,6 +10,18 @@ authors = [
   { name="Thibaut Goldsborough", email="thibaut.golds@gmail.com" },
 ]
 description = "Test package for InstanSeg PyPi"
+=======
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "InstanSeg"
+version = "0.1.0"
+authors = [
+  { name="Thibaut Goldsborough", email="thibaut.golds@ed.ac.uk" },
+]
+description = "A package for instance segmentation using deep learning."
+>>>>>>> upstream/main
 readme = "README.md"
 requires-python = ">=3.9"
 classifiers = [
@@ -16,6 +29,7 @@ classifiers = [
     "License :: OSI Approved :: Apache Software License",
     "Operating System :: OS Independent",
 ]
+<<<<<<< HEAD
 
 # Dependencies (Specify your requirements here)
 dependencies = [
@@ -45,3 +59,12 @@ full = [
 [project.urls]
 Homepage = "https://github.com/instanseg/instanseg"
 Issues = "https://github.com/instanseg/instanseg/issues"
+=======
+dynamic = ["dependencies"]
+[tool.setuptools.dynamic]
+dependencies = {file = ["requirements.txt"]}
+
+[project.urls]
+Homepage = "https://github.com/instanseg/instanseg"
+Issues = "https://github.com/instanseg/instanseg/issues"
+>>>>>>> upstream/main
