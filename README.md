@@ -1,8 +1,7 @@
 
-!-- 
 <p align="center">
   <img src="https://github.com/ThibautGoldsborough/instanseg_thibaut/blob/main/assets/instanseg_logo.png?raw=True" alt="Instanseg Logo" width="25%">
-</p> -->
+</p>
 
 
 
@@ -35,10 +34,10 @@ If you use InstanSeg for nucleus and / or cell segmentation in fluorescence imag
 > Goldsborough, T. et al. (2024) ‘A novel channel invariant architecture for the segmentation of cells and nuclei in multiplexed images using InstanSeg’. _bioRxiv_, p. 2024.09.04.611150. Available at: https://doi.org/10.1101/2024.09.04.611150.
 
 
-!-- 
+
 <p align="center">
   <img src="https://github.com/ThibautGoldsborough/instanseg_thibaut/blob/main/assets/instanseg_main_figure.png?raw=True" alt="Instanseg Main Figure" width="50%">
-</p> -->
+</p>
 
 ## Installation
 
@@ -52,14 +51,22 @@ if you want all the requirements used for training:
 ```bash
 pip install instanseg-torch[full]
 ```
-
-
+You can started immediately by calling the InstanSeg class:
 
 ```python
 from instanseg import InstanSeg
-from instanseg.utils.utils import show_images
-
 instanseg_brightfield = InstanSeg("brightfield_nuclei", image_reader= "tiffslide", verbosity=1)
+
+labeled_output = instanseg_brightfield.eval(image = "../instanseg/examples/HE_example.tif",
+                                            save_output = True,
+                                            save_overlay=True)
+```
+
+Alternatively, if you want more control over the intermediate steps:
+
+```python
+
+from instanseg.utils.utils import show_images
 
 image_array, pixel_size = instanseg_brightfield.read_image("../instanseg/examples/HE_example.tif")
 
