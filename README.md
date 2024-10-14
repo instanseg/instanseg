@@ -40,6 +40,20 @@ If you use InstanSeg for nucleus and / or cell segmentation in fluorescence imag
   <img src="https://github.com/ThibautGoldsborough/instanseg_thibaut/blob/main/assets/instanseg_main_figure.png?raw=True" alt="Instanseg Main Figure" width="50%">
 </p> -->
 
+## Installation
+
+For a minimal install:
+```bash
+pip install instanseg-torch
+```
+
+if you want all the requirements used for training:
+
+```bash
+pip install instanseg-torch[full]
+```
+
+
 
 ```python
 from instanseg import InstanSeg
