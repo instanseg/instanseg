@@ -99,8 +99,14 @@ if __name__ == "__main__":
 
             pixel_size = read_pixel_size(file)
 
+            from tiffslide import TiffSlide
+
+            img = TiffSlide(file)
+
 
             pdb.set_trace()
+
+            channel_number = img.dims.C
 
 
             channel_number = img.dims.C

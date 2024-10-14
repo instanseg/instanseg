@@ -33,3 +33,5 @@ InstanSeg/utils/models/patch_classifier/
 InstanSeg/utils/models/bash.sh
 Raw_Datasets
 InstanSeg/bio_2_delete/
+
+dist/
