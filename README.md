@@ -1,7 +1,7 @@
 
 
 <p align="center">
-  <img src="./images/instanseg_logo.png" alt="Instanseg Logo" width="25%">
+  <img src="./assets/instanseg_logo.png" alt="Instanseg Logo" width="25%">
 </p>
 
 
@@ -37,7 +37,7 @@ If you use InstanSeg for nucleus and / or cell segmentation in fluorescence imag
 
 
 <p align="center">
-  <img src="./images/instanseg_main_figure.png" alt="Instanseg Main Figure" width="50%">
+  <img src="./assets/instanseg_main_figure.png" alt="Instanseg Main Figure" width="50%">
 </p>
 
 
@@ -98,9 +98,9 @@ The repository may work with older versions of CUDA. For this replace "12.1" and
 
 ### Download Datasets
 
-To download public datasets and example images, follow the instructions under **InstanSeg/notebooks/load_datasets.ipynb**
+To download public datasets and example images, follow the instructions under **instanseg/notebooks/load_datasets.ipynb**
 
-To train InstanSeg on your own dataset, extend the **InstanSeg/notebooks/load_datasets.ipynb** with one of the templates provided.
+To train InstanSeg on your own dataset, extend the **instanseg/notebooks/load_datasets.ipynb** with one of the templates provided.
 
 ### Training Models
 
