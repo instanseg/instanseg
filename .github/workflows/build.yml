@@ -23,5 +23,5 @@ jobs:
         run: |
           cd notebooks # because the folder InstanSeg and the module InstanSeg are treated the same (thanks python!)
           python -c 'import instanseg'
-          python -c 'from instanSeg.utils.loss.lovasz_losses import binary_xloss'
+          python -c 'from instanseg.utils.loss.lovasz_losses import binary_xloss'
           python -c 'from instanSeg.utils.models.InstanSeg_UNet import DecoderBlock, EncoderBlock, conv_norm_act'

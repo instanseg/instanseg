@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "instanseg"
-version = "0.0.6"
+version = "0.0.12"
 authors = [
   { name="Thibaut Goldsborough", email="thibaut.golds@gmail.com" },
 ]
@@ -69,6 +69,7 @@ full = [
 ]
 
 [tool.hatch.build]
+include = ["instanseg/**"]
 exclude = ["notebooks/**", "instanseg/examples/*", "assets/**"]
 
 [project.urls]

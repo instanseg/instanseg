@@ -3,7 +3,9 @@
 <p align="center">
   <img src="./assets/instanseg_logo.png" alt="Instanseg Logo" width="25%">
 </p> -->
-![](https://github.com/ThibautGoldsborough/instanseg_thibaut/blob/main/assets/instanseg_logo.png)
+
+
+<img src="https://github.com/ThibautGoldsborough/instanseg_thibaut/blob/main/assets/instanseg_logo.png?raw=True" title="xx" width="25%" align="center">
 
 
 
@@ -43,7 +45,9 @@ If you use InstanSeg for nucleus and / or cell segmentation in fluorescence imag
 </p> -->
 
 
-![](https://github.com/ThibautGoldsborough/instanseg_thibaut/blob/main/assets/instanseg_main_figure.png)
+<img src="https://github.com/ThibautGoldsborough/instanseg_thibaut/blob/main/assets/instanseg_main_figure.png?raw=True" title="xx" width="50%" align="center">
+
+
 
 ## Table of Contents
 
