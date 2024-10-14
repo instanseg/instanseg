@@ -41,7 +41,20 @@ If you use InstanSeg for nucleus and / or cell segmentation in fluorescence imag
 </p> -->
 
 
+```python
+from instanseg import InstanSeg
+from instanseg.utils.utils import show_images
 
+instanseg_brightfield = InstanSeg("brightfield_nuclei", image_reader= "tiffslide", verbosity=1)
+
+image_array, pixel_size = instanseg_brightfield.read_image("../instanseg/examples/HE_example.tif")
+
+labeled_output, image_tensor  = instanseg_brightfield.eval_small_image(image_array, pixel_size)
+
+display = instanseg_brightfield.display(image_tensor, labeled_output)
+
+show_images(image_tensor,display, colorbar=False, titles = ["Normalized Image", "Image with segmentation"])
+```
 
 ## Table of Contents
 
@@ -51,6 +64,8 @@ If you use InstanSeg for nucleus and / or cell segmentation in fluorescence imag
 - [Usage](#usage)
   - [Training Models](#training-models)
   - [Testing Models](#testing-models)
+
+
 
 ## Installation
 
