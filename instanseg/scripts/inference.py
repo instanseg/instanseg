@@ -6,7 +6,6 @@ from pathlib import Path
 import argparse
 import pdb
 
-
 parser = argparse.ArgumentParser()
 parser.add_argument("-i_p", "--image_path", type=str, default=r"../examples")
 parser.add_argument("-m_f", "--model_folder", type=str)
