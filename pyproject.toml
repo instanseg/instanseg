@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "instanseg"
-version = "0.0.12"
+version = "0.0.13"
 authors = [
   { name="Thibaut Goldsborough", email="thibaut.golds@gmail.com" },
 ]
@@ -31,6 +31,7 @@ dependencies = [
     "aicsimageio>=4.11.0",
     "bioio>=1.1.0",
     "tiffslide>=2.4.0",
+    "slideio>=3.6.2",
 ]
 
 [project.optional-dependencies]

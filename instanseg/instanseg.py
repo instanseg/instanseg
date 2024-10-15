@@ -1,12 +1,12 @@
 from typing import Union, List, Optional
 import numpy as np
 import torch
+from torch import nn
 from torch.nn.functional import interpolate
 from pathlib import Path, PosixPath
 
 import sys
 import pdb
-
 
 
 def _to_tensor_float32(image: Union[np.ndarray, torch.Tensor]) -> torch.Tensor:
@@ -26,7 +26,9 @@ def _to_tensor_float32(image: Union[np.ndarray, torch.Tensor]) -> torch.Tensor:
 
     return image
 
-def _rescale_to_pixel_size(image: torch.Tensor, requested_pixel_size: float, model_pixel_size: float) -> torch.Tensor:
+def _rescale_to_pixel_size(image: torch.Tensor, 
+                           requested_pixel_size: float, 
+                           model_pixel_size: float) -> torch.Tensor:
 
     if image.squeeze().dim() == 3:
         not_batched = True
@@ -44,12 +46,11 @@ def _rescale_to_pixel_size(image: torch.Tensor, requested_pixel_size: float, mod
 
     return image
 
-
-def display_colourized(mIF, random_seed = 0):
-    from instanseg.utils.utils import percentile_normalize, _move_channel_axis, generate_colors
-    
+def display_colourized(mIF):
+    from instanseg.utils.utils import _move_channel_axis, generate_colors
 
     mIF = _to_tensor_float32(mIF)
+    mIF = mIF / (mIF.max() + 1e-6)
     if mIF.shape[0]!=3:
         colours = generate_colors(num_colors=mIF.shape[0])
         colour_render = (mIF.flatten(1).T @ torch.tensor(colours)).reshape(mIF.shape[1],mIF.shape[2],3)
@@ -60,27 +61,46 @@ def display_colourized(mIF, random_seed = 0):
     return colour_render.astype(np.uint8)
 
 
-
 class InstanSeg():
     """
     Main class for running InstanSeg.
     """
     def __init__(self, 
-                 model_type: str = "brightfield_nuclei", 
+                 model_type: Union[str,nn.Module] = "brightfield_nuclei", 
                  device: Optional[str] = None, 
                  image_reader: str = "tiffslide",
                 verbosity = 1, #0,1,2
                 ):
         
+        """
+        Parameters:
+            model_type (Union[str,nn.Module])
+                The type of model to use. If a string is provided, the model will be downloaded. 
+                If the model is not public, it will look for a model in your bioimageio folder. 
+                If an nn.Module is provided, this model will be used.
+
+            device (Optional[str]): 
+                The device to run the model on. If None, the device will be chosen automatically.
+
+            image_reader (str): 
+                The image reader to use. Options are "tiffslide", "skimage.io", "bioio", "AICSImageIO".
+
+            verbosity (int): 
+                The verbosity level. 0 is silent, 1 is normal, 2 is verbose.
         
+        """
         from instanseg.utils.utils import download_model, _choose_device
-        self.instanseg = download_model(model_type, return_model=True)
+
+        if isinstance(model_type, nn.Module):
+            self.instanseg = model_type
+        else:
+            self.instanseg = download_model(model_type)
         self.inference_device = _choose_device(device)
         self.instanseg = self.instanseg.to(self.inference_device)
         self.verbosity = verbosity
         self.verbose = verbosity != 0
         self.prefered_image_reader = image_reader
-        self.small_image_threshold = 3 * 1500 * 1500
+        self.small_image_threshold = 3 * 1500 * 1500 #max number of image pixels to be processed on GPU.
         self.medium_image_threshold = 10000 * 10000 #max number of image pixels that could be loaded in RAM.
         self.prediction_tag = "_instanseg_prediction"
 
@@ -272,8 +292,6 @@ class InstanSeg():
         
         return output
     
-
-
     def save_output(self,image_path: str, 
                     labels: torch.Tensor,
                     image_array: Optional[np.ndarray] = None,
@@ -320,6 +338,7 @@ class InstanSeg():
                 print(f"Saving overlay to {out_path}")
             assert image_array is not None, "Image array must be provided to save overlay."
             display = self.display(image_array, labels)
+            
             io.imsave(out_path, display, check_contrast=False)
 
 
@@ -363,7 +382,7 @@ class InstanSeg():
                 image = torch.stack([percentile_normalize(i) for i in image])
 
         
-        if target != "all_outputs":
+        if target != "all_outputs" and self.instanseg.cells_and_nuclei:
             assert target in ["nuclei", "cells"], "Target must be 'nuclei', 'cells' or 'all_outputs'."
             if target == "nuclei":
                 target_segmentation = torch.tensor([1,0])
@@ -373,7 +392,10 @@ class InstanSeg():
             target_segmentation = torch.tensor([1,1])
 
         with torch.amp.autocast('cuda'):
-            instances = self.instanseg(image,target_segmentation = target_segmentation, **kwargs)
+
+        
+            instanseg_kwargs = {k: v for k, v in kwargs.items() if k not in ["batch_size", "tile_size", "normalisation_subsampling_factor"]}
+            instances = self.instanseg(image,target_segmentation = target_segmentation, **instanseg_kwargs)
 
         if pixel_size is not None and img_has_been_rescaled:  
             instances = interpolate(instances, size=original_shape[-2:], mode="nearest")
@@ -420,7 +442,7 @@ class InstanSeg():
 
         output_dimension = 2 if self.instanseg.cells_and_nuclei else 1
 
-        if target != "all_outputs":
+        if target != "all_outputs" and output_dimension == 2:
             assert target in ["nuclei", "cells"], "Target must be 'nuclei', 'cells' or 'all_outputs'."
             if target == "nuclei":
                 target_segmentation = torch.tensor([1,0])
@@ -482,6 +504,8 @@ class InstanSeg():
 
         im_for_display = display_colourized(image.squeeze())
 
+        
+
         output_dimension = instances.shape[1]
 
         if output_dimension ==1: #Nucleus or cell mask
@@ -497,16 +521,17 @@ class InstanSeg():
 
             
 if __name__ == "__main__":
+
+
     import os
     import pdb
     sys.path = sys.path[1:]
     from instanseg.utils.utils import show_images
-    from instanseg.utils.utils import percentile_normalize, _move_channel_axis
-    
 
     example_image_folder = Path(os.path.join(os.path.dirname(__file__),"./examples/"))
 
     instanseg_brightfield = InstanSeg("brightfield_nuclei")
+
 
     image_array, pixel_size = instanseg_brightfield.read_image(example_image_folder/"HE_example.tif")
 
@@ -525,16 +550,12 @@ if __name__ == "__main__":
 
     show_images(display, colorbar=False)
 
-
-
-
    # instanseg = InstanSeg("fluorescence_nuclei_and_cells")
    # image_array,pixel_size = instanseg.read_image(example_image_folder / "adam.ome.tif")
 
    # labeled_output, image_tensor  = instanseg.eval_medium_image(image_array, pixel_size, normalisation_subsampling_factor=10, batch_size=3)
 
    # instanseg.save_output(example_image_folder / "adam.ome.tif", labeled_output, image_array, output_overlay=True, output_geojson=True)
-
 
     # instanseg = InstanSeg("brightfield_nuclei")
     # # instances = instanseg.eval_whole_slide_image(example_image_folder / "HE_Hamamatsu.tiff")
