@@ -504,8 +504,6 @@ class InstanSeg():
 
         im_for_display = display_colourized(image.squeeze())
 
-        
-
         output_dimension = instances.shape[1]
 
         if output_dimension ==1: #Nucleus or cell mask
