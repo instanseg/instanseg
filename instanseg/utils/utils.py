@@ -834,7 +834,7 @@ def drag_and_drop_file():
     return entry_var.get()
 
 
-def download_model(model_str: str):
+def download_model(model_str: str, verbose : bool = True):
     import os
     import requests
     import zipfile
@@ -864,7 +864,9 @@ def download_model(model_str: str):
         with zipfile.ZipFile(BytesIO(response.content)) as z:
             z.extractall(bioimageio_path)
 
-        print(f"Model {model_str} downloaded and extracted to {bioimageio_path}")
+
+        if verbose:
+            print(f"Model {model_str} downloaded and extracted to {bioimageio_path}")
 
         path_to_torchscript_model = bioimageio_path + f"{model_str}/instanseg.pt"
         return torch.jit.load(path_to_torchscript_model)

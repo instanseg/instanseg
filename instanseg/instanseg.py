@@ -91,14 +91,16 @@ class InstanSeg():
         """
         from instanseg.utils.utils import download_model, _choose_device
 
+        self.verbosity = verbosity
+        self.verbose = verbosity != 0
+
         if isinstance(model_type, nn.Module):
             self.instanseg = model_type
         else:
-            self.instanseg = download_model(model_type)
-        self.inference_device = _choose_device(device)
+            self.instanseg = download_model(model_type, verbose = self.verbose)
+        self.inference_device = _choose_device(device, verbose= self.verbose)
         self.instanseg = self.instanseg.to(self.inference_device)
-        self.verbosity = verbosity
-        self.verbose = verbosity != 0
+
         self.prefered_image_reader = image_reader
         self.small_image_threshold = 3 * 1500 * 1500 #max number of image pixels to be processed on GPU.
         self.medium_image_threshold = 10000 * 10000 #max number of image pixels that could be loaded in RAM.
@@ -348,6 +350,7 @@ class InstanSeg():
                           normalise: bool = True,
                           return_image_tensor: bool = True,
                           target = "all_outputs", #or "nuclei" or "cells"
+                          rescale_output: bool = True,
                           **kwargs):
         """
         Evaluate the input image using the InstanSeg model.
@@ -397,7 +400,7 @@ class InstanSeg():
             instanseg_kwargs = {k: v for k, v in kwargs.items() if k not in ["batch_size", "tile_size", "normalisation_subsampling_factor"]}
             instances = self.instanseg(image,target_segmentation = target_segmentation, **instanseg_kwargs)
 
-        if pixel_size is not None and img_has_been_rescaled:  
+        if pixel_size is not None and img_has_been_rescaled and rescale_output:  
             instances = interpolate(instances, size=original_shape[-2:], mode="nearest")
 
             if return_image_tensor:
@@ -415,6 +418,7 @@ class InstanSeg():
                         return_image_tensor: bool = True,
                         normalisation_subsampling_factor: int = 1,
                         target = "all_outputs", #or "nuclei" or "cells"
+                        rescale_output: bool = True,
                           **kwargs):
         
         from instanseg.utils.utils import percentile_normalize, _move_channel_axis
@@ -463,11 +467,12 @@ class InstanSeg():
                     target_segmentation = target_segmentation,
                     **kwargs).float()
         
-        if pixel_size is not None and img_has_been_rescaled:  
+        if pixel_size is not None and img_has_been_rescaled and rescale_output:  
             instances = interpolate(instances, size=original_shape[-2:], mode="nearest")
 
             if return_image_tensor:
                 image = interpolate(image, size=original_shape[-2:], mode="bilinear")
+
         if return_image_tensor:
             return instances.cpu(), image.cpu()
         else:
