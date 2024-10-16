@@ -1,24 +1,77 @@
 [build-system]
-requires = ["setuptools>=61.0"]
-build-backend = "setuptools.build_meta"
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 
 [project]
-name = "InstanSeg"
-version = "0.1.0"
+name = "instanseg-torch"
+version = "0.0.2"
 authors = [
-  { name="Thibaut Goldsborough", email="thibaut.golds@ed.ac.uk" },
+  { name="Thibaut Goldsborough", email="thibaut.golds@gmail.com" },
 ]
-description = "A package for instance segmentation using deep learning."
+description = "Package for instanseg-torch PyPi"
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.9, <3.12"
 classifiers = [
     "Programming Language :: Python :: 3",
     "License :: OSI Approved :: Apache Software License",
     "Operating System :: OS Independent",
 ]
-dynamic = ["dependencies"]
-[tool.setuptools.dynamic]
-dependencies = {file = ["requirements.txt"]}
+
+# Dependencies (Specify your requirements here)
+dependencies = [
+    "numpy>=1.26.4",
+    "torch>=2.1.1",
+    "tqdm>=4.66.1",
+    "matplotlib>=3.8.2",
+    "colorcet>=3.0.1",
+    "fastremap>=1.14.0",
+    "rasterio>=1.3.9",
+    "tifffile>=2023.12.9",
+    "scikit-image>=0.22.0",
+    "aicsimageio>=4.11.0",
+    "bioio>=1.1.0",
+    "tiffslide>=2.4.0",
+    "slideio>=2.6.2",
+]
+
+[project.optional-dependencies]
+full = [
+ "ipykernel>=6.28.0",
+    "ipywidgets>=8.1.1",
+    "jupyterlab>=4.0.10",
+    "tqdm>=4.66.1",
+    "imagecodecs>=2024.1.1",
+    "seaborn>=0.13.1",
+    "matplotlib>=3.8.2",
+    "numba>=0.58.1",
+    "colorcet>=3.0.1",
+    "fastremap>=1.14.0",
+    "scipy>=1.11.4",
+    "scikit-learn>=1.3.2",
+    "rasterio>=1.3.9",
+    "tifffile>=2023.12.9",
+    "scikit-image>=0.22.0",
+    "opencv-python>=4.9.0",
+    "hyperopt>=0.2.7",
+    "pip>=23.3.2",
+    "einops>=0.7.0",
+    "aicsimageio>=4.10.0",
+    "bioimageio.core>=0.5.11",
+    "bioimageio.spec>=0.4.9",
+    "onnx>=1.15.0",
+    "tensorboard>=2.17.0",
+    "torchstain>=1.3.0",
+    "cucim>=23.10.00",
+    "stardist>=0.8.5",
+    "torchvision>=0.16.1",
+    "kornia>=0.7.0",
+    "monai>=1.3.0",
+    "edt"
+]
+
+[tool.hatch.build]
+include = ["instanseg/**"]
+exclude = ["notebooks/**", "instanseg/examples/*", "assets/**"]
 
 [project.urls]
 Homepage = "https://github.com/instanseg/instanseg"

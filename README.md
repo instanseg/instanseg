@@ -1,28 +1,27 @@
 
-
 <p align="center">
-  <img src="./images/instanseg_logo.png" alt="Instanseg Logo" width="25%">
+  <img src="https://github.com/ThibautGoldsborough/instanseg_thibaut/blob/main/assets/instanseg_logo.png?raw=True" alt="Instanseg Logo" width="25%">
 </p>
 
 
 
 ## Overview
 
-InstanSeg is a pytorch based cell and nucleus segmentation pipeline for fluorescent and brightfield microscopy images. This README provides instructions for setting up the environment, installing dependencies, and using the provided tools and models.
+InstanSeg is a pytorch based cell and nucleus segmentation pipeline for fluorescence and brightfield microscopy images. This README provides instructions for setting up the environment, installing dependencies, and using the provided tools and models.
 
 ## Why should I use InstanSeg?
 
-1. InstanSeg is fully open-source
-2. It's much faster than other cell segmentation methods
-3. Instanseg is highly accurate for both nucleus and cell segmentation
-5. InstanSeg can be entirely (_including prostprocessing!_) compiled in TorchScript, which means it's easy to use in Python and DeepImageJ. This allows you to run InstanSeg directly in [QuPath](https://qupath.github.io/)!
-6. InstanSeg can simultaneously detect nuclei and cells
-7. You can use InstanSeg on multiplexed images (images that have more than three channels) on novel biomarker panels, without retraining or manual intervention.
-8. We plan to release more InstanSeg models trained on public datasets. If there's a _public_ dataset (_i.e._ one with a recognized license) that we missed, let us know and we may be able to increase our InstanSeg model zoo.
+1. InstanSeg is freely available and open source
+2. It's faster than other cell segmentation methods… sometimes much faster
+3. It's capable of accurately segmenting both nuclei and whole cells
+4. InstanSeg can be entirely compiled in TorchScript - including prostprocessing! This means it's not only easy to use in Python but also works with LibTorch alone. This allows you to run InstanSeg directly in QuPath!
+5. You can use InstanSeg on multiplexed images (images that have more than three channels) on novel biomarker panels, without retraining or manual intervention.
+6. We plan to release more InstanSeg models trained on public datasets. If there's a nucleus and/or cell segmentation dataset under a permissive open license (e.g. CC0 or CC-BY) that we missed, let us know and we may be able to increase our InstanSeg model zoo.
+ 
 
 ## InstanSeg has its own QuPath extension!
 
-InstanSeg is introduced in the [QuPath pre-release v0.6.0-rc1](https://github.com/qupath/qupath/releases/tag/v0.6.0-rc1), so you can start using InstanSeg immediately. You can find the standalone QuPath extension [here](https://github.com/qupath/qupath-extension-instanseg).
+InstanSeg is introduced in the [QuPath pre-release v0.6.0-rc2](https://github.com/qupath/qupath/releases/tag/v0.6.0-rc2), so you can start using InstanSeg immediately. You can find the standalone QuPath extension [here](https://github.com/qupath/qupath-extension-instanseg).
 
 ## How to cite InstanSeg:
 
@@ -37,10 +36,8 @@ If you use InstanSeg for nucleus and / or cell segmentation in fluorescence imag
 
 
 <p align="center">
-  <img src="./images/instanseg_main_figure.png" alt="Instanseg Main Figure" width="50%">
+  <img src="https://github.com/ThibautGoldsborough/instanseg_thibaut/blob/main/assets/instanseg_main_figure.png?raw=True" alt="Instanseg Main Figure" width="50%">
 </p>
-
-
 
 ## Table of Contents
 
@@ -51,7 +48,42 @@ If you use InstanSeg for nucleus and / or cell segmentation in fluorescence imag
   - [Training Models](#training-models)
   - [Testing Models](#testing-models)
 
-## Installation
+
+## Installing using pip
+
+For a minimal install:
+```bash
+pip install instanseg-torch
+```
+
+if you want all the requirements used for training:
+
+```bash
+pip install instanseg-torch[full]
+```
+You can started immediately by calling the InstanSeg class:
+
+```python
+from instanseg import InstanSeg
+instanseg_brightfield = InstanSeg("brightfield_nuclei", image_reader= "tiffslide", verbosity=1)
+
+labeled_output = instanseg_brightfield.eval(image = "../instanseg/examples/HE_example.tif",
+                                            save_output = True,
+                                            save_overlay = True)
+```
+
+Alternatively, if you want more control over the intermediate steps:
+
+```python
+image_array, pixel_size = instanseg_brightfield.read_image("../instanseg/examples/HE_example.tif")
+
+labeled_output, image_tensor  = instanseg_brightfield.eval_small_image(image_array, pixel_size)
+
+display = instanseg_brightfield.display(image_tensor, labeled_output)
+
+from instanseg.utils.utils import show_images
+show_images(image_tensor,display, colorbar=False, titles = ["Normalized Image", "Image with segmentation"])
+```
 
 ### Local Installation
 
@@ -98,9 +130,9 @@ The repository may work with older versions of CUDA. For this replace "12.1" and
 
 ### Download Datasets
 
-To download public datasets and example images, follow the instructions under **InstanSeg/notebooks/load_datasets.ipynb**
+To download public datasets and example images, follow the instructions under **instanseg/notebooks/load_datasets.ipynb**
 
-To train InstanSeg on your own dataset, extend the **InstanSeg/notebooks/load_datasets.ipynb** with one of the templates provided.
+To train InstanSeg on your own dataset, extend the **instanseg/notebooks/load_datasets.ipynb** with one of the templates provided.
 
 ### Training Models
 
@@ -108,13 +140,13 @@ To train models using InstanSeg, use the **train.py** script under the scripts f
 
 For example, to train InstanSeg on the TNBC_2018 dataset over 250 epochs at a pixel resolution of 0.25 microns/pixel, run the following command:
 ```bash
-cd InstanSeg/scripts
+cd instanseg/scripts
 python train.py -data segmentation_dataset.pth -source "[TNBC_2018]" --num_epochs 250 --experiment_str my_first_instanseg --requested_pixel_size 0.25
 ```
 
 To train a channel invariant InstanSeg on the CPDMI_2023 dataset, predicting both nuclei and cells, run the following command:
 ```bash
-cd InstanSeg/scripts
+cd instanseg/scripts
 python train.py -data segmentation_dataset.pth -source "[CPDMI_2023]" --num_epochs 250 --experiment_str my_first_instanseg -target NC --channel_invariant True --requested_pixel_size 0.5
 ```
 
