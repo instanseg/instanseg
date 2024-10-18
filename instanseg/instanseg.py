@@ -521,6 +521,48 @@ class InstanSeg():
             image_overlay = save_image_with_label_overlay(image_overlay,lab=cell_labels_for_display,return_image=True, label_boundary_mode="inner", label_colors="green",thickness=1)
 
         return image_overlay
+    
+
+    def cluster_instances_by_mean_channel_intensity(self, image_tensor: torch.Tensor, labeled_output: torch.Tensor):
+
+        #This is experimental code that is not yet implemented. You'll need to install rapids_singlecell, cuml and scanpy to run this code.
+
+        from instanseg.utils.biological_utils import get_mean_object_features
+        import fastremap
+        import numpy as np
+        from instanseg.utils.utils import apply_cmap
+        from instanseg.utils.pytorch_utils import torch_fastremap
+        import rapids_singlecell as rsc
+        import scanpy as sc
+        import matplotlib.pyplot as plt
+
+        X_features = get_mean_object_features( image_tensor.to("cuda"), labeled_output.to("cuda"),)
+
+        adata = sc.AnnData(X_features.cpu().numpy())
+        rsc.get.anndata_to_GPU(adata)
+        rsc.pp.scale(adata)
+        rsc.pp.neighbors(adata, n_neighbors=8, n_pcs=50)
+        rsc.tl.umap(adata)
+        rsc.tl.leiden(adata, resolution=0.1)
+
+        # Create the UMAP plot
+        fig, axes = plt.subplots(1, 2, figsize=(15, 7))
+        mapping = fastremap.component_map(np.arange(1, len(adata.obs["leiden"]) + 1), adata.obs["leiden"].astype(np.int64) + 1)
+        labs = torch_fastremap(labeled_output[0, 0])
+        labels = fastremap.remap(labs.numpy(), mapping, preserve_missing_labels=True)
+
+        labels_disp = apply_cmap(labels, labels > 0, cmap="tab10")
+
+        # Show the labeled image
+        axes[0].imshow(labels_disp)
+        axes[0].set_title('Labeled Image')
+        axes[0].axis('off')
+
+        sc.pl.umap(adata, color="leiden", legend_loc='on data', cmap="tab10", title='UMAP with Leiden Clustering', s=30, ax=axes[1], show = False)
+        axes[1].axis('off')
+        plt.subplots_adjust(wspace=0., hspace=0)
+        plt.show()
+
 
             
 if __name__ == "__main__":
