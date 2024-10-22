@@ -442,7 +442,6 @@ class InstanSeg():
         
         if normalise:
             image = percentile_normalize(image, subsampling_factor=normalisation_subsampling_factor)
-            image = image
 
         output_dimension = 2 if self.instanseg.cells_and_nuclei else 1
 
@@ -471,6 +470,7 @@ class InstanSeg():
             instances = interpolate(instances, size=original_shape[-2:], mode="nearest")
 
             if return_image_tensor:
+                image = image[None]
                 image = interpolate(image, size=original_shape[-2:], mode="bilinear")
 
         if return_image_tensor:
