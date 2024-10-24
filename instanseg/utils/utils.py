@@ -321,7 +321,7 @@ def percentile_normalize(img: Union[np.ndarray, torch.Tensor], percentile=0.1, s
         img = _move_channel_axis(img, to_back=True)
         for c in range(img.shape[-1]):
             im_temp = img[::subsampling_factor, ::subsampling_factor, c]
-            (p_min, p_max) = torch.quantile(im_temp, torch.tensor([percentile / 100, (100 - percentile) / 100],device = im_temp.device))
+            (p_min, p_max) = np.percentile(im_temp.cpu(), [percentile, 100 - percentile])
             img[:, :, c] = (img[:, :, c] - p_min) / max(epsilon, p_max - p_min)
        # img = img / np.maximum(0.01, torch.max(img))
         return img.movedim(2, channel_axis)
