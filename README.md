@@ -14,7 +14,7 @@ InstanSeg is a pytorch based cell and nucleus segmentation pipeline for fluoresc
 1. InstanSeg is freely available and open source
 2. It's faster than other cell segmentation methods… sometimes much faster
 3. It's capable of accurately segmenting both nuclei and whole cells
-4. InstanSeg can be entirely compiled in TorchScript - including prostprocessing! This means it's not only easy to use in Python but also works with LibTorch alone. This allows you to run InstanSeg directly in QuPath!
+4. InstanSeg can be entirely compiled in TorchScript - including postprocessing! This means it's not only easy to use in Python but also works with LibTorch alone. This allows you to run InstanSeg directly in QuPath!
 5. You can use InstanSeg on multiplexed images (images that have more than three channels) on novel biomarker panels, without retraining or manual intervention.
 6. We plan to release more InstanSeg models trained on public datasets. If there's a nucleus and/or cell segmentation dataset under a permissive open license (e.g. CC0 or CC-BY) that we missed, let us know and we may be able to increase our InstanSeg model zoo.
  
@@ -25,7 +25,7 @@ InstanSeg is introduced in the [QuPath pre-release v0.6.0-rc2](https://github.co
 
 ## How to cite InstanSeg:
 
-If you use InstanSeg for nucleus segmentation if brightfield histology images, please cite:
+If you use InstanSeg for nucleus segmentation in brightfield histology images, please cite:
 
 > Goldsborough, T. et al. (2024) ‘InstanSeg: an embedding-based instance segmentation algorithm optimized for accurate, efficient and portable cell segmentation’. _arXiv_. Available at: https://doi.org/10.48550/arXiv.2408.15954.
 
