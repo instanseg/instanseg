@@ -103,7 +103,6 @@ class Augmentations(object):
         self.channel_invariant = channel_invariant
     def to_tensor(self, image, labels=None, normalize=False, amount=None, metadata=None):
 
-        
 
         if isinstance(image, np.ndarray):
             if self.debug:
@@ -132,6 +131,8 @@ class Augmentations(object):
 
                     if not (lab == -1).any():  # convention is to skip labels with a value of -1
                         labels[n] = fastremap.renumber(lab)[0]
+                    else:
+                        labels[n] = lab
 
                 labels = torch.tensor(labels.astype(np.int32), dtype=torch.int32)
             labels = torch.atleast_3d(labels)
@@ -702,16 +703,17 @@ class Augmentations(object):
 
             resized_labels = Resize(size=shape, interpolation=torchvision.transforms.InterpolationMode.NEAREST)(labels)
 
-        while self.shape is not None and np.any(np.array(resized_data[0].shape) < self.shape[0]):
+        while self.shape is not None and np.any(np.array(resized_data[0].shape) < self.shape[0]) and not crop:
             pad = int((self.shape[0] - min(resized_data[0].shape)) / 2) + 3
             pad = torch.Tensor([pad, resized_data.shape[1], resized_data.shape[2]]).min().int() - 1
 
+            
 
             resized_data = torch.nn.functional.pad(resized_data, (pad, pad, pad, pad), mode='constant',
                                                    value=image.max() if modality == "Brightfield" else resized_data.min())
 
             if labels is not None:
-                resized_labels = torch.nn.functional.pad(resized_labels, (pad, pad, pad, pad), mode='constant').to(
+                resized_labels = torch.nn.functional.pad(resized_labels, (pad, pad, pad, pad), mode='constant', value = min(resized_labels.min(),0)).to(
                     labels.dtype)
 
         if not crop:

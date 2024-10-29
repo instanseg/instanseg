@@ -157,10 +157,10 @@ def main(model, loss_fn, train_loader, test_loader, num_epochs=1000, epoch_name=
 
 if __name__ == "__main__":
 
-    from InstanSeg.utils.utils import plot_average, _choose_device
-    from InstanSeg.utils.AI_utils import optimize_hyperparameters, train_epoch, test_epoch
-    from InstanSeg.utils.model_loader import build_model_from_dict, load_model_weights
-    from InstanSeg.utils.data_loader import _read_images_from_pth, get_loaders
+    from instanseg.utils.utils import plot_average, _choose_device
+    from instanseg.utils.AI_utils import optimize_hyperparameters, train_epoch, test_epoch
+    from instanseg.utils.model_loader import build_model_from_dict, load_model_weights
+    from instanseg.utils.data_loader import _read_images_from_pth, get_loaders
 
     args = parser.parse_args()
 
@@ -211,7 +211,7 @@ if __name__ == "__main__":
     device = _choose_device(args.device)
 
     if args.loss_function == "instanseg_loss":
-        from InstanSeg.utils.loss.instanseg_loss import InstanSeg
+        from instanseg.utils.loss.instanseg_loss import InstanSeg
 
 
         method = InstanSeg(binary_loss_fn_str=args.binary_loss_fn, 
@@ -250,7 +250,7 @@ if __name__ == "__main__":
     # print(flop_count_str(flops))
 
     if args.loss_function in ["instanseg_loss"]:
-        from InstanSeg.utils.loss.instanseg_loss import has_pixel_classifier_model
+        from instanseg.utils.loss.instanseg_loss import has_pixel_classifier_model
 
         if not has_pixel_classifier_model(model):
             model = method.initialize_pixel_classifier(model, MLP_width = args.mlp_width)
@@ -272,7 +272,7 @@ if __name__ == "__main__":
         optimizer = optim.Adam(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
 
     if args.channel_invariant:
-        from InstanSeg.utils.models.ChannelInvariantNet import AdaptorNetWrapper, has_AdaptorNet
+        from instanseg.utils.models.ChannelInvariantNet import AdaptorNetWrapper, has_AdaptorNet
         if not has_AdaptorNet(model):
             model = AdaptorNetWrapper(model,adaptor_net_str=args.adaptor_net_str, norm = args.norm)
         optimizer = optim.Adam(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
@@ -333,7 +333,7 @@ if __name__ == "__main__":
 
 
 
-    from InstanSeg.utils.model_loader import load_model
+    from instanseg.utils.model_loader import load_model
     model, model_dict = load_model(folder="", path=args.output_path) #Load model from checkpoint
     model.eval()
     model.to(device)

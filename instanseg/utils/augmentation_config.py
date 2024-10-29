@@ -85,7 +85,7 @@ def get_augmentation_dict(dim_in,nuclei_channel,amount,pixel_size=0.5, augmentat
                     ("extract_nucleus_and_cytoplasm_channels", [0.05, amount]),
                     ("pseudo_imc", [0, amount]),
                     ("colourize", [0.1, nuclei_channel]),
-                    ("draw_shapes", [0.05, amount]),
+                   # ("draw_shapes", [0.05, amount]),
                     ("flips", [1]),
                     ("rotate", [1]),
                     ("perspective", [0, amount]),
