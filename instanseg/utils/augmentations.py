@@ -703,7 +703,7 @@ class Augmentations(object):
 
             resized_labels = Resize(size=shape, interpolation=torchvision.transforms.InterpolationMode.NEAREST)(labels)
 
-        while self.shape is not None and np.any(np.array(resized_data[0].shape) < self.shape[0]) and not crop:
+        while self.shape is not None and np.any(np.array(resized_data[0].shape) < self.shape[0]) and crop:
             pad = int((self.shape[0] - min(resized_data[0].shape)) / 2) + 3
             pad = torch.Tensor([pad, resized_data.shape[1], resized_data.shape[2]]).min().int() - 1
 
@@ -715,7 +715,8 @@ class Augmentations(object):
             if labels is not None:
                 resized_labels = torch.nn.functional.pad(resized_labels, (pad, pad, pad, pad), mode='constant', value = min(resized_labels.min(),0)).to(
                     labels.dtype)
-
+                
+              
         if not crop:
             if labels is None:
                 return resized_data, None

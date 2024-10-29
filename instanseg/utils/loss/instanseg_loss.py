@@ -789,6 +789,7 @@ class InstanSeg(nn.Module):
 
                 if (instance < 0).all(): #-1 means not annotated
                     continue
+       
 
                 elif instance.min() < 0: #label is sparse
                     mask = instance >=0
