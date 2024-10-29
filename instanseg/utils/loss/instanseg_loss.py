@@ -787,12 +787,15 @@ class InstanSeg(nn.Module):
 
                 instance = instances_batch[b, mask_channel].unsqueeze(0)  # 1 x h x w
 
-                if instance.min() < 0: #label is sparse
+                if (instance < 0).all(): #-1 means not annotated
+                    continue
+       
+
+                elif instance.min() < 0: #label is sparse
                     mask = instance >=0
                     instance[instance < 0] = 0
                 else:
                     mask = None
-
 
                 seed_loss_tmp = self.seed_loss(seed_map,instance, mask = mask)
 
