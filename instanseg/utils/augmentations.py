@@ -152,8 +152,9 @@ class Augmentations(object):
         out = percentile_normalize(image, subsampling_factor=subsampling_factor, percentile=percentile)
 
         return out, labels
+    
 
-    def extract_eosin_stain(self, image: torch.Tensor, labels=None, amount=0, metadata=None):
+    def extract_hematoxylin_stain(self, image: torch.Tensor, labels=None, amount=0, metadata=None):
         # image should be 3 channel RGB between 0 and 255 (float32)
         if metadata is not None and metadata["image_modality"] != "Brightfield":
             return image, labels
@@ -162,15 +163,19 @@ class Augmentations(object):
         if self.debug:
             orig = torch.clone(image)
 
-        image = (image / image.max()) * 255
+        tensor = (image / (image.max() + 0.001)) * 255
 
-        tensor = torch.clamp(image, 0., 255.)
+        tensor = torch.clamp(tensor, 0., 255.)
 
         normalizer = torchstain.normalizers.MacenkoNormalizer(backend='torch')
 
-        normalizer.HERef += (torch.rand_like(normalizer.HERef) - 0.5) * normalizer.HERef * amount
-        normalizer.maxCRef += (torch.rand_like(normalizer.maxCRef) - 0.5) * normalizer.maxCRef * amount
-        norm, H, E = normalizer.normalize(I=tensor, stains=True, Io=240)
+        try:
+
+            normalizer.HERef += (torch.rand_like(normalizer.HERef) - 0.5) * normalizer.HERef * amount
+            normalizer.maxCRef += (torch.rand_like(normalizer.maxCRef) - 0.5) * normalizer.maxCRef * amount
+            norm, H, E = normalizer.normalize(I=tensor, stains=True, Io=240)
+        except:
+            return image,labels
 
         out = _move_channel_axis(H) / 255.
 
@@ -191,15 +196,18 @@ class Augmentations(object):
         if self.debug:
             orig = torch.clone(image)
 
-        image = (image / image.max()) * 255
+        tensor = (image / (image.max() + 0.001)) * 255
 
-        tensor = torch.clamp(image, 0., 255.)
+        tensor = torch.clamp(tensor, 0., 255.)
 
         normalizer = torchstain.normalizers.MacenkoNormalizer(backend='torch')
 
-        normalizer.HERef += (torch.rand_like(normalizer.HERef) - 0.5) * normalizer.HERef * amount
-        normalizer.maxCRef += (torch.rand_like(normalizer.maxCRef) - 0.5) * normalizer.maxCRef * amount
-        norm, _, _ = normalizer.normalize(I=tensor, stains=False, Io=240, beta=0.15)
+        try:
+            normalizer.HERef += (torch.rand_like(normalizer.HERef) - 0.5) * normalizer.HERef * amount
+            normalizer.maxCRef += (torch.rand_like(normalizer.maxCRef) - 0.5) * normalizer.maxCRef * amount
+            norm, _, _ = normalizer.normalize(I=tensor, stains=False, Io=240, beta=0.15)
+        except:
+            return image,labels
 
         #    pdb.set_trace()
 
@@ -817,7 +825,7 @@ class Augmentations(object):
 
             if np.random.random() < values[0]:
 
-                if augmentation in ["normalize_HE_stains", "extract_eosin_stain", "normalize", "pseudo_background"]:
+                if augmentation in ["normalize_HE_stains", "extract_hematoxylin_stain", "normalize", "pseudo_background"]:
                     if not has_been_normalized:
                         if augmentation != "normalize":
                             _, amount = values

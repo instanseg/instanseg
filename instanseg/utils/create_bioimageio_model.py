@@ -79,9 +79,15 @@ def readme(model_name: str, model_dict: dict = None):
         
         if model_dict is not None and "source_dataset" in model_dict.keys():
             for dataset in (model_dict["source_dataset"]).replace("[","").replace("]","").replace("'","").split(", "):
-                f.write(f"- {dataset} \n")
-                f.write(f"  - License: {dataset_dict[dataset][0]} \n")
-                f.write(f"  - URL: {dataset_dict[dataset][1]} \n")
+                if dataset in dataset_dict.keys():
+                    f.write(f"- {dataset} \n")
+                    f.write(f"  - License: {dataset_dict[dataset][0]} \n")
+                    f.write(f"  - URL: {dataset_dict[dataset][1]} \n")
+                else:
+                    f.write(f"- {dataset} \n")
+                    f.write(f"  - License: Not specified \n")
+                    f.write(f"  - URL: Not specified \n")
+        
 
         f.write("\n The user is responsible for ensuring that the model is used in accordance with the licenses of the source datasets. \n")
 

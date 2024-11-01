@@ -91,8 +91,7 @@ def main(model, loss_fn, train_loader, test_loader, num_epochs=1000, epoch_name=
 
         train_loss, train_time = train_epoch(model, device, train_loader, loss_fn, optimizer, args = args, writer = writer)
 
-        if epoch <= 5 + 500 * (
-                1 - args.on_cluster) and not args.model_folder:  # Training is just starting AND we are not loading a model
+        if epoch <= 5 and not args.model_folder:  # Training is just starting AND we are not loading a model
             save_epoch_outputs = True
         else:
             save_epoch_outputs = False
