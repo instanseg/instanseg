@@ -25,3 +25,4 @@ jobs:
           python -c 'import instanseg'
           python -c 'from instanseg.utils.loss.lovasz_losses import binary_xloss'
           python -c 'from instanseg.utils.models.InstanSeg_UNet import DecoderBlock, EncoderBlock, conv_norm_act'
+          python -c 'from instanseg.utils.tiling import run_tiling_tests; run_tiling_tests()'
