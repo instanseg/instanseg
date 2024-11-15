@@ -728,7 +728,7 @@ def set_export_paths():
 
 
 def export_to_torchscript(model_str: str, show_example: bool = False, output_dir: str = "../torchscripts",
-                          model_path: str = "../models", torchscript_name: str = None, mixed_predicision = False):
+                          model_path: str = "../models", torchscript_name: str = None, use_optimized_params = False):
     device = 'cpu'
     from instanseg.utils.model_loader import load_model
     import math
@@ -737,19 +737,20 @@ def export_to_torchscript(model_str: str, show_example: bool = False, output_dir
     set_export_paths()
     output_dir = os.environ.get('INSTANSEG_TORCHSCRIPT_PATH')
     model_path = os.environ.get('INSTANSEG_MODEL_PATH')
-    example_path = os.environ.get('EXAMPLE_IMAGE_PATH') 
+    example_path = os.environ.get('EXAMPLE_IMAGE_PATH')
 
-
-    import pandas as pd
-
-    #Check is best_params.csv exists in the model folder, if not, use default parameters
-    if not os.path.exists(Path(model_path) / model_str / "best_params.csv"):
-        print("No best_params.csv found in model folder, using default parameters")
-        params = None
+    if use_optimized_params:
+        import pandas as pd
+        #Check is best_params.csv exists in the model folder, if not, use default parameters
+        if not os.path.exists(Path(model_path) / model_str / "Results/best_params.csv"):
+            print("No best_params.csv found in model folder, using default parameters")
+            params = None
+        else:
+            #Load best_params.csv
+            df = pd.read_csv(Path(model_path) / model_str / "Results/best_params.csv",header = None)
+            params = {key: value for key, value in df.to_dict('tight')['data']}
     else:
-        #Load best_params.csv
-        df = pd.read_csv(Path(model_path) / model_str / "best_params.csv",header = None)
-        params = {key: value for key, value in df.to_dict('tight')['data']}
+        params = None
 
     model, model_dict = load_model(folder=model_str, path=model_path)
     model.eval()
@@ -785,8 +786,7 @@ def export_to_torchscript(model_str: str, show_example: bool = False, output_dir
                                         params = params, 
                                         feature_engineering_function = str(model_dict["feature_engineering"]), 
                                         backbone_dim_in= dim_in, 
-                                        to_centre = bool(model_dict["to_centre"]),
-                                        mixed_precision = mixed_predicision).to(device)
+                                        to_centre = bool(model_dict["to_centre"])).to(device)
     
 
     out = super_model(input_tensor[None,])

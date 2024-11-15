@@ -171,23 +171,23 @@ def get_image(img_object):
         return img_object
 
 
-def _read_images_from_pth(data_path= "../datasets", dataset = "segmentation", data_slice = None, dummy = False, args = None, sets = ["Train","Validation"]):
+def _read_images_from_pth(data_path= "../datasets", dataset = "segmentation", data_slice = None, dummy = False, args = None, sets = ["Train","Validation"], complete_dataset = None):
     from pathlib import Path
     import torch
     import os 
 
-    if not os.environ.get("INSTANSEG_DATASET_PATH"):
-        os.environ["INSTANSEG_DATASET_PATH"] = Path(os.path.join(os.path.dirname(__file__),data_path))
-    data_path = os.environ["INSTANSEG_DATASET_PATH"]
+    if complete_dataset is None:
+        if not os.environ.get("INSTANSEG_DATASET_PATH"):
+            os.environ["INSTANSEG_DATASET_PATH"] = Path(os.path.join(os.path.dirname(__file__),data_path))
+        data_path = os.environ["INSTANSEG_DATASET_PATH"]
+        if ".pth" in dataset:
+            path_of_pth = os.path.join(data_path,dataset)
+        else:
+            path_of_pth = os.path.join(data_path,str(dataset + "_dataset.pth"))
 
-    if ".pth" in dataset:
-        path_of_pth = os.path.join(data_path,dataset)
-    else:
-        path_of_pth = os.path.join(data_path,str(dataset + "_dataset.pth"))
-
-
-    print("Loading dataset from ", os.path.abspath(path_of_pth))
-    complete_dataset = torch.load(path_of_pth)
+        print("Loading dataset from ", os.path.abspath(path_of_pth))
+        complete_dataset = torch.load(path_of_pth)
+    
 
     data_dicts = {}
     

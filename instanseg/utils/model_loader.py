@@ -185,7 +185,7 @@ def load_model_weights(model, device, folder, path=r"../models/", dict = None):
     from pathlib import Path
     model_path = Path(path) / folder
     if torch.cuda.is_available():
-        model_dict = torch.load(model_path / "model_weights.pth")
+        model_dict = torch.load(model_path / "model_weights.pth", weights_only= False)
     else:
         if device is None:
             if torch.backends.mps.is_available():

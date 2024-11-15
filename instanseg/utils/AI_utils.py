@@ -26,7 +26,6 @@ def train_epoch(train_model,
                 train_loss_fn, 
                 train_optimizer, 
                 args,
-                writer = None,
                 ):
     
     global global_step
@@ -43,10 +42,6 @@ def train_epoch(train_model,
         loss.backward()
 
         torch.nn.utils.clip_grad_norm_(train_model.parameters(), args.clip)
-
-        if writer is not None:
-            writer.add_scalar('train_loss', loss, global_step)
-            global_step += 1
 
         train_optimizer.step()
         train_loss.append(loss.detach().cpu().numpy())
@@ -68,7 +63,6 @@ def test_epoch(test_model,
                debug=False, 
                save_str=None, 
                save_bool=False,
-               writer = None,
                best_f1=None):
     global global_step_test
     start = time.time()
@@ -84,7 +78,7 @@ def test_epoch(test_model,
             output = test_model(image_batch)  
             loss = test_loss_fn(output, labels.clone()).mean()
             test_loss.append(loss.detach().cpu().numpy())
-            writer.add_scalar('test_loss', loss, global_step_test)
+
 
 
             if labels.type() != 'torch.cuda.FloatTensor' and labels.type() != 'torch.FloatTensor':
@@ -97,18 +91,6 @@ def test_epoch(test_model,
                 warnings.warn("Labels are of type float, not int. Not calculating F1.")
                 current_f1_list.append(0)
 
-            if global_step_test % 100 == 0:
-                img = torchvision.utils.make_grid(output[0].unsqueeze(1), scale_each=True, normalize=True, nrow = method.dim_out //2 if args.cells_and_nuclei else method.dim_out )
-                writer.add_images('Model Outputs', img[None], global_step)
-
-            if args.channel_invariant and global_step_test % 100 == 0:
-                img = torchvision.utils.make_grid(test_model.model.AdaptorNet(image_batch),scale_each = True, normalize = True)
-                writer.add_images('ChIN rendering', img[None], global_step)
-            if args.cells_and_nuclei:
-                writer.add_scalar('test_f1_nuclei',current_f1_list[-1][0], global_step_test)
-                writer.add_scalar('test_f1_cells', current_f1_list[-1][1], global_step_test)
-            else:
-                writer.add_scalar('test_f1', current_f1_list[-1], global_step_test)
             global_step_test += 1
 
     f1_array = np.array(current_f1_list)  # either N,2 or N,

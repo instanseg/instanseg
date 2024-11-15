@@ -22,6 +22,9 @@ def edge_mask(labels, ignore=[None]):
     if 'right' not in ignore:
         edges.append(last_column)
 
+    if len(edges) == 0:
+        return torch.zeros_like(labels).bool()
+
     edges = torch.cat(edges, dim=0)
     return torch.isin(labels, edges[edges > 0])
 
@@ -58,6 +61,7 @@ def chops(img_shape: tuple, shape: tuple, overlap: int = 0) -> tuple:
         return [0], [0]
     h, v = img_shape[-2:]
 
+    assert shape[0] > overlap and shape[1] > overlap, f"The overlap {overlap} must be smaller than the window size {shape}"
 
     stride_h = shape[0] - overlap
     stride_v = shape[1] - overlap
@@ -465,8 +469,21 @@ def recover_padding(x: torch.Tensor, pad: torch.Tensor):
 
 
 
-def sliding_window_inference(input_tensor, predictor, window_size=(512, 512), overlap = 100, max_cell_size = 20, sw_device='cuda',
-                             device='cpu', output_channels=1, show_progress = True, batch_size = 1,**kwargs):
+def sliding_window_inference(input_tensor, 
+                             predictor, 
+                             window_size=(512, 512), 
+                             overlap = 80, 
+                             max_cell_size = 20, 
+                             sw_device='cuda',
+                             device='cpu', 
+                             output_channels=1, 
+                             show_progress = True, 
+                             batch_size = 1,
+                             **kwargs):
+    
+    h,w = input_tensor.shape[-2:]
+    window_size = (min(window_size[0], h), min(window_size[1], w))
+    
     input_tensor = input_tensor.to(device)
     predictor = predictor.to(sw_device)
  
@@ -474,16 +491,18 @@ def sliding_window_inference(input_tensor, predictor, window_size=(512, 512), ov
     tile_list = tiles_from_chops(input_tensor, shape=window_size, tuple_index=tuple_index)
  
  
-    #print("Number of tiles: ", len(tile_list))
-   # print("Shape of tiles: ", tile_list[0].shape)
- 
+    assert len(tile_list) > 0, "No tiles generated"
+    # print("Number of tiles: ", len(tile_list))
+    # print("Shape of tiles: ", tile_list[0].shape)
+    # print("window size: ", window_size)
+    # print("input tensor shape: ", input_tensor.shape)
  
     with torch.no_grad():
         with torch.amp.autocast("cuda"):
             batch_list = [torch.stack(tile_list[batch_size * i:batch_size * (i+1)]) for i in range(int(np.ceil(len(tile_list)/batch_size)))]
             label_list = torch.cat([predictor(tile.to(sw_device),**kwargs).to(device) for tile in tqdm(batch_list, disable= not show_progress,leave = False, colour = "blue")])
  
- 
+   
     lab = torch.cat([stitch([lab[i] for lab in label_list],
                             shape=window_size,
                             chop_list=tuple_index,
@@ -494,3 +513,38 @@ def sliding_window_inference(input_tensor, predictor, window_size=(512, 512), ov
  
  
     return lab[None]  # 1,C,H,W
+
+
+def run_tiling_tests():
+
+    import torch
+    from instanseg.utils.pytorch_utils import torch_sparse_onehot, fast_sparse_dual_iou, connected_components
+
+    torch.random.manual_seed(0)
+    input_tensor = torch.randint(0,2,(1,1, 512, 256))
+    input_tensor = connected_components(input_tensor)
+
+    overlap = 10
+    max_cell_size = 20
+    window_size = (70,70)
+
+    tuple_index = chops(input_tensor.shape, shape=window_size, overlap=2 * (overlap + max_cell_size))
+    tile_list = tiles_from_chops(input_tensor, shape=window_size, tuple_index=tuple_index)
+    assert len(tile_list) == len(tuple_index[0]) * len(tuple_index[1])
+    labels_list = [lab for lab in tile_list]
+    output = stitch([lab[0,0] for lab in labels_list],
+                                shape=window_size,
+                                chop_list=tuple_index,
+                                offset = overlap,
+                                final_shape=(1, input_tensor.shape[-2], input_tensor.shape[-1]))
+
+    assert output.shape[-2:] == input_tensor.shape[-2:]
+
+    out = torch.stack([input_tensor[0], output], dim=1)
+    onehot1 = torch_sparse_onehot(out[0, 0], flatten=True)[0]
+    onehot2 = torch_sparse_onehot(out[0, 1], flatten=True)[0]
+    iou_sparse = fast_sparse_dual_iou(onehot1, onehot2)
+
+    assert iou_sparse.shape[-1] == iou_sparse.shape[-2] and iou_sparse.sum() == iou_sparse.shape[-1]
+    assert iou_sparse.shape[-1] == len(torch.unique(input_tensor[input_tensor > 0]))
+    assert (iou_sparse.sum(0) == iou_sparse.sum(1)).all()
