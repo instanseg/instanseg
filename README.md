@@ -7,29 +7,29 @@
 
 ## Overview
 
-InstanSeg is a pytorch based cell and nucleus segmentation pipeline for fluorescence and brightfield microscopy images. This README provides instructions for setting up the environment, installing dependencies, and using the provided tools and models.
+InstanSeg is a pytorch-based cell and nucleus segmentation pipeline for fluorescence and brightfield microscopy images. This README provides instructions for setting up the environment, installing dependencies, and using the provided tools and models.
 
 ## Why should I use InstanSeg?
 
-1. InstanSeg is freely available and open source
-2. It's faster than other cell segmentation methods… sometimes much faster
-3. It's capable of accurately segmenting both nuclei and whole cells
-4. InstanSeg can be entirely compiled in TorchScript - including prostprocessing! This means it's not only easy to use in Python but also works with LibTorch alone. This allows you to run InstanSeg directly in QuPath!
+1. InstanSeg is freely available and open source.
+2. It's faster than other cell segmentation methods… sometimes much faster.
+3. It's capable of accurately segmenting both nuclei and whole cells.
+4. InstanSeg can be entirely compiled in TorchScript - including postprocessing! This means it's not only easy to use in Python but also works with LibTorch alone. This allows you to run InstanSeg directly in QuPath!
 5. You can use InstanSeg on multiplexed images (images that have more than three channels) on novel biomarker panels, without retraining or manual intervention.
-6. We plan to release more InstanSeg models trained on public datasets. If there's a nucleus and/or cell segmentation dataset under a permissive open license (e.g. CC0 or CC-BY) that we missed, let us know and we may be able to increase our InstanSeg model zoo.
+6. We plan to release more InstanSeg models trained on public datasets. If there's a nucleus and/or cell segmentation dataset under a permissive open license (e.g. CC0 or CC-BY) that we missed, let us know, and we may be able to increase our InstanSeg model zoo.
  
 
 ## InstanSeg has its own QuPath extension!
 
-InstanSeg is introduced in the [QuPath pre-release v0.6.0-rc2](https://github.com/qupath/qupath/releases/tag/v0.6.0-rc2), so you can start using InstanSeg immediately. You can find the standalone QuPath extension [here](https://github.com/qupath/qupath-extension-instanseg).
+InstanSeg is introduced in the [QuPath pre-release v0.6.0-rc2](https://github.com/qupath/qupath/releases/tag/v0.6.0-rc2), so you can start using InstanSeg immediately. You can find the QuPath extension source code [in its GitHub repository](https://github.com/qupath/qupath-extension-instanseg).
 
 ## How to cite InstanSeg:
 
-If you use InstanSeg for nucleus segmentation if brightfield histology images, please cite:
+If you use InstanSeg for nucleus segmentation of brightfield histology images, please cite:
 
 > Goldsborough, T. et al. (2024) ‘InstanSeg: an embedding-based instance segmentation algorithm optimized for accurate, efficient and portable cell segmentation’. _arXiv_. Available at: https://doi.org/10.48550/arXiv.2408.15954.
 
-If you use InstanSeg for nucleus and / or cell segmentation in fluorescence images, please cite:
+If you use InstanSeg for nucleus and/or cell segmentation in fluorescence images, please cite:
 
 > Goldsborough, T. et al. (2024) ‘A novel channel invariant architecture for the segmentation of cells and nuclei in multiplexed images using InstanSeg’. _bioRxiv_, p. 2024.09.04.611150. Available at: https://doi.org/10.1101/2024.09.04.611150.
 
@@ -51,7 +51,7 @@ If you use InstanSeg for nucleus and / or cell segmentation in fluorescence imag
 
 ## Installing using pip
 
-For a minimal install:
+For a minimal installation:
 ```bash
 pip install instanseg-torch
 ```
@@ -61,7 +61,7 @@ if you want all the requirements used for training:
 ```bash
 pip install instanseg-torch[full]
 ```
-You can started immediately by calling the InstanSeg class:
+You can get started immediately by calling the InstanSeg class:
 
 ```python
 from instanseg import InstanSeg
