@@ -963,7 +963,9 @@ class InstanSeg(nn.Module):
                     fields = prediction_i[0:self.dim_coords]
 
                 sigma = prediction_i[self.dim_coords:self.dim_coords + self.n_sigma]
-                mask_map = torch.sigmoid(prediction_i[self.dim_coords + self.n_sigma])
+            #    mask_map = torch.sigmoid(prediction_i[self.dim_coords + self.n_sigma])
+
+                mask_map = ((prediction_i[self.dim_coords + self.n_sigma]) / 15) + 0.5
 
                 if (mask_map > mask_threshold).max() == 0:  # no foreground pixels
                     label = torch.zeros(mask_map.shape, dtype=int, device=mask_map.device).squeeze()
@@ -1197,7 +1199,7 @@ class IdentityTransform:
         
 
 from instanseg.utils.biological_utils import resolve_cell_and_nucleus_boundaries
-
+from typing import Dict, Optional
 class InstanSeg_Torchscript(nn.Module):
     def __init__(self, model, 
                  cells_and_nuclei: bool = False,
@@ -1207,13 +1209,14 @@ class InstanSeg_Torchscript(nn.Module):
                  to_centre: bool = True,
                  backbone_dim_in: int = 3,  
                  feature_engineering_function:str  = "0",
-                 params = None,
-                 mixed_precision: bool = False):
+                 params = None):
         super(InstanSeg_Torchscript, self).__init__()
 
         model.eval()
 
-        with torch.cuda.amp.autocast(enabled=mixed_precision):
+        use_mixed_precision = True
+
+        with torch.amp.autocast("cuda", enabled=use_mixed_precision):
             with torch.no_grad():
                 self.fcn = torch.jit.trace(model, torch.rand(1, backbone_dim_in, 256, 256))
 
@@ -1227,36 +1230,57 @@ class InstanSeg_Torchscript(nn.Module):
         self.n_sigma = n_sigma
         self.to_centre = to_centre
         self.feature_engineering, self.feature_engineering_width = feature_engineering_generator(feature_engineering_function)
-        self.params = params,
-    
+        self.params = params or {}
         self.index_dtype = torch.long #torch.int
 
-        # self.traced_feature_engineering = torch.jit.trace(self.feature_engineering, 
-        #                                                   (torch.ones(self.dim_coords,256,256).float(), 
-        #                                                    torch.rand(55, 2).int(), 
-        #                                                    torch.ones(self.n_sigma,256,256).float(), 
-        #                                                    torch.tensor([32]).int(), 
-        #                                                    (torch.rand(2, 225280) * 256).int()))
-
-        #median_filter = MedianFilter((3,3))
-
-        # if self.params is not None:
-        #     for key in self.params:
-        #         setattr(self, key, self.params[key])
+        self.default_target_segmentation = self.params.get('target_segmentation', torch.tensor([1, 1]))
+        self.default_min_size = self.params.get('min_size', 10)
+        self.default_mask_threshold = self.params.get('mask_threshold', 0.53)
+        self.default_peak_distance = int(self.params.get('peak_distance', 5))
+        self.default_seed_threshold = self.params.get('seed_threshold', 0.7)
+        self.default_overlap_threshold = self.params.get('overlap_threshold', 0.3)
+        self.default_mean_threshold = self.params.get('mean_threshold', 0.0)
+        self.default_window_size = self.params.get('window_size', 32)
+        self.default_cleanup_fragments = self.params.get('cleanup_fragments', False)
+        self.default_resolve_cell_and_nucleus = self.params.get('resolve_cell_and_nucleus', True)
 
     def forward(self, x: torch.Tensor,
-                target_segmentation : torch.Tensor = torch.tensor([1,1]), # Nuclei / Cells
-                min_size:int = 10,
-                mask_threshold: float = 0.53,
-                peak_distance: int = 5,
-                seed_threshold: float = 0.7,
-                overlap_threshold: float = 0.3,
-                mean_threshold: float  = 0.0,
-                window_size: int = 32,
-                cleanup_fragments: bool= False,
-                resolve_cell_and_nucleus: bool = True,
+                args: Optional[Dict[str, torch.Tensor]] = None,
+                target_segmentation: torch.Tensor = torch.tensor([1, 1]), # Nuclei / Cells
+                min_size: Optional[int] = None,
+                mask_threshold: Optional[float] = None,
+                peak_distance: Optional[int] = None,
+                seed_threshold: Optional[float] = None,
+                overlap_threshold: Optional[float] = None,
+                mean_threshold: Optional[float] = None,
+                window_size: Optional[int] = None,
+                cleanup_fragments: Optional[bool] = None,
+                resolve_cell_and_nucleus: Optional[bool] = None,
                 ) -> torch.Tensor:
         
+        min_size = int(min_size) if min_size is not None else self.default_min_size
+        mask_threshold = float(mask_threshold) if mask_threshold is not None else self.default_mask_threshold
+        peak_distance = int(peak_distance) if peak_distance is not None else self.default_peak_distance
+        seed_threshold = float(seed_threshold) if seed_threshold is not None else self.default_seed_threshold
+        overlap_threshold = float(overlap_threshold) if overlap_threshold is not None else self.default_overlap_threshold
+        mean_threshold = float(mean_threshold) if mean_threshold is not None else self.default_mean_threshold
+        window_size = int(window_size) if window_size is not None else self.default_window_size
+        cleanup_fragments = bool(cleanup_fragments) if cleanup_fragments is not None else self.default_cleanup_fragments
+        resolve_cell_and_nucleus = bool(resolve_cell_and_nucleus) if resolve_cell_and_nucleus is not None else self.default_resolve_cell_and_nucleus
+
+        if args is None:
+            args = {"None": torch.tensor([0])}
+
+        target_segmentation = args.get('target_segmentation', target_segmentation)
+        min_size = int(args.get('min_size', torch.tensor(float(min_size))).item())
+        mask_threshold = args.get('mask_threshold', torch.tensor(mask_threshold)).item()
+        peak_distance = args.get('peak_distance', torch.tensor(peak_distance)).item()
+        seed_threshold = args.get('seed_threshold', torch.tensor(seed_threshold)).item()
+        overlap_threshold = args.get('overlap_threshold', torch.tensor(overlap_threshold)).item()
+        mean_threshold = args.get('mean_threshold', torch.tensor(mean_threshold)).item()
+        window_size = int(args.get('window_size', torch.tensor(float(window_size))).item())
+        cleanup_fragments = args.get('cleanup_fragments', torch.tensor(cleanup_fragments)).item()
+        resolve_cell_and_nucleus = args.get('resolve_cell_and_nucleus', torch.tensor(resolve_cell_and_nucleus)).item()
 
         torch.clamp_max_(x, 3) #Safety check, please normalize inputs properly!
         torch.clamp_min_(x, -2)
@@ -1264,7 +1288,6 @@ class InstanSeg_Torchscript(nn.Module):
         x, pad = instanseg_padding(x, extra_pad=0)
 
 
-       # with torch.autocast(device_type='cuda', dtype=torch.float16):
         with torch.no_grad():
             x_full = self.fcn(x)
     
@@ -1281,14 +1304,9 @@ class InstanSeg_Torchscript(nn.Module):
             output_labels_list = []
 
             for image_index in range(x_full.shape[0]):
-
-            
                 labels_list = []
-
                 for i in iterations:
-
                     if i == 0:
-
                         x = x_full[image_index,0: dim_out, :, :]
                     else:
                         x = x_full[image_index,dim_out:, :, :]
@@ -1307,12 +1325,12 @@ class InstanSeg_Torchscript(nn.Module):
 
                 
                     sigma = x[self.dim_coords:self.dim_coords + self.n_sigma]
-                    mask_map = torch.sigmoid(x[self.dim_coords + self.n_sigma])
+
+                    #mask_map = torch.sigmoid(x[self.dim_coords + self.n_sigma]) #legacy
+                    mask_map = ((x[self.dim_coords + self.n_sigma]) / 15) + 0.5 # inverse transform applied to edt during training.
 
                     centroids_idx = torch_peak_local_max(mask_map, neighbourhood_size=peak_distance,
                                                         minimum_value=seed_threshold, dtype= self.index_dtype)  # .to(prediction.device)
-                    #num_initial_centroids = centroids_idx.shape[0]
-
 
                     fields = fields + xxyy
 
@@ -1320,7 +1338,6 @@ class InstanSeg_Torchscript(nn.Module):
                         fields_at_centroids = xxyy[:, centroids_idx[:, 0], centroids_idx[:, 1]]
                     else:
                         fields_at_centroids = fields[:, centroids_idx[:, 0], centroids_idx[:, 1]]
-
 
                     x = fields
                     c = fields_at_centroids.T
@@ -1362,7 +1379,6 @@ class InstanSeg_Torchscript(nn.Module):
 
                     x = x.reshape(C, 1, slice_size, slice_size)
 
-                
                     C = x.shape[0]
 
                     if C == 0:
@@ -1389,11 +1405,8 @@ class InstanSeg_Torchscript(nn.Module):
                         in_mask = cc == labels_to_keep[:,None,None,None]
                         x *= in_mask
 
-                
-
                     labels = convert(x, coords, size=(h, w), mask_threshold=mask_threshold)[None]
 
-            
 
                     idx = torch.arange(1, C + 1, device=x.device, dtype = self.index_dtype)
                     stack_ID = torch.ones((C, slice_size, slice_size), device=x.device, dtype=self.index_dtype)
@@ -1428,8 +1441,6 @@ class InstanSeg_Torchscript(nn.Module):
                     labels[torch.isin(labels, labels_to_remove)] = 0
 
                     
-
-
                     labels_list.append(labels.squeeze().to(original_device))
 
                 if len(labels_list) == 1:
@@ -1444,27 +1455,9 @@ class InstanSeg_Torchscript(nn.Module):
             
             lab = torch.stack(output_labels_list) # B,C,H,W
 
-            
-
-
+        
             return lab.to(torch.float32) # B,C,H,W
 
-if __name__ == "__main__":
-
-    import sys
-
-    import torch
-    from instanseg.utils.create_bioimageio_model import export_bioimageio
-    from instanseg.utils.utils import show_images
-
-    from instanseg.utils.utils import export_to_torchscript
-
-    model_name = "1804630"
-
-    export_to_torchscript(model_name, show_example=True, mixed_predicision=False, model_path = "../../models/")
-
-
-    pdb.set_trace()
 
 
 

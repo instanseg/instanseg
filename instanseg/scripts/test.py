@@ -8,8 +8,6 @@ import fastremap
 import time
 import numpy as np
 
-
-
 parser = argparse.ArgumentParser()
 parser.add_argument("-d_p", "--data_path", type=str, default=r"../datasets")
 parser.add_argument("-o_f", "--output_folder", type=str, default="Results")
@@ -60,15 +58,15 @@ def instanseg_inference(val_images, val_labels, model, postprocessing_fn, device
     imgs, _ = Augmenter.normalize(imgs)
     with torch.no_grad():
         imgs, pad = instanseg_padding(imgs, extra_pad=0, min_dim=32)
-        with torch.cuda.amp.autocast():
+        with torch.amp.autocast("cuda"):
             pred = model(imgs[None,])
         pred = pred.float()
         pred = recover_padding(pred, pad).squeeze(0)
         if params is not None:
-            with torch.cuda.amp.autocast():
+            with torch.amp.autocast("cuda"):
                 lab = postprocessing_fn(pred, **params, window_size=parser_args.window_size)
         else:
-            with torch.cuda.amp.autocast():
+            with torch.amp.autocast("cuda"):
                 lab = postprocessing_fn(pred, img=imgs, window_size=parser_args.window_size)
         lab = lab.cpu().numpy()
 
@@ -89,7 +87,7 @@ def instanseg_inference(val_images, val_labels, model, postprocessing_fn, device
 
             if not tta:
                 imgs, pad = instanseg_padding(imgs, extra_pad=0, min_dim=32, ensure_square=False)
-                with torch.cuda.amp.autocast():
+                with torch.amp.autocast("cuda"):
                     pred = model(imgs[None,])
 
                 pred = recover_padding(pred, pad).squeeze(0)
@@ -102,10 +100,10 @@ def instanseg_inference(val_images, val_labels, model, postprocessing_fn, device
                 start = time.time()
 
                 if params is not None:
-                    with torch.cuda.amp.autocast():
+                    with torch.amp.autocast("cuda"):
                         lab = postprocessing_fn(pred, **params, window_size=parser_args.window_size)
                 else:
-                    with torch.cuda.amp.autocast():
+                    with torch.amp.autocast("cuda"):
                         lab = postprocessing_fn(pred, img=imgs, window_size=parser_args.window_size)
 
                 torch.cuda.synchronize()
@@ -252,15 +250,13 @@ if __name__ == "__main__":
     count = 0
 
 
-    #  pdb.set_trace()
-
     Augmenter = Augmentations(dim_in=model_dict['dim_in'], shape=None,
                               channel_invariant=model_dict['channel_invariant'])
 
     val_data = [Augmenter.duplicate_grayscale_channels(*Augmenter.to_tensor(img, label, normalize= True)) for img, label in
             zip(val_images, val_labels)]
 
-   # val_data = [(img, label) for img, label in zip(val_images, val_labels)]
+    # val_data = [(img, label) for img, label in zip(val_images, val_labels)]
     # val_data = [Augmenter.normalize(img,label,percentile=0.) for img, label in val_data]
 
     if parser_args.pixel_size is not None and parser_args.pixel_size != "None":
@@ -279,7 +275,7 @@ if __name__ == "__main__":
                                             modality=val_meta[i]["image_modality"], crop=False) for i, (img, label) in
                     enumerate(val_data)]
 
-    #val_data = [Augmenter.colourize(img,label,c_nuclei = val_meta[i]['nuclei_channels'][0]) for i, (img,label) in enumerate(val_data)]
+    # val_data = [Augmenter.colourize(img,label,c_nuclei = val_meta[i]['nuclei_channels'][0]) for i, (img,label) in enumerate(val_data)]
 
     # from instanseg.utils.augmentations import get_marker_location
     # val_meta = [get_marker_location(meta) for meta in val_meta]
