@@ -218,7 +218,7 @@ def export_bioimageio(torchsript: torch.jit._script.RecursiveScriptModule,
     Augmenter=Augmentations()
 
     input_tensor,_ = Augmenter.to_tensor(input_data,normalize=False) #this converts the input data to a tensor and does percentile normalization (no clipping)
-    input_tensor,_ = Augmenter.normalize(input_tensor, percentile=0.)
+    #input_tensor,_ = Augmenter.normalize(input_tensor, percentile=0.)
     import math
     if math.isnan(model_pixel_size):
         model_pixel_size_tmp = pixel_size
@@ -238,6 +238,9 @@ def export_bioimageio(torchsript: torch.jit._script.RecursiveScriptModule,
     # you will need to save the input BEFORE preprocessing and the output AFTER postprocessing
 
     np.save(os.path.join(output_name, "test-input.npy"), input_crop.numpy())
+
+    input_crop,_ = Augmenter.to_tensor(input_crop[0],normalize=True)
+    input_crop = input_crop.unsqueeze(0)
 
     with torch.no_grad():
         output = torchsript(input_crop.to(device))
