@@ -20,9 +20,7 @@ classifiers = [
 # Dependencies (Specify your requirements here)
 dependencies = [
     "numpy>=1.26.4",
-    "palettable>=3.3.3",
     "torch>=2.1.1",
-    "einops>=0.7.0",
     "tqdm>=4.66.1",
     "matplotlib>=3.8.2",
     "colorcet>=3.0.1",
@@ -33,7 +31,6 @@ dependencies = [
     "aicsimageio>=4.11.0",
     "bioio>=1.1.0",
     "tiffslide>=2.4.0",
-    "geojson>=3.1.0",
     "slideio>=2.6.2",
 ]
 
@@ -61,6 +58,7 @@ full = [
     "opencv-python>=4.9.0",
     "hyperopt>=0.2.7",
     "pip>=23.3.2",
+    "einops>=0.7.0",
     "aicsimageio>=4.10.0",
     "bioimageio.core==0.5.11",
     "bioimageio.spec==0.4.9",
@@ -72,8 +70,6 @@ full = [
     "torchvision>=0.16.1",
     "kornia>=0.7.0",
     "monai>=1.3.0",
-    "tkinterdnd2>=0.4.2",
-    "line_profiler>=4.1.3",
     "edt"
 ]
 
