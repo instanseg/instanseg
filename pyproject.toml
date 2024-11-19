@@ -35,8 +35,13 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+test = [
+    "pytest~=8.2.2",
+    "coverage~=7.6.5",
+    "genbadge~=1.1.1"
+]
 full = [
- "ipykernel>=6.28.0",
+    "ipykernel>=6.28.0",
     "ipywidgets>=8.1.1",
     "jupyterlab>=4.0.10",
     "tqdm>=4.66.1",
