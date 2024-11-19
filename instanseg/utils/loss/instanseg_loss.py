@@ -6,7 +6,7 @@ from typing import Tuple, List, Union
 
 from instanseg.utils.loss.lovasz_losses import binary_xloss
 from instanseg.utils.pytorch_utils import torch_fastremap, torch_onehot, remap_values, fast_iou, fast_sparse_iou, eccentricity_batch, connected_components
-from instanseg.utils.tiling import instanseg_padding, recover_padding
+from instanseg.utils.tiling import _instanseg_padding, recover_padding
 
 import torch.nn.functional as F
 import torch.nn as nn
@@ -1109,7 +1109,7 @@ class InstanSeg(nn.Module):
             for t in transforms:
                 with torch.cuda.amp.autocast():
                     augmented_image = t.augment_image(img)
-                    augmented_image, pad = instanseg_padding(augmented_image, extra_pad= 0, min_dim = 32)
+                    augmented_image, pad = _instanseg_padding(augmented_image, extra_pad= 0, min_dim = 32)
                     prediction = model(augmented_image)[:,i * dim_out:(i+1) * dim_out]
                     prediction = recover_padding(prediction, pad)
                     mask_map = prediction[:,-1][None] 
@@ -1285,7 +1285,7 @@ class InstanSeg_Torchscript(nn.Module):
         torch.clamp_max_(x, 3) #Safety check, please normalize inputs properly!
         torch.clamp_min_(x, -2)
 
-        x, pad = instanseg_padding(x, extra_pad=0)
+        x, pad = _instanseg_padding(x, extra_pad=0)
 
 
         with torch.no_grad():

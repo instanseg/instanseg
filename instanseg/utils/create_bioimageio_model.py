@@ -1,12 +1,7 @@
 import os
-#from PIL import Image
-import tifffile
-
-# the imports for bioimage.io model export
 import bioimageio.core
 import numpy as np
 import torch
-import monai
 from aicsimageio import AICSImage
 
 from instanseg.utils.augmentations import Augmentations
@@ -174,7 +169,6 @@ def export_bioimageio(torchsript: torch.jit._script.RecursiveScriptModule,
 
     output_path = os.environ['INSTANSEG_BIOIMAGEIO_PATH']
 
-
     if output_name is None:
         output_name = model_name
     # create a directory to store bioimage.io model files
@@ -184,7 +178,6 @@ def export_bioimageio(torchsript: torch.jit._script.RecursiveScriptModule,
 
     model_pixel_size = torchsript.pixel_size
     print("Model pixel size: ", model_pixel_size)
-
 
     try:
         model,model_dict = load_model(model_name, path = os.environ['INSTANSEG_MODEL_PATH'])
@@ -244,9 +237,9 @@ def export_bioimageio(torchsript: torch.jit._script.RecursiveScriptModule,
         dim_out = output.shape[1]
     np.save(os.path.join(output_name, "test-output.npy"), output.cpu().numpy())
 
-    from instanseg.utils.utils import display_overlay
+    from instanseg.utils.utils import _display_overlay
 
-    cover = display_overlay(input_crop[0], output)
+    cover = _display_overlay(input_crop[0], output)
     show_images(cover, colorbar=False)
     show_images(cover, colorbar=False, save_str= os.path.join(output_name, "cover"))
 
@@ -254,7 +247,6 @@ def export_bioimageio(torchsript: torch.jit._script.RecursiveScriptModule,
         train_data = str(model_dict["source_dataset"])
     else:
         train_data = "Not specified"
-
 
     # create readme
     readme(output_name, model_dict)
@@ -343,7 +335,6 @@ def export_bioimageio(torchsript: torch.jit._script.RecursiveScriptModule,
 
     #unzip the folder
 
-    
     import zipfile
     import shutil
 
@@ -354,13 +345,7 @@ def export_bioimageio(torchsript: torch.jit._script.RecursiveScriptModule,
     
     yaml_path = os.path.join(destination, 'rdf.yaml')
     modify_yaml_for_qupath_config(yaml_path, pixel_size=model_pixel_size, dim_in=dim_in, dim_out=dim_out)
-
     
     make_archive(destination, input)
-
-
-    
-
-    
 
     shutil.rmtree(output_name)
