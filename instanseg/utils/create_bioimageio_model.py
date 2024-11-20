@@ -237,7 +237,7 @@ def export_bioimageio(torchsript: torch.jit._script.RecursiveScriptModule,
     # NOTE: if you have pre-and-post-processing in your model (see the more advanced models for an example)
     # you will need to save the input BEFORE preprocessing and the output AFTER postprocessing
 
-    np.save(os.path.join(output_name, "test-input.npy"), input_crop.numpy())
+    np.save(os.path.join(output_name, "test-input.npy"), input_crop.float().numpy())
 
     input_crop,_ = Augmenter.to_tensor(input_crop[0],normalize=True)
     input_crop = input_crop.unsqueeze(0)
