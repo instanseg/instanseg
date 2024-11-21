@@ -1,18 +1,15 @@
 from instanseg.utils.utils import show_images, _move_channel_axis
 import torchvision
-from skimage.draw import bezier_curve
 import torchvision.transforms.functional as TF
 import torch
 import random
 import numpy as np
-import skimage
 from torchvision.transforms import RandomCrop, Resize, RandomPerspective
-from monai.transforms import RandGaussianNoise, AdjustContrast, HistogramNormalize
+from monai.transforms import RandGaussianNoise, AdjustContrast
 from instanseg.utils.utils import percentile_normalize, generate_colors
 import warnings
 
 import time
-import pdb
 import fastremap
 
 time_dict = {}
@@ -190,8 +187,8 @@ class Augmentations(object):
         if metadata is not None and metadata["image_modality"] != "Brightfield":
             return image, labels
         
-        assert image.shape[0] == 3, pdb.set_trace()
-
+        assert image.shape[0] == 3
+        
         import torchstain
         if self.debug:
             orig = torch.clone(image)
@@ -209,7 +206,6 @@ class Augmentations(object):
         except:
             return image,labels
 
-        #    pdb.set_trace()
 
         out = _move_channel_axis(norm) / 255.
 
@@ -242,7 +238,6 @@ class Augmentations(object):
         image = image.clamp(0, 1) * 255
         image = image.byte()
 
-        #        pdb.set_trace()
 
         image = F.to_pil_image(image)
 
@@ -292,10 +287,6 @@ class Augmentations(object):
         normalizer = RandStdShiftIntensity(10)
 
         out = torch.stack([normalizer(c) for c in image])
-
-
-
-     #   pdb.set_trace()
 
         if self.debug:
             print("RandStdShiftIntensity")
@@ -349,7 +340,7 @@ class Augmentations(object):
 
     def adjust_hue(self, image, labels, amount=0, metadata=None):
 
-        assert image.shape[0] == 3, pdb.set_trace()
+        assert image.shape[0] == 3
 
         if metadata is not None and metadata["image_modality"] != "Brightfield":
             return image, labels
@@ -391,7 +382,6 @@ class Augmentations(object):
         return out, labels
 
     def invert(self, image, labels, amount=0, metadata=None):
-        # pdb.set_trace()
 
         out = 1 - image
 
@@ -424,8 +414,7 @@ class Augmentations(object):
             'eosin': torch.Tensor([0.2159, 0.8012, 0.5581])
         }
 
-        assert c_nuclei is not None, pdb.set_trace()
-
+        assert c_nuclei is not None
         im_nuclei = image[c_nuclei]
 
         my_stains = [torch.clone(stains['hematoxylin'])]
@@ -486,22 +475,19 @@ class Augmentations(object):
         np.random.shuffle(colours)
         if np.min(image.shape) == 1:
             c_nuclei = 0  # If we have a greyscale image, we want to colourize the one and only nuclei channel
-        #   pdb.set_trace()
-
+        
         coloured_image = image[c_nuclei][None,] * torch.Tensor([0, 0, 1])[:, None, None]
         for i, image_channel in enumerate(image[np.arange(len(image)) != c_nuclei]):
             colour = colours[i]
             # greyscale_image_channel = image_channel[None,].expand(3, -1, -1)
             coloured_image_channel = image_channel * torch.Tensor(colour)[:, None, None]
             coloured_image += coloured_image_channel
-        assert not coloured_image.isnan().any(), pdb.set_trace()
-
+        assert not coloured_image.isnan().any()
         image = percentile_normalize(coloured_image, 0.1, subsampling_factor=5)
         if self.debug:
             print("Colourize")
             show_images([orig, image], titles=["Original", "Transformed"])
-        assert not coloured_image.isnan().any(), pdb.set_trace()
-
+        assert not coloured_image.isnan().any()
         return image, labels
 
     def pseudo_imc(self, image, labels, amount=0, metadata=None):
@@ -628,8 +614,6 @@ class Augmentations(object):
                     np.random.shuffle(slice)
                     slice = np.append(slice, c_nuclei)
 
-                    #    pdb.set_trace()
-                    #   np.random.shuffle(slice)
                     c_nuclei = np.where(slice == c_nuclei)[0][0]
 
             image = image[slice]
@@ -680,8 +664,7 @@ class Augmentations(object):
             torch.manual_seed(random_seed)
 
         if labels is not None:
-            assert image.shape[-2:] == labels.shape[-2:], pdb.set_trace()
-
+            assert image.shape[-2:] == labels.shape[-2:]
 
 
         shape = (torch.tensor(image.shape[-2:]) * (1 + ((torch.rand(1) - 0.5) * amount))).int().tolist()
@@ -738,7 +721,7 @@ class Augmentations(object):
         if labels is not None:
             out_labels = resized_labels[:, i:i + h, j:j + w]
 
-            assert out_image.shape[-2:] == self.shape and out_labels.shape[-2:] == self.shape, pdb.set_trace()
+            assert out_image.shape[-2:] == self.shape and out_labels.shape[-2:] == self.shape
 
         if self.debug:
             print("Rescaling")
@@ -779,7 +762,6 @@ class Augmentations(object):
                 else:
                     observed_modality = meta["image_modality"]
             else:
-                pdb.set_trace()
                 observed_modality = _estimate_image_modality(image, labels)
             modality = observed_modality
         else:
@@ -870,8 +852,7 @@ class Augmentations(object):
 
                     image, labels = getattr(self, augmentation)(image, labels, amount=amount, metadata=metadata)
 
-                assert not image.isnan().any(), pdb.set_trace()
-
+                assert not image.isnan().any()
         
 
         image, labels = self.duplicate_grayscale_channels(image,
@@ -896,10 +877,6 @@ if __name__ == "__main__":
     label = tifffile.imread(r"../examples/LuCa1_label.tif")[:512,:512]
     meta = {"image_modality": "Fluorescence", "nuclei_channels": [7]}
 
-   # pdb.set_trace()
-    # img = tifffile.imread(r"../examples/HE_example.tif")
-    # label = tifffile.imread(r"../examples/HE_example_masks.tif")
-    # meta = {"image_modality": "Brightfield", "nuclei_channels": [0, 1, 2]}
 
     Augmenter = Augmentations(augmentation_dict=augmentation_dict, debug=False,dim_in = None)
 

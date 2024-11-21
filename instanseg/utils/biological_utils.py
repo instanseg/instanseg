@@ -5,11 +5,8 @@ import pandas as pd
 import numpy as np
 import seaborn as sns
 import matplotlib.pyplot as plt
-import sys
 
-import pdb
 from instanseg.utils.pytorch_utils import torch_sparse_onehot, torch_fastremap, remap_values, torch_onehot
-from instanseg.utils.utils import show_images
 
 def get_intersection_over_union(label: torch.Tensor, return_lab: bool = True) -> torch.Tensor:
 
@@ -351,11 +348,8 @@ def show_umap_and_cluster(X_features):
 
 if __name__ == "__main__":
     from skimage import io
-    from instanseg.utils.tiling import sliding_window_inference
-    from instanseg.utils.pytorch_utils import torch_sparse_onehot, fast_sparse_dual_iou
+    from instanseg.utils.pytorch_utils import torch_sparse_onehot
     from instanseg.utils.utils import _choose_device
-    from instanseg.utils.utils import drag_and_drop_file
-    from pathlib import Path
 
     instanseg = torch.jit.load("../torchscripts/1793450.pt")
     device = _choose_device()
@@ -373,7 +367,7 @@ if __name__ == "__main__":
 
     lab = instanseg(input_tensor[:,128:256,:128].unsqueeze(0).to(device))
 
-    # lab = sliding_window_inference(input_tensor, instanseg, window_size=(512, 512),
+    # lab = _sliding_window_inference(input_tensor, instanseg, window_size=(512, 512),
     #                                sw_device=device, device='cpu', output_channels=2)
     
     lab = resolve_cell_and_nucleus_boundaries(lab)
@@ -403,20 +397,7 @@ if __name__ == "__main__":
                                         mixed_precision = False).to(device)
     out = super_model(input_tensor[None,][:,:,128:256,:128])
 
-
-
-    pdb.set_trace()
-
-
-
-
-
     export_to_torchscript(model_name, show_example=True, mixed_predicision=False)
-
-
-
-
-
 
     print("Calculating cellular features ...")
     X_cell, X_nuclei, X_cytoplasm = get_features_by_location(input_tensor, lab)
