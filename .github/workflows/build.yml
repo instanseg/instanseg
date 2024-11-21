@@ -10,6 +10,8 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
     runs-on: ${{ matrix.os }}
+    env:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # for downloading models
     steps:
       - name: Check out repository
         uses: actions/checkout@v4

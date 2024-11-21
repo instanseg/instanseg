@@ -837,12 +837,13 @@ def drag_and_drop_file():
     return entry_var.get()
 
 
-def download_model(model_str: str, verbose : bool = True):
+def download_model(model_str: str, verbose : bool = True, header: Optional[str]=None):
     import os
     import requests
     import zipfile
     from io import BytesIO
     import torch
+
 
     if not os.environ.get("INSTANSEG_BIOIMAGEIO_PATH"):
         os.environ["INSTANSEG_BIOIMAGEIO_PATH"] = os.path.join(os.path.dirname(__file__),"../bioimageio_models/")
@@ -854,7 +855,7 @@ def download_model(model_str: str, verbose : bool = True):
     
     release_tag = "instanseg_models_v1"
     url = f"https://api.github.com/repos/instanseg/instanseg/releases/tags/{release_tag}"
-    response = requests.get(url)
+    response = requests.get(url, header=header)
     response.raise_for_status()  # Raise an error for bad response
 
     release_data = response.json()
