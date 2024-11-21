@@ -29,7 +29,6 @@ jobs:
           python -c 'from instanseg.utils.loss.lovasz_losses import binary_xloss'
           python -c 'from instanseg.utils.models.InstanSeg_UNet import DecoderBlock, EncoderBlock, conv_norm_act'
       - name: pytest
-        if: matrix.os == 'ubuntu-latest'
         run: |
           pip install .[full,test]
           pytest
