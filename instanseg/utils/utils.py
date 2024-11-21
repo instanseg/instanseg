@@ -20,7 +20,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import torch
 import tifffile
-from typing import Optional
+from typing import Optional, List
 import geojson
 
 def moving_average(x, w):

@@ -2,7 +2,7 @@
 def test_tiling():
 
     import torch
-    from instanseg.utils.tiling import chops, tiles_from_chops, stitch
+    from instanseg.utils.tiling import _chops, _tiles_from_chops, _stitch
     from instanseg.utils.pytorch_utils import torch_sparse_onehot, fast_sparse_dual_iou, connected_components
 
     torch.random.manual_seed(0)
@@ -13,11 +13,11 @@ def test_tiling():
     max_cell_size = 20
     window_size = (70,70)
 
-    tuple_index = chops(input_tensor.shape, shape=window_size, overlap=2 * (overlap + max_cell_size))
-    tile_list = tiles_from_chops(input_tensor, shape=window_size, tuple_index=tuple_index)
+    tuple_index = _chops(input_tensor.shape, shape=window_size, overlap=2 * (overlap + max_cell_size))
+    tile_list = _tiles_from_chops(input_tensor, shape=window_size, tuple_index=tuple_index)
     assert len(tile_list) == len(tuple_index[0]) * len(tuple_index[1])
     labels_list = [lab for lab in tile_list]
-    output = stitch([lab[0,0] for lab in labels_list],
+    output = _stitch([lab[0,0] for lab in labels_list],
                                 shape=window_size,
                                 chop_list=tuple_index,
                                 offset = overlap,
