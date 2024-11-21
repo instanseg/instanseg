@@ -1,28 +1,35 @@
 name: Python package
 
-on: [push]
+on:
+  push:
+  pull_request:
 
 jobs:
-  build:
-    defaults:
-      run:
-        shell: bash -l {0}
-
-    runs-on: ubuntu-latest
-
+  test:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    env:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # for downloading models
     steps:
-      - uses: actions/checkout@v4
-      - uses: conda-incubator/setup-miniconda@v3
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up python
+        id: setup-python
+        uses: actions/setup-python@v5
         with:
-          activate-environment: instanseg
-          environment-file: env.yml
+          python-version: "3.10"
       - name: Install
         run: |
-          pip install .
+          pip install .[full,test]
       - name: basic smoke test
         run: |
           cd notebooks # because the folder InstanSeg and the module InstanSeg are treated the same (thanks python!)
           python -c 'import instanseg'
           python -c 'from instanseg.utils.loss.lovasz_losses import binary_xloss'
           python -c 'from instanseg.utils.models.InstanSeg_UNet import DecoderBlock, EncoderBlock, conv_norm_act'
-          python -c 'from instanseg.utils.tiling import run_tiling_tests; run_tiling_tests()'
+      - name: pytest
+        run: |
+          pytest
