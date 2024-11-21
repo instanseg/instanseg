@@ -850,6 +850,7 @@ def download_model(model_str: str, verbose : bool = True, headers: Optional[str]
 
     bioimageio_path = os.environ.get("INSTANSEG_BIOIMAGEIO_PATH")
 
+
     # Ensure the directory exists
     os.makedirs(bioimageio_path, exist_ok=True)
     
@@ -876,12 +877,15 @@ def download_model(model_str: str, verbose : bool = True, headers: Optional[str]
         return torch.jit.load(path_to_torchscript_model)
 
     else:
+
         #load model locally
-        if os.path.exists(bioimageio_path + f"{model_str}/instanseg.pt"):
-            path_to_torchscript_model = bioimageio_path + f"{model_str}/instanseg.pt"
+
+        path_to_torchscript_model = os.path.join(bioimageio_path, model_str, "instanseg.pt")
+
+        if os.path.exists(path_to_torchscript_model):
             return torch.jit.load(path_to_torchscript_model)
         else:
-            raise Exception(f"Model {model_str} not found in the release data or locally. Please check the model name and try again.")
+            raise Exception(f"Model {path_to_torchscript_model} not found in the release data or locally. Please check the model name and try again.")
 
 
 
