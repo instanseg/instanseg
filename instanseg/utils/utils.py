@@ -28,7 +28,7 @@ def moving_average(x, w) -> np.ndarray:
     return np.convolve(x, np.ones(w), 'valid') / w
 
 
-def plot_average(train, test, clip=99, window_size=10) -> plt.Figure:
+def plot_average(train, test, clip=99, window_size=10):
     fig = plt.figure(figsize=(10, 10))
     clip_val = np.percentile(test, [clip])
     test = np.clip(test, 0, clip_val[0])
@@ -38,20 +38,6 @@ def plot_average(train, test, clip=99, window_size=10) -> plt.Figure:
     plt.plot(moving_average(train, window_size), label="train")
     plt.legend()
     return fig
-
-
-def _to_shape(a, shape) -> np.ndarray:
-    """Pad an array to a given shape."""
-    a = _move_channel_axis(a)
-    if len(np.shape(a)) == 2:
-        a = a[None,]
-    y_, x_ = shape
-    y, x = a[0].shape
-    y_pad = np.max([0, (y_ - y)])
-    x_pad = np.max([0, (x_ - x)])
-    return np.pad(a, ((0, 0), (y_pad // 2, y_pad // 2 + y_pad % 2),
-                      (x_pad // 2, x_pad // 2 + x_pad % 2)),
-                  mode='constant')
 
 
 def labels_to_features(lab: np.ndarray,
@@ -108,13 +94,7 @@ def labels_to_features(lab: np.ndarray,
     return geojson.FeatureCollection(features)
 
 
-def interp(image: np.ndarray, shape: float = None, scale:float = None) -> np.ndarray:
-    """
-    Interpolate an image to a new shape or scale.
-    :param image:
-    :param shape:
-    :param scale:
-    """
+def interp(image: np.ndarray, shape: float = None, scale:float = None):
 
     from scipy import interpolate
     x = np.array(range(image.shape[1]))
@@ -327,13 +307,8 @@ def _move_channel_axis(img: Union[np.ndarray, torch.Tensor], to_back: bool = Fal
 def percentile_normalize(img: Union[np.ndarray, torch.Tensor],
                          percentile: float = 0.1,
                          subsampling_factor: int = 1,
-                         epsilon: float = 1e-3) -> Union[np.ndarray, torch.Tensor]:
-    """
-    :param img:
-    :param percentile:
-    :param subsampling_factor:
-    :param epsilon:
-    """
+                         epsilon: float = 1e-3):
+
     if isinstance(img, np.ndarray):
         assert img.ndim == 2 or img.ndim == 3, "Image must be 2D or 3D, got image of shape" + str(img.shape)
         img = np.atleast_3d(img)
@@ -406,7 +381,7 @@ def export_annotations_and_images(output_dir, original_image, lab, base_name=Non
 
 
 import matplotlib.colors as mcolors
-def color_name_to_rgb(color_name: str) -> Tuple[int, int, int]:
+def color_name_to_rgb(color_name: str):
     """
     Convert a color name to its corresponding RGB values.
     
@@ -427,7 +402,7 @@ def save_image_with_label_overlay(im: np.ndarray,
                                   label_colors=None,
                                   alpha=1.0,
                                   thickness=3,
-                                  return_image=False) -> Union[np.ndarray, None]:
+                                  return_image=False):
     """
     Save an image as RGB alongside a corresponding label overlay.
     This can be used to quickly visualize the results of a segmentation, generally using the
@@ -716,7 +691,7 @@ def timer(func):
 
 
 
-def set_export_paths() -> None:
+def set_export_paths():
     from pathlib import Path
     if os.environ.get('INSTANSEG_BIOIMAGEIO_PATH'):
         path = Path(os.environ['INSTANSEG_BIOIMAGEIO_PATH'])
@@ -864,7 +839,7 @@ def drag_and_drop_file():
     return entry_var.get()
 
 
-def download_model(model_str: str, verbose : bool = True) -> Union[torch.ScriptModule, torch.ScriptFunction]:
+def download_model(model_str: str, verbose : bool = True):
     """
     :param model_str:
     :param verbose:

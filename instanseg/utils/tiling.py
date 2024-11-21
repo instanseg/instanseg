@@ -33,26 +33,6 @@ def _remove_edge_labels(labels, ignore=[None]):
     return labels * ~_edge_mask(labels, ignore=ignore)
 
 
-def _to_shape(a, shape):
-    """Pad a tensor to a given shape."""
-    if len(a.shape) == 2:
-        a = a.unsqueeze(0)
-    y_, x_ = shape
-    y, x = a[0].shape[-2:]
-    y_pad = max(0, y_ - y)
-    x_pad = max(0, x_ - x)
-    return torch.nn.functional.pad(a, (x_pad // 2, x_pad // 2 + x_pad % 2, y_pad // 2, y_pad // 2 + y_pad % 2))
-
-
-def _to_shape_bottom_left(a, shape):
-    """Pad a tensor to a given shape."""
-    if len(a.shape) == 2:
-        a = a.unsqueeze(0)
-    y_, x_ = shape
-    y, x = a[0].shape[-2:]
-    y_pad = max(0, y_ - y)
-    x_pad = max(0, x_ - x)
-    return torch.nn.functional.pad(a, (0, x_pad, 0, y_pad))
 
 def _chops(img_shape: tuple, shape: tuple, overlap: int = 0) -> tuple:
     """This function splits an image into desired windows and returns the indices of the windows"""

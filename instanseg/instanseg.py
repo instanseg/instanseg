@@ -260,7 +260,7 @@ class InstanSeg():
              save_output: bool = False,
              save_overlay: bool = False,
              save_geojson: bool = False,
-             **kwargs) -> Union[torch.Tensor, List[torch.Tensor]]:
+             **kwargs) -> Union[torch.Tensor, List[torch.Tensor], None]:
         """
         Evaluate the input image or list of images using the InstanSeg model.
         :param image: The path to the image, or a list of such paths.
@@ -269,7 +269,7 @@ class InstanSeg():
         :param save_overlay: Controls whether the output is saved to disk as an overlay (see :func:`save_output <instanseg.Instanseg.save_output>`).
         :param save_geojson: Controls whether the geojson output labels are saved to disk (see :func:`save_output <instanseg.Instanseg.save_output>`).
         :param kwargs: Passed to other eval methods, eg :func:`save_output <instanseg.Instanseg.eval_small_image>`, :func:`save_output <instanseg.Instanseg.eval_medium_image>`, :func:`save_output <instanseg.Instanseg.eval_whole_slide_image>` 
-        :return: A torch.Tensor of outputs if the input is a path to a single image, or a list of such outputs if the input is a list of paths.
+        :return: A torch.Tensor of outputs if the input is a path to a single image, or a list of such outputs if the input is a list of paths, or None if the input is a whole slide image.
         """
 
         if isinstance(image, PosixPath):
@@ -553,7 +553,7 @@ class InstanSeg():
                                detection_size: int = 20, 
                                batch_size: int = 1,
                                output_geojson: bool = False,
-                               **kwargs) -> zarr.core.Array:
+                               **kwargs):
             """
             Evaluate a whole slide input image using the InstanSeg model. This function uses slideio to read an image and then segments it using the instanseg model. The segmentation is done in a tiled manner to avoid memory issues. 
             The function returns a zarr file with the segmentation. The zarr file is saved in the same directory as the image with the same name but with the extension .zarr. The function also returns the zarr file object.
@@ -569,8 +569,6 @@ class InstanSeg():
             :param target: Controls what type of output is given, usually "all_outputs", "nuclei", or "cells".
             :param rescale_output: Controls whether the outputs should be rescaled to the same coordinate space as the input (useful if the pixel size is different to that of the InstanSeg model being used).
             :param kwargs: Passed to pytorch.
-            
-            :return: A tensor corresponding to the output targets specified, as well as the input image if requested.
             """
 
             memory_block_size =  (int(self.medium_image_threshold**0.5), int(self.medium_image_threshold **0.5))
@@ -741,7 +739,6 @@ class InstanSeg():
                 _zarr_to_json_export(file_with_zarr_extension, detection_size = detection_size, size = shape[0], scale = scale_factor, n_dim = n_dim)
                     
 
-            return canvas
 
     
     def display(self,
