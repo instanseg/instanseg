@@ -34,3 +34,4 @@ instanseg/utils/models/bash.sh
 Raw_Datasets
 instanseg/bio_2_delete/
 dist/
+env
