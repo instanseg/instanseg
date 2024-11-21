@@ -43,7 +43,7 @@ full = [
     "bioimageio.core==0.5.11",
     "bioimageio.spec==0.4.9",
     "colorcet>=3.0.1",
-    "cucim>=23.10.00; platform_system=='Linux'",
+    "cucim>=23.10.00",
     "edt",
     "einops>=0.7.0",
     "fastremap>=1.14.0",
