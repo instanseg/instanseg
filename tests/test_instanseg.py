@@ -17,7 +17,7 @@ def test_inference():
     labeled_output, image_tensor  = instanseg_brightfield.eval_small_image(image_array, pixel_size)
     display = instanseg_brightfield.display(image_tensor, labeled_output)
 
-    instanseg_fluorescence = InstanSeg("fluorescence_nuclei_and_cells", verbosity=0)
+    instanseg_fluorescence = InstanSeg("fluorescence_nuclei_and_cells", verbosity=0, device=device)
     image_array, pixel_size = instanseg_fluorescence.read_image(example_image_folder/"Fluorescence_example.tif")
 
     labeled_output, image_tensor  = instanseg_fluorescence.eval_small_image(image_array, pixel_size)
