@@ -321,16 +321,19 @@ class InstanSeg():
         
         return output
     
-    def save_output(self,image_path: str, 
+    def save_output(self,
+                    image_path: str, 
                     labels: torch.Tensor,
                     image_array: Optional[np.ndarray] = None,
                     save_overlay = False,
                     save_geojson = False) -> None:
         """
         Save the output of InstanSeg to disk.
-        :param image_path: The path to the image.
+        :param image_path: The path to the image, and where outputs will be saved.
         :param labels: The output labels.
-        :param image_array: 
+        :param image_array: The image in array format. Required to save overlay.
+        :param save_overlay: Save the labels overlaid on the image.
+        :param save_geojson: Save the labels as a GeoJSON feature collection.
         """
         import os
 
