@@ -114,7 +114,7 @@ class InstanSeg():
         self.verbosity = verbosity
         self.verbose = verbosity != 0
 
-        headers = {'Authorization': 'token ' + github_token}
+        headers = None if github_token is None else {'Authorization': 'token ' + github_token}
         if isinstance(model_type, nn.Module):
             self.instanseg = model_type
         else:
