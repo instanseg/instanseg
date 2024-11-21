@@ -89,7 +89,7 @@ def readme(model_name: str, model_dict: dict = None):
           #  f.write(str(model_dict["source_dataset"]))
 
 
-def modify_yaml_for_qupath_config(yaml_path, pixel_size: float, dim_in: int = 3, dim_out: int = 2):
+def modify_yaml_for_qupath_config(yaml_path, pixel_size: float, dim_in: int = 3, dim_out: int = 2, version: str = None):
 
     #copy ijm files
     import shutil
@@ -108,41 +108,42 @@ def modify_yaml_for_qupath_config(yaml_path, pixel_size: float, dim_in: int = 3,
         ]}
 
     data['config']['deepimagej'] = {
-    'allow_tiling': True,
-    'model_keys': None,
-    'prediction': {
-        'preprocess': [
-            {'kwargs': 'instanseg_preprocess.ijm'}
-        ],
-        'postprocess': [
-            {'kwargs': 'instanseg_postprocess.ijm'}
-        ]
-    },
-    'pyramidal_model': False,
-    'test_information': {
-        'inputs': [
-            {
-                'name': 'test-input.npy',
-                'pixel_size': {
-                    'x': 1.0,
-                    'y': 1.0,
-                    'z': 1.0
-                },
-                'size': f'256 x 256 x 1 x {dim_in}'
-            }
-        ],
-        'memory_peak': None,
-        'outputs': [
-            {
-                'name': 'test-output.npy',
-                'size': f'256 x 256 x 1 x {dim_out}',
-                'type': 'image'
-            }
-        ],
-        'runtime': None
+        'allow_tiling': True,
+        'model_keys': None,
+        'prediction': {
+            'preprocess': [
+                {'kwargs': 'instanseg_preprocess.ijm'}
+            ],
+            'postprocess': [
+                {'kwargs': 'instanseg_postprocess.ijm'}
+            ]
+        },
+        'pyramidal_model': False,
+        'test_information': {
+            'inputs': [
+                {
+                    'name': 'test-input.npy',
+                    'pixel_size': {
+                        'x': 1.0,
+                        'y': 1.0,
+                        'z': 1.0
+                    },
+                    'size': f'256 x 256 x 1 x {dim_in}'
+                }
+            ],
+            'memory_peak': None,
+            'outputs': [
+                {
+                    'name': 'test-output.npy',
+                    'size': f'256 x 256 x 1 x {dim_out}',
+                    'type': 'image'
+                }
+            ],
+            'runtime': None
+        }
     }
-
-    }
+    if version is not None:
+        data["version"] = version
 
     with open(yaml_path, 'w') as file:
         yaml.dump(data, file)
@@ -163,7 +164,8 @@ def export_bioimageio(torchsript: torch.jit._script.RecursiveScriptModule,
                       model_name: str, 
                       test_img_path: str, 
                       model_dict: dict = None, 
-                      output_name = None):
+                      output_name = None,
+                      version: str = None):
     
     set_export_paths()
 
@@ -211,7 +213,7 @@ def export_bioimageio(torchsript: torch.jit._script.RecursiveScriptModule,
     Augmenter=Augmentations()
 
     input_tensor,_ = Augmenter.to_tensor(input_data,normalize=False) #this converts the input data to a tensor and does percentile normalization (no clipping)
-    input_tensor,_ = Augmenter.normalize(input_tensor, percentile=0.)
+    #input_tensor,_ = Augmenter.normalize(input_tensor, percentile=0.)
     import math
     if math.isnan(model_pixel_size):
         model_pixel_size_tmp = pixel_size
@@ -230,7 +232,10 @@ def export_bioimageio(torchsript: torch.jit._script.RecursiveScriptModule,
     # NOTE: if you have pre-and-post-processing in your model (see the more advanced models for an example)
     # you will need to save the input BEFORE preprocessing and the output AFTER postprocessing
 
-    np.save(os.path.join(output_name, "test-input.npy"), input_crop.numpy())
+    np.save(os.path.join(output_name, "test-input.npy"), input_crop.float().numpy())
+
+    input_crop,_ = Augmenter.to_tensor(input_crop[0],normalize=True)
+    input_crop = input_crop.unsqueeze(0)
 
     with torch.no_grad():
         output = torchsript(input_crop.to(device))
@@ -344,7 +349,8 @@ def export_bioimageio(torchsript: torch.jit._script.RecursiveScriptModule,
         zip_ref.extractall(destination)
     
     yaml_path = os.path.join(destination, 'rdf.yaml')
-    modify_yaml_for_qupath_config(yaml_path, pixel_size=model_pixel_size, dim_in=dim_in, dim_out=dim_out)
+    modify_yaml_for_qupath_config(yaml_path, pixel_size=model_pixel_size, dim_in=dim_in, dim_out=dim_out, version=version)
+
     
     make_archive(destination, input)
 

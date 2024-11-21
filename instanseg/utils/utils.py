@@ -20,10 +20,10 @@ import numpy as np
 import matplotlib.pyplot as plt
 import torch
 import tifffile
-from typing import Tuple, Optional
+from typing import Optional
 import geojson
 
-def moving_average(x, w) -> np.ndarray:
+def moving_average(x, w):
     """Moving average of an array x with window size w"""
     return np.convolve(x, np.ones(w), 'valid') / w
 
@@ -839,24 +839,26 @@ def drag_and_drop_file():
     return entry_var.get()
 
 
-def download_model(model_str: str, verbose : bool = True):
+def download_model(model_str: str, verbose : bool = True, headers: Optional[str]=None):
     import os
     import requests
     import zipfile
     from io import BytesIO
     import torch
 
+
     if not os.environ.get("INSTANSEG_BIOIMAGEIO_PATH"):
         os.environ["INSTANSEG_BIOIMAGEIO_PATH"] = os.path.join(os.path.dirname(__file__),"../bioimageio_models/")
 
     bioimageio_path = os.environ.get("INSTANSEG_BIOIMAGEIO_PATH")
+
 
     # Ensure the directory exists
     os.makedirs(bioimageio_path, exist_ok=True)
     
     release_tag = "instanseg_models_v1"
     url = f"https://api.github.com/repos/instanseg/instanseg/releases/tags/{release_tag}"
-    response = requests.get(url)
+    response = requests.get(url, headers=headers)
     response.raise_for_status()  # Raise an error for bad response
 
     release_data = response.json()
@@ -877,9 +879,12 @@ def download_model(model_str: str, verbose : bool = True):
         return torch.jit.load(path_to_torchscript_model)
 
     else:
+
         #load model locally
-        if os.path.exists(bioimageio_path + f"{model_str}/instanseg.pt"):
-            path_to_torchscript_model = bioimageio_path + f"{model_str}/instanseg.pt"
+
+        path_to_torchscript_model = os.path.join(bioimageio_path, model_str, "instanseg.pt")
+
+        if os.path.exists(path_to_torchscript_model):
             return torch.jit.load(path_to_torchscript_model)
         else:
             raise Exception(f"Model {model_str} not found in the release data or locally. Please check the model name and try again.")

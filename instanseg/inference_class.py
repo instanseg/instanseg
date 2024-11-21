@@ -6,6 +6,7 @@ from torch.nn.functional import interpolate
 from pathlib import Path, PosixPath
 from tiffslide import TiffSlide
 import zarr
+import os
 
 
 def to_ndim(x: torch.Tensor, n: int) -> torch.Tensor:
@@ -87,13 +88,15 @@ class InstanSeg():
                  model_type: Union[str,nn.Module] = "brightfield_nuclei", 
                  device: Optional[str] = None, 
                  image_reader: str = "tiffslide",
-                 verbosity: int = 1, #0,1,2
-                ):
+                 github_token: str = os.environ.get("GITHUB_TOKEN"),
+                 verbosity: int = 1 #0,1,2
+                 ):
         
         """
         :param model_type: The type of model to use. If a string is provided, the model will be downloaded. If the model is not public, it will look for a model in your bioimageio folder. If an nn.Module is provided, this model will be used.
         :param device: The device to run the model on. If None, the device will be chosen automatically.
         :param image_reader: The image reader to use. Options are "tiffslide", "skimage.io", "bioio", "AICSImageIO".
+        :param github_token: The GitHub API token to use to authenticate model downloads. May be necessary to avoid rate limits in some circumstances.
         :param verbosity: The verbosity level. 0 is silent, 1 is normal, 2 is verbose.
         """
         from instanseg.utils.utils import download_model, _choose_device
@@ -101,10 +104,11 @@ class InstanSeg():
         self.verbosity = verbosity
         self.verbose = verbosity != 0
 
+        headers = None if github_token is None else {'Authorization': 'token ' + github_token}
         if isinstance(model_type, nn.Module):
             self.instanseg = model_type
         else:
-            self.instanseg = download_model(model_type, verbose = self.verbose)
+            self.instanseg = download_model(model_type, verbose = self.verbose, headers=headers)
         self.inference_device = _choose_device(device, verbose= self.verbose)
         self.instanseg = self.instanseg.to(self.inference_device)
 
@@ -816,55 +820,4 @@ class InstanSeg():
         axes[1].axis('off')
         plt.subplots_adjust(wspace=0., hspace=0)
         plt.show()
-
-
-def run_inference_tests():
-    import os
-    import pdb
-    sys.path = sys.path[1:]
-    from instanseg.utils.utils import show_images
-
-    example_image_folder = Path(os.path.join(os.path.dirname(__file__),"./examples/"))
-
-    instanseg_brightfield = InstanSeg("brightfield_nuclei", verbosity=0)
-    image_array, pixel_size = instanseg_brightfield.read_image(example_image_folder/"HE_example.tif")
-    labeled_output, image_tensor  = instanseg_brightfield.eval_small_image(image_array, pixel_size)
-    display = instanseg_brightfield.display(image_tensor, labeled_output)
-
-    instanseg_fluorescence = InstanSeg("fluorescence_nuclei_and_cells", verbosity=0)
-    image_array, pixel_size = instanseg_fluorescence.read_image("../instanseg/examples/LuCa1.tif")
-
-    labeled_output, image_tensor  = instanseg_fluorescence.eval_small_image(image_array, pixel_size)
-    display = instanseg_fluorescence.display(image_tensor, labeled_output)
-
-    instanseg_fluorescence.eval_small_image(torch.randn(1,1,256,256), 0.5)
-    
-    instanseg_fluorescence.eval_small_image(torch.randn(1,1,256,256), 1, rescale_output = True)
-    
-    instanseg_fluorescence.eval_small_image(torch.randn(1,1,256,256), 1, rescale_output=False)
-    
-    instanseg_fluorescence.eval_small_image(torch.randn(1,1,256,256), 1,
-                                             rescale_output=False, 
-                                             return_image_tensor=False,
-                                             normalise = False)
-    
-    input = torch.randn(1,1,1,1,1,1,1000,1000)
-    label,img = instanseg_fluorescence.eval_medium_image(input, 0.5, rescale_output=True)
-    assert label.shape[-2:] == input.shape[-2:]
-
-    input = torch.randn(1,1,1000,256)
-    label,img = instanseg_fluorescence.eval_medium_image(input, 0.5, rescale_output=True)
-    assert label.shape[-2:] == input.shape[-2:]
-
-    input = torch.randn(1,5,512,512)
-    label,img = instanseg_fluorescence.eval_medium_image(input, 0.5, rescale_output=True)
-    assert label.shape[-2:] == input.shape[-2:]
-
-    input = torch.randn(1,1,256,256)
-    label,img = instanseg_fluorescence.eval_medium_image(input, 1, rescale_output=True, normalise = True)
-    assert label.shape[-2:] == input.shape[-2:]
-
-    input = torch.randn(1,1,2560,2560)
-    label,img = instanseg_fluorescence.eval_medium_image(input, 0.1, rescale_output=True)
-    assert label.shape[-2:] == input.shape[-2:]
 

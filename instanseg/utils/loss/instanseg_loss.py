@@ -1256,6 +1256,7 @@ class InstanSeg_Torchscript(nn.Module):
                 window_size: Optional[int] = None,
                 cleanup_fragments: Optional[bool] = None,
                 resolve_cell_and_nucleus: Optional[bool] = None,
+                precomputed_seeds: torch.Tensor = torch.tensor([]),
                 ) -> torch.Tensor:
         
         min_size = int(min_size) if min_size is not None else self.default_min_size
@@ -1281,6 +1282,7 @@ class InstanSeg_Torchscript(nn.Module):
         window_size = int(args.get('window_size', torch.tensor(float(window_size))).item())
         cleanup_fragments = args.get('cleanup_fragments', torch.tensor(cleanup_fragments)).item()
         resolve_cell_and_nucleus = args.get('resolve_cell_and_nucleus', torch.tensor(resolve_cell_and_nucleus)).item()
+        precomputed_seeds = args.get('precomputed_seeds', precomputed_seeds)
 
         torch.clamp_max_(x, 3) #Safety check, please normalize inputs properly!
         torch.clamp_min_(x, -2)
@@ -1329,8 +1331,11 @@ class InstanSeg_Torchscript(nn.Module):
                     #mask_map = torch.sigmoid(x[self.dim_coords + self.n_sigma]) #legacy
                     mask_map = ((x[self.dim_coords + self.n_sigma]) / 15) + 0.5 # inverse transform applied to edt during training.
 
-                    centroids_idx = torch_peak_local_max(mask_map, neighbourhood_size=peak_distance,
-                                                        minimum_value=seed_threshold, dtype= self.index_dtype)  # .to(prediction.device)
+                    if precomputed_seeds is None or precomputed_seeds.shape[0] == 0:
+                        centroids_idx = torch_peak_local_max(mask_map, neighbourhood_size=peak_distance,
+                                                            minimum_value=seed_threshold, dtype= self.index_dtype)  # .to(prediction.device)
+                    else:
+                        centroids_idx = precomputed_seeds.to(mask_map.device).long()
 
                     fields = fields + xxyy
 
