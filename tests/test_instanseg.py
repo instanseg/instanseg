@@ -3,6 +3,7 @@ from instanseg.instanseg import InstanSeg
 import torch
 import sys
 
+
 def test_inference():
     import os
     sys.path = sys.path[1:]
@@ -10,7 +11,8 @@ def test_inference():
     example_image_folder = Path(os.path.join(os.path.dirname(__file__),"../instanseg/examples/"))
     print(example_image_folder)
 
-    instanseg_brightfield = InstanSeg("brightfield_nuclei", verbosity=0)
+    device = "cuda" if sys.platform == "linux" else "cpu"
+    instanseg_brightfield = InstanSeg("brightfield_nuclei", verbosity=0, device=device)
     image_array, pixel_size = instanseg_brightfield.read_image(example_image_folder/"HE_example.tif")
     labeled_output, image_tensor  = instanseg_brightfield.eval_small_image(image_array, pixel_size)
     display = instanseg_brightfield.display(image_tensor, labeled_output)
