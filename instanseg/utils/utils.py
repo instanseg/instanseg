@@ -840,10 +840,6 @@ def drag_and_drop_file():
 
 
 def download_model(model_str: str, verbose : bool = True):
-    """
-    :param model_str:
-    :param verbose:
-    """
     import os
     import requests
     import zipfile

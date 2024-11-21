@@ -41,7 +41,7 @@ def instanseg_inference(val_images, val_labels, model, postprocessing_fn, device
             tta.Rotate90(angles=[0, 180, 90, 270]),
         ])
 
-    from instanseg.utils.tiling import _instanseg_padding, recover_padding
+    from instanseg.utils.tiling import _instanseg_padding, _recover_padding
     count = 0
     time_dict = {'preprocessing': 0, 'model': 0, 'postprocessing': 0, 'torchscript': 0, 'combined': []}
 
@@ -61,7 +61,7 @@ def instanseg_inference(val_images, val_labels, model, postprocessing_fn, device
         with torch.amp.autocast("cuda"):
             pred = model(imgs[None,])
         pred = pred.float()
-        pred = recover_padding(pred, pad).squeeze(0)
+        pred = _recover_padding(pred, pad).squeeze(0)
         if params is not None:
             with torch.amp.autocast("cuda"):
                 lab = postprocessing_fn(pred, **params, window_size=parser_args.window_size)
@@ -90,8 +90,8 @@ def instanseg_inference(val_images, val_labels, model, postprocessing_fn, device
                 with torch.amp.autocast("cuda"):
                     pred = model(imgs[None,])
 
-                pred = recover_padding(pred, pad).squeeze(0)
-                imgs = recover_padding(imgs, pad).squeeze(0)
+                pred = _recover_padding(pred, pad).squeeze(0)
+                imgs = _recover_padding(imgs, pad).squeeze(0)
                 torch.cuda.synchronize()
 
                 model_time = time.time() - start

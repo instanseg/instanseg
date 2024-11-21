@@ -278,7 +278,7 @@ def optimize_hyperparameters(model,postprocessing_fn, data_loader = None, val_im
                 return 1 - mean_f1
         
         elif val_images is not None and val_labels is not None:
-            from instanseg.utils.tiling import _instanseg_padding, recover_padding
+            from instanseg.utils.tiling import _instanseg_padding, _recover_padding
             def objective(params={}):
                 pred_masks = []
                 gt_masks = []
@@ -295,7 +295,7 @@ def optimize_hyperparameters(model,postprocessing_fn, data_loader = None, val_im
                         imgs = imgs.to(device)
                         imgs, pad = _instanseg_padding(imgs, min_dim = 32)
                         output = _model(imgs[None,])
-                        output = recover_padding(output, pad).squeeze(0)
+                        output = _recover_padding(output, pad).squeeze(0)
                         lab = postprocessing_fn(output.to(device), **params).cpu()
                         pred_masks.append(lab)
                         gt_masks.append(gt_mask)
