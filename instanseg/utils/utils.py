@@ -22,7 +22,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import torch
 import tifffile
-
+from typing import Optional
 
 def moving_average(x, w):
     """Moving average of an array x with window size w"""
