@@ -65,7 +65,7 @@ def _rescale_to_pixel_size(image: torch.Tensor,
     return to_ndim(image, original_dim)
     
 
-def _display_colourized(mIF) -> torch.Tensor:
+def _display_colourized(mIF):
     from instanseg.utils.utils import _move_channel_axis, generate_colors
 
     mIF = _to_tensor_float32(mIF)
@@ -223,7 +223,7 @@ class InstanSeg():
         return None
 
 
-    def read_slide(self, image_str: str) -> TiffSlide:      
+    def read_slide(self, image_str: str):
         """
         Read a whole slide image from disk.
         :param image_str: The path to the image.
@@ -523,9 +523,8 @@ class InstanSeg():
             target_segmentation = torch.tensor([1,1])
 
         instances = _sliding_window_inference(image,
-                                              self.instanseg, 
-                                              window_size = (tile_size,tile_size),
-                                              sw_device = self.inference_device,
+                                              self.instanseg,
+                                              window_size = (tile_size,tile_size),sw_device = self.inference_device,
                                               device = 'cpu', 
                                               batch_size= batch_size,
                                               output_channels = output_dimension,
@@ -563,7 +562,6 @@ class InstanSeg():
                                **kwargs):
             """
             Evaluate a whole slide input image using the InstanSeg model. This function uses slideio to read an image and then segments it using the instanseg model. The segmentation is done in a tiled manner to avoid memory issues. 
-            The function returns a zarr file with the segmentation. The zarr file is saved in the same directory as the image with the same name but with the extension .zarr. The function also returns the zarr file object.
             
             :param image:: The input image to be evaluated.
             :param pixel_size: The pixel size of the image, in microns. If not provided, it will be read from the image metadata.
@@ -576,6 +574,7 @@ class InstanSeg():
             :param target: Controls what type of output is given, usually "all_outputs", "nuclei", or "cells".
             :param rescale_output: Controls whether the outputs should be rescaled to the same coordinate space as the input (useful if the pixel size is different to that of the InstanSeg model being used).
             :param kwargs: Passed to pytorch.
+            :return: Returns a zarr file with the segmentation. The zarr file is saved in the same directory as the image with the same name but with the extension .zarr.
             """
 
             memory_block_size =  (int(self.medium_image_threshold**0.5), int(self.medium_image_threshold **0.5))
