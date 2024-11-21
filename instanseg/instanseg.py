@@ -4,6 +4,7 @@ import torch
 from torch import nn
 from torch.nn.functional import interpolate
 from pathlib import Path, PosixPath
+import os
 
 import sys
 import pdb
@@ -87,7 +88,8 @@ class InstanSeg():
                  model_type: Union[str,nn.Module] = "brightfield_nuclei", 
                  device: Optional[str] = None, 
                  image_reader: str = "tiffslide",
-                verbosity = 1, #0,1,2
+                 github_token: str = os.environ.get("GITHUB_TOKEN"),
+                 verbosity = 1, #0,1,2
                 ):
         
         """
@@ -112,10 +114,11 @@ class InstanSeg():
         self.verbosity = verbosity
         self.verbose = verbosity != 0
 
+        headers = {'Authorization': 'token ' + github_token}
         if isinstance(model_type, nn.Module):
             self.instanseg = model_type
         else:
-            self.instanseg = download_model(model_type, verbose = self.verbose)
+            self.instanseg = download_model(model_type, verbose = self.verbose, headers=headers)
         self.inference_device = _choose_device(device, verbose= self.verbose)
         self.instanseg = self.instanseg.to(self.inference_device)
 
