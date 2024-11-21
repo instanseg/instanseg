@@ -1,5 +1,5 @@
 from pathlib import Path
-from instanseg.instanseg import InstanSeg
+from instanseg import InstanSeg
 import torch
 import sys
 
