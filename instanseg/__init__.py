@@ -1,1 +1,1 @@
-from .instanseg import inference_class
+from .inference_class import Instanseg
