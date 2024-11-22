@@ -85,7 +85,6 @@ def test_image_readers():
     np.testing.assert_equal(fluoro_outputs[1][1], fluoro_outputs[2][1])
 
 
-
 def test_whole_slide_image():
     sys.path = sys.path[1:]
 
@@ -101,4 +100,3 @@ def test_whole_slide_image():
         instanseg_fluorescence = InstanSeg("fluorescence_nuclei_and_cells", verbosity=0, device=device, vram_size_threshold=10, ram_size_threshold=10)
 
         instanseg_fluorescence.eval_whole_slide_image(image_array)
-
