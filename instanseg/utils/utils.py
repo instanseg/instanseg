@@ -23,9 +23,10 @@ import tifffile
 from typing import Optional, List
 import geojson
 
+
 def moving_average(x, w):
     """Moving average of an array x with window size w"""
-    return np.convolve(x, np.ones(w), 'valid') / w
+    return np.convolve(x, np.ones(w), "valid") / w
 
 
 def plot_average(train, test, clip=99, window_size=10):
@@ -40,14 +41,16 @@ def plot_average(train, test, clip=99, window_size=10):
     return fig
 
 
-def labels_to_features(lab: np.ndarray,
-                       object_type='annotation',
-                       connectivity: int = 4,
-                       transform: Affine = None,
-                       downsample: float = 1.0,
-                       include_labels: bool = False,
-                       classification: str = None,
-                       offset: int = None) -> geojson.FeatureCollection:
+def labels_to_features(
+    lab: np.ndarray,
+    object_type="annotation",
+    connectivity: int = 4,
+    transform: Affine = None,
+    downsample: float = 1.0,
+    include_labels: bool = False,
+    classification: str = None,
+    offset: int = None,
+) -> geojson.FeatureCollection:
     """
     Create a GeoJSON FeatureCollection from a labeled image.
 
@@ -69,34 +72,39 @@ def labels_to_features(lab: np.ndarray,
         transform = Affine.scale(downsample)
 
     # Trace geometries
-    for i, obj in enumerate(rasterio.features.shapes(lab, mask=mask,
-                                                     connectivity=connectivity, transform=transform)):
+    for i, obj in enumerate(
+        rasterio.features.shapes(
+            lab, mask=mask, connectivity=connectivity, transform=transform
+        )
+    ):
 
         # Create properties
         props = dict(object_type=object_type)
         if include_labels:
-            props['measurements'] = [{'name': 'Label', 'value': i}]
+            props["measurements"] = [{"name": "Label", "value": i}]
         #  pdb.set_trace()
 
         # Just to show how a classification can be added
         if classification is not None:
-            props['classification'] = classification
+            props["classification"] = classification
 
         if offset is not None:
-            coordinates = obj[0]['coordinates']
+            coordinates = obj[0]["coordinates"]
             coordinates = [
-                [(int(x[0] + offset[0]), int(x[1] + offset[1])) for x in coordinates[0]]]
-            obj[0]['coordinates'] = coordinates
+                [(int(x[0] + offset[0]), int(x[1] + offset[1])) for x in coordinates[0]]
+            ]
+            obj[0]["coordinates"] = coordinates
 
-        po = geojson.Feature(geometry = obj[0], properties=props)
+        po = geojson.Feature(geometry=obj[0], properties=props)
 
         features.append(po)
     return geojson.FeatureCollection(features)
 
 
-def interp(image: np.ndarray, shape: float = None, scale:float = None):
+def interp(image: np.ndarray, shape: float = None, scale: float = None):
 
     from scipy import interpolate
+
     x = np.array(range(image.shape[1]))
     y = np.array(range(image.shape[0]))
     interpolate_fn = interpolate.interp2d(x, y, image)
@@ -105,19 +113,24 @@ def interp(image: np.ndarray, shape: float = None, scale:float = None):
         x_new = np.linspace(0, image.shape[1] - 1, shape[1])
         y_new = np.linspace(0, image.shape[0] - 1, shape[0])
     elif scale:
-        x_new = np.linspace(0, image.shape[1] - 1, int(np.floor(image.shape[1] * scale) + 1))
-        y_new = np.linspace(0, image.shape[0] - 1, int(np.floor(image.shape[0] * scale) + 1))
-    
+        x_new = np.linspace(
+            0, image.shape[1] - 1, int(np.floor(image.shape[1] * scale) + 1)
+        )
+        y_new = np.linspace(
+            0, image.shape[0] - 1, int(np.floor(image.shape[0] * scale) + 1)
+        )
+
     znew = interpolate_fn(x_new, y_new)
     return znew
 
 
-
-def apply_cmap(x,
-               fg_mask: np.ndarray = None,
-               cmap: str = "coolwarm_r",
-               bg_intensity: int = 255,
-               normalize: bool = True):
+def apply_cmap(
+    x,
+    fg_mask: np.ndarray = None,
+    cmap: str = "coolwarm_r",
+    bg_intensity: int = 255,
+    normalize: bool = True,
+):
     """
     Apply a colormap to an image, with a background mask.
     x  and fg_mask should have the same shape, and be numpy arrays.
@@ -125,6 +138,7 @@ def apply_cmap(x,
     """
     import matplotlib.cm as cm
     import matplotlib
+
     norm = matplotlib.colors.Normalize(vmin=1, vmax=10)
 
     if fg_mask is None:
@@ -133,7 +147,7 @@ def apply_cmap(x,
     x_clone = x_clone.squeeze()
     fg_clone = x_clone[fg_mask]
     cmap = matplotlib.colormaps.get_cmap(cmap)
-    m = cm.ScalarMappable(cmap=cmap,norm = norm)
+    m = cm.ScalarMappable(cmap=cmap, norm=norm)
 
     rgba_image = m.to_rgba(fg_clone)
     canvas = np.zeros((x_clone.shape[0], x_clone.shape[1], 4)).astype(np.float32)
@@ -143,14 +157,20 @@ def apply_cmap(x,
     return canvas
 
 
-
-
-
-
-
-def show_images(*img_list, clip_pct=None, titles=None, save_str=False, n_cols=3, axes=False, cmap="viridis",
-                labels=None,
-                dpi=None, timer_flag=None, colorbar=True, **args):
+def show_images(
+    *img_list,
+    clip_pct=None,
+    titles=None,
+    save_str=False,
+    n_cols=3,
+    axes=False,
+    cmap="viridis",
+    labels=None,
+    dpi=None,
+    timer_flag=None,
+    colorbar=True,
+    **args,
+):
     """Designed to plot torch tensor and numpy arrays in windows robustly"""
 
     if labels is None:
@@ -158,7 +178,7 @@ def show_images(*img_list, clip_pct=None, titles=None, save_str=False, n_cols=3,
     if titles is None:
         titles = []
     if dpi:
-        mpl.rcParams['figure.dpi'] = dpi
+        mpl.rcParams["figure.dpi"] = dpi
 
     img_list = [img for img in img_list]
     if isinstance(img_list[0], list):
@@ -181,25 +201,40 @@ def show_images(*img_list, clip_pct=None, titles=None, save_str=False, n_cols=3,
             img = np.moveaxis(img, np.argmin(img.shape), -1)
             if img.shape[-1] > 4 or img.shape[-1] == 2:
                 plt.close()
-                show_images([img[..., i] for i in range(img.shape[-1])], clip_pct=clip_pct,
-                            titles=["Channel:" + str(i) for i in range(img.shape[-1])], save_str=save_str,
-                            n_cols=n_cols, axes=axes, cmap=cmap, colorbar=colorbar)
+                show_images(
+                    [img[..., i] for i in range(img.shape[-1])],
+                    clip_pct=clip_pct,
+                    titles=["Channel:" + str(i) for i in range(img.shape[-1])],
+                    save_str=save_str,
+                    n_cols=n_cols,
+                    axes=axes,
+                    cmap=cmap,
+                    colorbar=colorbar,
+                )
                 continue
         ax1 = plt.subplot(grid[i])
         if not axes:
-            plt.axis('off')
+            plt.axis("off")
         if clip_pct is not None:
-            print(np.percentile(img.ravel(), clip_pct), np.percentile(img.ravel(), 100 - clip_pct))
-            im = ax1.imshow(img, vmin=np.percentile(img.ravel(), clip_pct),
-                            vmax=np.percentile(img.ravel(), 100 - clip_pct))
+            print(
+                np.percentile(img.ravel(), clip_pct),
+                np.percentile(img.ravel(), 100 - clip_pct),
+            )
+            im = ax1.imshow(
+                img,
+                vmin=np.percentile(img.ravel(), clip_pct),
+                vmax=np.percentile(img.ravel(), 100 - clip_pct),
+            )
         if i in labels:
             img = img.astype(int)
             img = fastremap.renumber(img)[0]
             n_instances = len(fastremap.unique(img))
             glasbey_cmap = cc.cm.glasbey_bw_minc_20_minl_30_r.colors
             glasbey_cmap[0] = [0, 0, 0]  # Set bg to black
-            cmap_lab = LinearSegmentedColormap.from_list('my_list', glasbey_cmap, N=n_instances)
-            im = ax1.imshow(img, cmap=cmap_lab, interpolation='nearest')
+            cmap_lab = LinearSegmentedColormap.from_list(
+                "my_list", glasbey_cmap, N=n_instances
+            )
+            im = ax1.imshow(img, cmap=cmap_lab, interpolation="nearest")
         else:
             im = ax1.imshow(img, cmap=cmap, **args)
         if colorbar:
@@ -217,51 +252,77 @@ def show_images(*img_list, clip_pct=None, titles=None, save_str=False, n_cols=3,
         plt.show()
 
     if save_str:
-        plt.savefig(str(save_str) + ".png", bbox_inches='tight')
+        plt.savefig(str(save_str) + ".png", bbox_inches="tight")
         plt.close()
         return None
 
 
-
-
-def display_as_grid(display_list,
-                    ncols: int,
-                    padding: int = 2,
-                    left_titles: Optional[List[str]] = None,
-                    top_titles = None,
-                    right_side = None,
-                    title_height: int = 20,
-                    fontsize: float = 12):
+def display_as_grid(
+    display_list,
+    ncols: int,
+    padding: int = 2,
+    left_titles: Optional[List[str]] = None,
+    top_titles=None,
+    right_side=None,
+    title_height: int = 20,
+    fontsize: float = 12,
+):
 
     from instanseg.utils.augmentations import Augmentations
+
     Augmenter = Augmentations()
 
     tensor_list = []
     for i in display_list:
-        disp_tensor = Augmenter.to_tensor(i,normalize = False)[0].to("cpu")
-        h,w = disp_tensor.shape[1:]
+        disp_tensor = Augmenter.to_tensor(i, normalize=False)[0].to("cpu")
+        h, w = disp_tensor.shape[1:]
         tensor_list.append(disp_tensor / disp_tensor.max())
 
     from torchvision.utils import make_grid
 
     grid = make_grid(tensor_list, nrow=ncols, padding=padding, pad_value=1)
 
-    fig  = plt.figure(figsize=(10, 10))
+    fig = plt.figure(figsize=(10, 10))
     plt.imshow(grid.numpy().transpose(1, 2, 0))
-    plt.axis('off')
-
+    plt.axis("off")
 
     if left_titles is not None:
         for idx, dataset in enumerate(left_titles):
-            plt.text(-title_height, idx * h + int((h/2)) + 2 * idx , dataset, fontsize=fontsize, color='black', verticalalignment='center', rotation = "vertical")
+            plt.text(
+                -title_height,
+                idx * h + int((h / 2)) + 2 * idx,
+                dataset,
+                fontsize=fontsize,
+                color="black",
+                verticalalignment="center",
+                rotation="vertical",
+            )
     if top_titles is not None:
         for idx, dataset in enumerate(top_titles):
-            plt.text(idx * w + int((w/2)),  -title_height , dataset, fontsize=fontsize, color='black', verticalalignment = 'center', horizontalalignment='center', rotation = "horizontal")
+            plt.text(
+                idx * w + int((w / 2)),
+                -title_height,
+                dataset,
+                fontsize=fontsize,
+                color="black",
+                verticalalignment="center",
+                horizontalalignment="center",
+                rotation="horizontal",
+            )
     if right_side is not None:
         for idx, dataset in enumerate(right_side):
-            plt.text(5 * w + 10, idx * h + int((h/2)) + 2 * idx , dataset, fontsize = fontsize, color='black', verticalalignment='center', rotation = 270)
-    
+            plt.text(
+                5 * w + 10,
+                idx * h + int((h / 2)) + 2 * idx,
+                dataset,
+                fontsize=fontsize,
+                color="black",
+                verticalalignment="center",
+                rotation=270,
+            )
+
     return fig
+
 
 def _scale_length(size: float, pixel_size: float, do_round=True) -> float:
     """
@@ -279,12 +340,16 @@ def _scale_area(size: float, pixel_size: float, do_round=True) -> float:
     return np.round(size_pixels) if do_round else size_pixels
 
 
-def _move_channel_axis(img: Union[np.ndarray, torch.Tensor], to_back: bool = False) -> Union[np.ndarray, torch.Tensor]:
+def _move_channel_axis(
+    img: Union[np.ndarray, torch.Tensor], to_back: bool = False
+) -> Union[np.ndarray, torch.Tensor]:
     if isinstance(img, np.ndarray):
         img = img.squeeze()
         if img.ndim != 3:
             if img.ndim == 2:
-                img = img[None,]
+                img = img[
+                    None,
+                ]
             if img.ndim != 3:
                 raise ValueError("Input array should be 3D or 2D")
         ch = np.argmin(img.shape)
@@ -295,7 +360,9 @@ def _move_channel_axis(img: Union[np.ndarray, torch.Tensor], to_back: bool = Fal
     elif isinstance(img, torch.Tensor):
         if img.dim() != 3:
             if img.dim() == 2:
-                img = img[None,]
+                img = img[
+                    None,
+                ]
             if img.dim() != 3:
                 raise ValueError("Input array should be 3D or 2D")
         ch = np.argmin(img.shape)
@@ -304,13 +371,17 @@ def _move_channel_axis(img: Union[np.ndarray, torch.Tensor], to_back: bool = Fal
         return img.movedim(ch, 0)
 
 
-def percentile_normalize(img: Union[np.ndarray, torch.Tensor],
-                         percentile: float = 0.1,
-                         subsampling_factor: int = 1,
-                         epsilon: float = 1e-3):
+def percentile_normalize(
+    img: Union[np.ndarray, torch.Tensor],
+    percentile: float = 0.1,
+    subsampling_factor: int = 1,
+    epsilon: float = 1e-3,
+):
 
     if isinstance(img, np.ndarray):
-        assert img.ndim == 2 or img.ndim == 3, "Image must be 2D or 3D, got image of shape" + str(img.shape)
+        assert (
+            img.ndim == 2 or img.ndim == 3
+        ), "Image must be 2D or 3D, got image of shape" + str(img.shape)
         img = np.atleast_3d(img)
         channel_axis = np.argmin(img.shape)
         img = _move_channel_axis(img, to_back=True)
@@ -319,27 +390,38 @@ def percentile_normalize(img: Union[np.ndarray, torch.Tensor],
             im_temp = img[::subsampling_factor, ::subsampling_factor, c]
             (p_min, p_max) = np.percentile(im_temp, [percentile, 100 - percentile])
             img[:, :, c] = (img[:, :, c] - p_min) / max(epsilon, p_max - p_min)
-       # img = img / np.maximum(0.01, np.max(img))
+        # img = img / np.maximum(0.01, np.max(img))
         return np.moveaxis(img, 2, channel_axis)
 
     elif isinstance(img, torch.Tensor):
-        assert img.ndim == 2 or img.ndim == 3, "Image must be 2D or 3D, got image of shape" + str(img.shape)
+        assert (
+            img.ndim == 2 or img.ndim == 3
+        ), "Image must be 2D or 3D, got image of shape" + str(img.shape)
         img = torch.atleast_3d(img)
         channel_axis = np.argmin(img.shape)
         img = _move_channel_axis(img, to_back=True)
         for c in range(img.shape[-1]):
             im_temp = img[::subsampling_factor, ::subsampling_factor, c]
             if img.is_cuda or img.is_mps:
-                (p_min, p_max) = torch.quantile(im_temp, torch.tensor([percentile / 100, (100 - percentile) / 100],device = im_temp.device))
+                (p_min, p_max) = torch.quantile(
+                    im_temp,
+                    torch.tensor(
+                        [percentile / 100, (100 - percentile) / 100],
+                        device=im_temp.device,
+                    ),
+                )
             else:
-                (p_min, p_max) = np.percentile(im_temp.cpu(), [percentile, 100 - percentile])
+                (p_min, p_max) = np.percentile(
+                    im_temp.cpu(), [percentile, 100 - percentile]
+                )
             img[:, :, c] = (img[:, :, c] - p_min) / max(epsilon, p_max - p_min)
-       # img = img / np.maximum(0.01, torch.max(img))
+        # img = img / np.maximum(0.01, torch.max(img))
         return img.movedim(2, channel_axis)
 
 
 def generate_colors(num_colors: int):
     import colorsys
+
     # Calculate the equally spaced hue values
     hues = [i / float(num_colors) for i in range(num_colors)]
 
@@ -352,6 +434,7 @@ def generate_colors(num_colors: int):
 def export_annotations_and_images(output_dir, original_image, lab, base_name=None):
     from pathlib import Path
     import os
+
     if os.path.isfile(output_dir):
         base_name = Path(output_dir).stem
         output_dir = Path(output_dir).parent
@@ -366,14 +449,26 @@ def export_annotations_and_images(output_dir, original_image, lab, base_name=Non
 
     if image.shape[0] == 3:
 
-        features = labels_to_features(lab.astype(np.int32), object_type='annotation', include_labels=True,
-                                      classification=None)
+        features = labels_to_features(
+            lab.astype(np.int32),
+            object_type="annotation",
+            include_labels=True,
+            classification=None,
+        )
         geojson = json.dumps(features)
-        with open(os.path.join(output_dir, str(base_name) + '_labels.geojson'), "w") as outfile:
+        with open(
+            os.path.join(output_dir, str(base_name) + "_labels.geojson"), "w"
+        ) as outfile:
             outfile.write(geojson)
 
-        save_image_with_label_overlay(image, lab, output_dir=output_dir, label_boundary_mode='thick', alpha=0.8,
-                                      base_name=base_name)
+        save_image_with_label_overlay(
+            image,
+            lab,
+            output_dir=output_dir,
+            label_boundary_mode="thick",
+            alpha=0.8,
+            base_name=base_name,
+        )
 
     else:
         warnings.warn("Did not attempt to save image of shape:")
@@ -381,28 +476,33 @@ def export_annotations_and_images(output_dir, original_image, lab, base_name=Non
 
 
 import matplotlib.colors as mcolors
+
+
 def color_name_to_rgb(color_name: str):
     """
     Convert a color name to its corresponding RGB values.
-    
+
     :param color_name: The name of the color.
-    
+
     :return: A tuple containing the RGB values.
     """
     return mcolors.to_rgb(color_name)
 
+
 #
-def save_image_with_label_overlay(im: np.ndarray,
-                                  lab: np.ndarray,
-                                  output_dir: str = "./",
-                                  base_name: str = 'image',
-                                  clip_percentile: float = 1.0,
-                                  scale_per_channel: bool = None,
-                                  label_boundary_mode="inner",
-                                  label_colors=None,
-                                  alpha=1.0,
-                                  thickness=3,
-                                  return_image=False):
+def save_image_with_label_overlay(
+    im: np.ndarray,
+    lab: np.ndarray,
+    output_dir: str = "./",
+    base_name: str = "image",
+    clip_percentile: float = 1.0,
+    scale_per_channel: bool = None,
+    label_boundary_mode="inner",
+    label_colors=None,
+    alpha=1.0,
+    thickness=3,
+    return_image=False,
+):
     """
     Save an image as RGB alongside a corresponding label overlay.
     This can be used to quickly visualize the results of a segmentation, generally using the
@@ -428,49 +528,105 @@ def save_image_with_label_overlay(im: np.ndarray,
     from skimage import morphology
 
     if isinstance(im, torch.Tensor):
-        im = torch.clamp(im,0,1).cpu().numpy() * 255 
-        im = _move_channel_axis(im,to_back = True).astype(np.uint8)
-
+        im = torch.clamp(im, 0, 1).cpu().numpy() * 255
+        im = _move_channel_axis(im, to_back=True).astype(np.uint8)
 
     if isinstance(lab, torch.Tensor):
         lab = _move_channel_axis(torch.atleast_3d(lab.squeeze())).cpu().numpy()
-        
+
         if lab.shape[0] == 1:
             lab = lab[0]
-            image_overlay = save_image_with_label_overlay(im,lab=lab,return_image=True, label_boundary_mode="thick", label_colors=label_colors,thickness=5,alpha=1)
+            image_overlay = save_image_with_label_overlay(
+                im,
+                lab=lab,
+                return_image=True,
+                label_boundary_mode="thick",
+                label_colors=label_colors,
+                thickness=5,
+                alpha=1,
+            )
         elif lab.shape[0] == 2:
             nuclei_labels_for_display = lab[0]
-            cell_labels_for_display = lab[1] 
-            bg = (lab.sum(0) == 0)
+            cell_labels_for_display = lab[1]
+            bg = lab.sum(0) == 0
 
             if label_boundary_mode is None:
                 from palettable.scientific import diverging as div
-                colour_cells = list((np.array(div.Berlin_12.colors[1]) /255))
-                colour_nuclei = list( np.array(div.Berlin_12.colors[11] ) /255)
-                image_overlay = save_image_with_label_overlay(im,lab=cell_labels_for_display,return_image=True, label_boundary_mode=None, label_colors=colour_cells,thickness=1, alpha = 1)
-                image_overlay = save_image_with_label_overlay(image_overlay,lab=nuclei_labels_for_display,return_image=True, label_boundary_mode=None, label_colors=colour_nuclei,thickness=1, alpha = 1)
-                image_overlay = save_image_with_label_overlay(image_overlay,lab=nuclei_labels_for_display,return_image=True, label_boundary_mode="thick", label_colors="black",thickness=1, alpha = 1)
-                image_overlay = save_image_with_label_overlay(image_overlay,lab=cell_labels_for_display,return_image=True, label_boundary_mode= "thick", label_colors="black",thickness=1, alpha = 1) 
-                image_overlay[bg] = (255,255,255)
+
+                colour_cells = list((np.array(div.Berlin_12.colors[1]) / 255))
+                colour_nuclei = list(np.array(div.Berlin_12.colors[11]) / 255)
+                image_overlay = save_image_with_label_overlay(
+                    im,
+                    lab=cell_labels_for_display,
+                    return_image=True,
+                    label_boundary_mode=None,
+                    label_colors=colour_cells,
+                    thickness=1,
+                    alpha=1,
+                )
+                image_overlay = save_image_with_label_overlay(
+                    image_overlay,
+                    lab=nuclei_labels_for_display,
+                    return_image=True,
+                    label_boundary_mode=None,
+                    label_colors=colour_nuclei,
+                    thickness=1,
+                    alpha=1,
+                )
+                image_overlay = save_image_with_label_overlay(
+                    image_overlay,
+                    lab=nuclei_labels_for_display,
+                    return_image=True,
+                    label_boundary_mode="thick",
+                    label_colors="black",
+                    thickness=1,
+                    alpha=1,
+                )
+                image_overlay = save_image_with_label_overlay(
+                    image_overlay,
+                    lab=cell_labels_for_display,
+                    return_image=True,
+                    label_boundary_mode="thick",
+                    label_colors="black",
+                    thickness=1,
+                    alpha=1,
+                )
+                image_overlay[bg] = (255, 255, 255)
             else:
-                image_overlay = save_image_with_label_overlay(im,lab=cell_labels_for_display,return_image=True, label_boundary_mode=label_boundary_mode, label_colors="cyan",thickness=1, alpha = 1)
-                image_overlay = save_image_with_label_overlay(image_overlay,lab=nuclei_labels_for_display,return_image=True, label_boundary_mode=label_boundary_mode, label_colors="magenta",thickness=1, alpha = 1)
+                image_overlay = save_image_with_label_overlay(
+                    im,
+                    lab=cell_labels_for_display,
+                    return_image=True,
+                    label_boundary_mode=label_boundary_mode,
+                    label_colors="cyan",
+                    thickness=1,
+                    alpha=1,
+                )
+                image_overlay = save_image_with_label_overlay(
+                    image_overlay,
+                    lab=nuclei_labels_for_display,
+                    return_image=True,
+                    label_boundary_mode=label_boundary_mode,
+                    label_colors="magenta",
+                    thickness=1,
+                    alpha=1,
+                )
         return image_overlay
-
-
 
     # Check if we have an RGB, channels-last image already
     if im.dtype == np.uint8 and im.ndim == 3 and im.shape[2] == 3:
         im_rgb = im.copy()
     else:
-        im_rgb = _to_rgb_channels_last(im, clip_percentile=clip_percentile, scale_per_channel=scale_per_channel)
+        im_rgb = _to_rgb_channels_last(
+            im, clip_percentile=clip_percentile, scale_per_channel=scale_per_channel
+        )
 
     # Convert labels to boundaries, if required
     if label_boundary_mode is not None:
         bw_boundaries = find_boundaries(lab, mode=label_boundary_mode)
         lab = lab.copy()
         # Need to expand labels for outer boundaries, but have to avoid overwriting known labels
-        if label_boundary_mode in ['thick', 'outer']:
+        if label_boundary_mode in ["thick", "outer"]:
             lab2 = morphology.dilation(lab, footprint=np.ones((thickness, thickness)))
             mask_dilated = bw_boundaries & (lab == 0)
 
@@ -518,25 +674,37 @@ def save_image_with_label_overlay(im: np.ndarray,
         base_name = "image"
 
     print(f"Exporting image to {os.path.join(output_dir, f'{base_name}.png')}")
-    imageio.imwrite(os.path.join(output_dir, f'{base_name}.png'), im_rgb)
-    imageio.imwrite(os.path.join(output_dir, f'{base_name}_overlay.png'), im_overlay)
+    imageio.imwrite(os.path.join(output_dir, f"{base_name}.png"), im_rgb)
+    imageio.imwrite(os.path.join(output_dir, f"{base_name}_overlay.png"), im_overlay)
+
 
 def display_cells_and_nuclei(lab):
-    display = save_image_with_label_overlay(torch.zeros((lab.shape[-2],lab.shape[-1],3)), lab, return_image= True, label_boundary_mode=None,alpha = 1)
+    display = save_image_with_label_overlay(
+        torch.zeros((lab.shape[-2], lab.shape[-1], 3)),
+        lab,
+        return_image=True,
+        label_boundary_mode=None,
+        alpha=1,
+    )
     return display
 
-def display_colourized(mIF, random_seed = 0):
+
+def display_colourized(mIF, random_seed=0):
     from instanseg.utils.augmentations import Augmentations
-    Augmenter=Augmentations()
+
+    Augmenter = Augmentations()
 
     mIF = Augmenter.to_tensor(mIF, normalize=False)[0]
-    if mIF.shape[0]!=3:
-        colour_render,_ = Augmenter.colourize(mIF, random_seed = random_seed)
+    if mIF.shape[0] != 3:
+        colour_render, _ = Augmenter.colourize(mIF, random_seed=random_seed)
     else:
         colour_render = Augmenter.to_tensor(mIF, normalize=True)[0]
     colour_render = torch.clamp_(colour_render, 0, 1)
-    colour_render = _move_channel_axis(colour_render,to_back = True).detach().numpy()*255
+    colour_render = (
+        _move_channel_axis(colour_render, to_back=True).detach().numpy() * 255
+    )
     return colour_render.astype(np.uint8)
+
 
 def _display_overlay(im, lab):
     assert lab.ndim == 4, "lab must be 4D"
@@ -545,26 +713,53 @@ def _display_overlay(im, lab):
 
     im_for_display = display_colourized(im)
 
-    if output_dimension ==1: #Nucleus or cell mask]
-        labels_for_display = lab[0,0].cpu().numpy() #Shape is 1,H,W
-        image_overlay = save_image_with_label_overlay(im_for_display,lab=labels_for_display,return_image=True, label_boundary_mode="thick", label_colors=None,thickness=10,alpha=0.5)
-    elif output_dimension ==2: #Nucleus and cell mask
-        nuclei_labels_for_display = lab[0,0].cpu().numpy()
-        cell_labels_for_display = lab[0,1].cpu().numpy() #Shape is 1,H,W
-        image_overlay = save_image_with_label_overlay(im_for_display,lab=nuclei_labels_for_display,return_image=True, label_boundary_mode="thick", label_colors="red",thickness=10)
-        image_overlay = save_image_with_label_overlay(image_overlay,lab=cell_labels_for_display,return_image=True, label_boundary_mode="inner", label_colors="green",thickness=1)
+    if output_dimension == 1:  # Nucleus or cell mask]
+        labels_for_display = lab[0, 0].cpu().numpy()  # Shape is 1,H,W
+        image_overlay = save_image_with_label_overlay(
+            im_for_display,
+            lab=labels_for_display,
+            return_image=True,
+            label_boundary_mode="thick",
+            label_colors=None,
+            thickness=10,
+            alpha=0.5,
+        )
+    elif output_dimension == 2:  # Nucleus and cell mask
+        nuclei_labels_for_display = lab[0, 0].cpu().numpy()
+        cell_labels_for_display = lab[0, 1].cpu().numpy()  # Shape is 1,H,W
+        image_overlay = save_image_with_label_overlay(
+            im_for_display,
+            lab=nuclei_labels_for_display,
+            return_image=True,
+            label_boundary_mode="thick",
+            label_colors="red",
+            thickness=10,
+        )
+        image_overlay = save_image_with_label_overlay(
+            image_overlay,
+            lab=cell_labels_for_display,
+            return_image=True,
+            label_boundary_mode="inner",
+            label_colors="green",
+            thickness=1,
+        )
     return image_overlay
 
-def _to_rgb_channels_last(im: np.ndarray,
-                          clip_percentile: float = 1.0,
-                          scale_per_channel: bool = True,
-                          input_channels_first: bool = True) -> np.ndarray:
+
+def _to_rgb_channels_last(
+    im: np.ndarray,
+    clip_percentile: float = 1.0,
+    scale_per_channel: bool = True,
+    input_channels_first: bool = True,
+) -> np.ndarray:
     """
     Convert an image to RGB, ensuring the output has channels-last ordering.
     """
 
     if im.ndim < 2 or im.ndim > 3:
-        raise ValueError(f"Number of dimensions should be 2 or 3! Image has shape {im.shape}")
+        raise ValueError(
+            f"Number of dimensions should be 2 or 3! Image has shape {im.shape}"
+        )
     if im.ndim == 3:
         if input_channels_first:
             im = np.moveaxis(im, source=0, destination=-1)
@@ -572,7 +767,10 @@ def _to_rgb_channels_last(im: np.ndarray,
             im = im.mean(axis=-1)
     if im.ndim > 2 and scale_per_channel:
         im_scaled = np.dstack(
-            [_to_scaled_uint8(im[..., ii], clip_percentile=clip_percentile) for ii in range(3)]
+            [
+                _to_scaled_uint8(im[..., ii], clip_percentile=clip_percentile)
+                for ii in range(3)
+            ]
         )
     else:
         im_scaled = _to_scaled_uint8(im, clip_percentile=clip_percentile)
@@ -589,7 +787,7 @@ def _to_scaled_uint8(im: np.ndarray, clip_percentile=1.0) -> np.ndarray:
     min_val = np.percentile(im_float.ravel(), clip_percentile)
     max_val = np.percentile(im_float.ravel(), 100.0 - clip_percentile)
     im_float -= min_val
-    im_float /= (max_val - min_val)
+    im_float /= max_val - min_val
     im_float *= 255
     return np.clip(im_float, a_min=0, a_max=255).astype(np.uint8)
 
@@ -600,22 +798,22 @@ def _choose_device(device: str = None, verbose=True) -> str:
     If a requested device is not specified or not available, then a default is chosen.
     """
     if device is not None:
-        if device == 'cuda' and not torch.cuda.is_available():
+        if device == "cuda" and not torch.cuda.is_available():
             device = None
-            print('CUDA device requested but not available!')
-        if device == 'mps' and not torch.backends.mps.is_available():
+            print("CUDA device requested but not available!")
+        if device == "mps" and not torch.backends.mps.is_available():
             device = None
-            print('MPS device requested but not available!')
+            print("MPS device requested but not available!")
 
     if device is None:
         if torch.cuda.is_available():
-            device = 'cuda'
+            device = "cuda"
         elif torch.backends.mps.is_available():
-            device = 'mps'
+            device = "mps"
         else:
-            device = 'cpu'
+            device = "cpu"
         if verbose:
-            print(f'Requesting default device: {device}')
+            print(f"Requesting default device: {device}")
 
     return device
 
@@ -627,6 +825,7 @@ def count_instances(labels: Union[np.ndarray, torch.Tensor]) -> int:
     :return: The total number of non-zero labels.
     """
     import fastremap
+
     if isinstance(labels, torch.Tensor):
         num_labels = len(torch.unique(labels[labels > 0]))
     elif isinstance(labels, np.ndarray):
@@ -657,7 +856,6 @@ def _estimate_image_modality(img, mask):
             else:
                 return "Brightfield"  # "Chromogenic"
 
-
     elif isinstance(img, torch.Tensor):
         img = torch.at_least_3d(_move_channel_axis(img))
         mask = torch.squeeze(mask)
@@ -677,6 +875,7 @@ def _estimate_image_modality(img, mask):
 def timer(func):
     import functools
     from line_profiler import LineProfiler
+
     @functools.wraps(func)
     def wrapper(*args, **kwargs):
         lp = LineProfiler()
@@ -689,68 +888,75 @@ def timer(func):
     return wrapper
 
 
-
-
 def set_export_paths():
     from pathlib import Path
-    if os.environ.get('INSTANSEG_BIOIMAGEIO_PATH'):
-        path = Path(os.environ['INSTANSEG_BIOIMAGEIO_PATH'])
+
+    if os.environ.get("INSTANSEG_BIOIMAGEIO_PATH"):
+        path = Path(os.environ["INSTANSEG_BIOIMAGEIO_PATH"])
     else:
-        path = Path(os.path.join(os.path.dirname(__file__),"../bioimageio_models/"))
-        os.environ['INSTANSEG_BIOIMAGEIO_PATH'] = str(path)
+        path = Path(os.path.join(os.path.dirname(__file__), "../bioimageio_models/"))
+        os.environ["INSTANSEG_BIOIMAGEIO_PATH"] = str(path)
 
     if not path.exists():
-        path.mkdir(exist_ok=True,parents=True)
+        path.mkdir(exist_ok=True, parents=True)
 
-    if os.environ.get('INSTANSEG_TORCHSCRIPT_PATH'):
-        path = Path(os.environ['INSTANSEG_TORCHSCRIPT_PATH'])
+    if os.environ.get("INSTANSEG_TORCHSCRIPT_PATH"):
+        path = Path(os.environ["INSTANSEG_TORCHSCRIPT_PATH"])
     else:
-        path = Path(os.path.join(os.path.dirname(__file__),"../torchscripts/"))
-        os.environ['INSTANSEG_TORCHSCRIPT_PATH'] = str(path)
+        path = Path(os.path.join(os.path.dirname(__file__), "../torchscripts/"))
+        os.environ["INSTANSEG_TORCHSCRIPT_PATH"] = str(path)
 
     if not path.exists():
-        path.mkdir(exist_ok=True,parents=True)
+        path.mkdir(exist_ok=True, parents=True)
 
-    if os.environ.get('INSTANSEG_MODEL_PATH'):
-        path = Path(os.environ['INSTANSEG_MODEL_PATH'])
+    if os.environ.get("INSTANSEG_MODEL_PATH"):
+        path = Path(os.environ["INSTANSEG_MODEL_PATH"])
     else:
-        path = Path(os.path.join(os.path.dirname(__file__),"../models/"))
-        os.environ['INSTANSEG_MODEL_PATH'] = str(path)
+        path = Path(os.path.join(os.path.dirname(__file__), "../models/"))
+        os.environ["INSTANSEG_MODEL_PATH"] = str(path)
 
     if not path.exists():
-        path.mkdir(exist_ok=True,parents=True)
+        path.mkdir(exist_ok=True, parents=True)
 
-    if os.environ.get('EXAMPLE_IMAGE_PATH'):
-        path = Path(os.environ['EXAMPLE_IMAGE_PATH'])
+    if os.environ.get("EXAMPLE_IMAGE_PATH"):
+        path = Path(os.environ["EXAMPLE_IMAGE_PATH"])
     else:
-        path = Path(os.path.join(os.path.dirname(__file__),"../examples/"))
-        os.environ['EXAMPLE_IMAGE_PATH'] = str(path)
-
-        
+        path = Path(os.path.join(os.path.dirname(__file__), "../examples/"))
+        os.environ["EXAMPLE_IMAGE_PATH"] = str(path)
 
 
-def export_to_torchscript(model_str: str, show_example: bool = False, output_dir: str = "../torchscripts",
-                          model_path: str = "../models", torchscript_name: str = None, use_optimized_params = False):
-    device = 'cpu'
+def export_to_torchscript(
+    model_str: str,
+    show_example: bool = False,
+    output_dir: str = "../torchscripts",
+    model_path: str = "../models",
+    torchscript_name: str = None,
+    use_optimized_params=False,
+):
+    device = "cpu"
     from instanseg.utils.model_loader import load_model
     import math
 
     import os
+
     set_export_paths()
-    output_dir = os.environ.get('INSTANSEG_TORCHSCRIPT_PATH')
-    model_path = os.environ.get('INSTANSEG_MODEL_PATH')
-    example_path = os.environ.get('EXAMPLE_IMAGE_PATH')
+    output_dir = os.environ.get("INSTANSEG_TORCHSCRIPT_PATH")
+    model_path = os.environ.get("INSTANSEG_MODEL_PATH")
+    example_path = os.environ.get("EXAMPLE_IMAGE_PATH")
 
     if use_optimized_params:
         import pandas as pd
-        #Check is best_params.csv exists in the model folder, if not, use default parameters
+
+        # Check is best_params.csv exists in the model folder, if not, use default parameters
         if not os.path.exists(Path(model_path) / model_str / "Results/best_params.csv"):
             print("No best_params.csv found in model folder, using default parameters")
             params = None
         else:
-            #Load best_params.csv
-            df = pd.read_csv(Path(model_path) / model_str / "Results/best_params.csv",header = None)
-            params = {key: value for key, value in df.to_dict('tight')['data']}
+            # Load best_params.csv
+            df = pd.read_csv(
+                Path(model_path) / model_str / "Results/best_params.csv", header=None
+            )
+            params = {key: value for key, value in df.to_dict("tight")["data"]}
     else:
         params = None
 
@@ -758,45 +964,71 @@ def export_to_torchscript(model_str: str, show_example: bool = False, output_dir
     model.eval()
     model.to(device)
 
-    cells_and_nuclei = model_dict['cells_and_nuclei']
-    pixel_size = model_dict['pixel_size']
-    n_sigma = model_dict['n_sigma']
+    cells_and_nuclei = model_dict["cells_and_nuclei"]
+    pixel_size = model_dict["pixel_size"]
+    n_sigma = model_dict["n_sigma"]
 
-
-    input_data = tifffile.imread(os.path.join(example_path,"HE_example.tif"))
-    #input_data = tifffile.imread("../examples/LuCa1.tif")
+    input_data = tifffile.imread(os.path.join(example_path, "HE_example.tif"))
+    # input_data = tifffile.imread("../examples/LuCa1.tif")
     from instanseg.utils.augmentations import Augmentations
+
     Augmenter = Augmentations()
     input_tensor, _ = Augmenter.to_tensor(input_data, normalize=False)
     input_tensor, _ = Augmenter.normalize(input_tensor)
 
     if not math.isnan(pixel_size):
-        input_tensor, _ = Augmenter.torch_rescale(input_tensor, current_pixel_size=0.5, requested_pixel_size=pixel_size, crop =True, modality="Brightfield")
+        input_tensor, _ = Augmenter.torch_rescale(
+            input_tensor,
+            current_pixel_size=0.5,
+            requested_pixel_size=pixel_size,
+            crop=True,
+            modality="Brightfield",
+        )
     input_tensor = input_tensor.to(device)
 
-
-    if input_tensor.shape[0] != model_dict["dim_in"] and model_dict["dim_in"] != 0 and model_dict["dim_in"] is not None:
-        input_tensor = torch.randn((model_dict["dim_in"], input_tensor.shape[1], input_tensor.shape[2])).to(device)
+    if (
+        input_tensor.shape[0] != model_dict["dim_in"]
+        and model_dict["dim_in"] != 0
+        and model_dict["dim_in"] is not None
+    ):
+        input_tensor = torch.randn(
+            (model_dict["dim_in"], input_tensor.shape[1], input_tensor.shape[2])
+        ).to(device)
         dim_in = model_dict["dim_in"]
     else:
         dim_in = 3
 
     from instanseg.utils.loss.instanseg_loss import InstanSeg_Torchscript
-    super_model = InstanSeg_Torchscript(model, cells_and_nuclei=cells_and_nuclei, 
-                                        pixel_size = pixel_size, 
-                                        n_sigma = n_sigma, 
-                                        params = params, 
-                                        feature_engineering_function = str(model_dict["feature_engineering"]), 
-                                        backbone_dim_in= dim_in, 
-                                        to_centre = bool(model_dict["to_centre"])).to(device)
-    
 
-    out = super_model(input_tensor[None,])
+    super_model = InstanSeg_Torchscript(
+        model,
+        cells_and_nuclei=cells_and_nuclei,
+        pixel_size=pixel_size,
+        n_sigma=n_sigma,
+        params=params,
+        feature_engineering_function=str(model_dict["feature_engineering"]),
+        backbone_dim_in=dim_in,
+        to_centre=bool(model_dict["to_centre"]),
+    ).to(device)
+
+    out = super_model(
+        input_tensor[
+            None,
+        ]
+    )
     if show_example:
-        show_images([input_tensor] + [i for i in out.squeeze(0)], labels=[i + 1 for i in range(len(out.squeeze(0)))])
+        show_images(
+            [input_tensor] + [i for i in out.squeeze(0)],
+            labels=[i + 1 for i in range(len(out.squeeze(0)))],
+        )
 
     with torch.jit.optimized_execution(should_optimize=True):
-        traced_cpu = torch.jit.script(super_model, input_tensor[None,])
+        traced_cpu = torch.jit.script(
+            super_model,
+            input_tensor[
+                None,
+            ],
+        )
 
     if torchscript_name is None:
         torchscript_name = model_str
@@ -805,8 +1037,9 @@ def export_to_torchscript(model_str: str, show_example: bool = False, output_dir
         os.mkdir(output_dir)
 
     torch.jit.save(traced_cpu, os.path.join(output_dir, torchscript_name + ".pt"))
-    print("Saved torchscript model to", os.path.join(output_dir, torchscript_name + ".pt"))
-
+    print(
+        "Saved torchscript model to", os.path.join(output_dir, torchscript_name + ".pt")
+    )
 
 
 def drag_and_drop_file():
@@ -831,7 +1064,7 @@ def drag_and_drop_file():
     entry.pack(pady=20)
 
     entry.drop_target_register(DND_FILES)
-    entry.dnd_bind('<<Drop>>', drop)
+    entry.dnd_bind("<<Drop>>", drop)
 
     save_button = tk.Button(root, text="Save and Close", command=save_and_close)
     save_button.pack(pady=10)
@@ -839,38 +1072,45 @@ def drag_and_drop_file():
     return entry_var.get()
 
 
-def download_model(model_str: str, verbose : bool = True, headers: Optional[str]=None):
+def download_model(model_str: str, verbose: bool = True, headers: Optional[str] = None):
     import os
     import requests
     import zipfile
     from io import BytesIO
     import torch
 
-
     if not os.environ.get("INSTANSEG_BIOIMAGEIO_PATH"):
-        os.environ["INSTANSEG_BIOIMAGEIO_PATH"] = os.path.join(os.path.dirname(__file__),"../bioimageio_models/")
+        os.environ["INSTANSEG_BIOIMAGEIO_PATH"] = os.path.join(
+            os.path.dirname(__file__), "../bioimageio_models/"
+        )
 
     bioimageio_path = os.environ.get("INSTANSEG_BIOIMAGEIO_PATH")
 
-
     # Ensure the directory exists
     os.makedirs(bioimageio_path, exist_ok=True)
-    
+
     release_tag = "instanseg_models_v1"
-    url = f"https://api.github.com/repos/instanseg/instanseg/releases/tags/{release_tag}"
+    url = (
+        f"https://api.github.com/repos/instanseg/instanseg/releases/tags/{release_tag}"
+    )
     response = requests.get(url, headers=headers)
     response.raise_for_status()  # Raise an error for bad response
 
     release_data = response.json()
     assets = release_data.get("assets", [])
 
-    if model_str in [asset["name"].replace(".zip","") for asset in assets if asset["name"].endswith(".zip")]:
-        url = r"https://github.com/instanseg/instanseg/releases/download/instanseg_models_v1/{}.zip".format(model_str)
+    if model_str in [
+        asset["name"].replace(".zip", "")
+        for asset in assets
+        if asset["name"].endswith(".zip")
+    ]:
+        url = r"https://github.com/instanseg/instanseg/releases/download/instanseg_models_v1/{}.zip".format(
+            model_str
+        )
         response = requests.get(url)
         response.raise_for_status()  # Raise an error for bad responses
         with zipfile.ZipFile(BytesIO(response.content)) as z:
             z.extractall(bioimageio_path)
-
 
         if verbose:
             print(f"Model {model_str} downloaded and extracted to {bioimageio_path}")
@@ -880,11 +1120,15 @@ def download_model(model_str: str, verbose : bool = True, headers: Optional[str]
 
     else:
 
-        #load model locally
+        # load model locally
 
-        path_to_torchscript_model = os.path.join(bioimageio_path, model_str, "instanseg.pt")
+        path_to_torchscript_model = os.path.join(
+            bioimageio_path, model_str, "instanseg.pt"
+        )
 
         if os.path.exists(path_to_torchscript_model):
             return torch.jit.load(path_to_torchscript_model)
         else:
-            raise Exception(f"Model {model_str} not found in the release data or locally. Please check the model name and try again.")
+            raise Exception(
+                f"Model {model_str} not found in the release data or locally. Please check the model name and try again."
+            )
