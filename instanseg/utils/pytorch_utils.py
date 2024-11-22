@@ -1,10 +1,7 @@
-import os
 import torch
 import torch.nn.functional as F
 
-from typing import Tuple, List, Union
-
-
+from typing import Tuple
 
 
 def remap_values(remapping: torch.Tensor, x: torch.Tensor) -> torch.Tensor:

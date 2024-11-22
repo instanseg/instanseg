@@ -6,7 +6,7 @@ from typing import Tuple, List, Union
 
 from instanseg.utils.loss.lovasz_losses import binary_xloss
 from instanseg.utils.pytorch_utils import torch_fastremap, torch_onehot, remap_values, fast_iou, fast_sparse_iou, eccentricity_batch, connected_components
-from instanseg.utils.tiling import instanseg_padding, recover_padding
+from instanseg.utils.tiling import _instanseg_padding, _recover_padding
 
 import torch.nn.functional as F
 import torch.nn as nn
@@ -1109,9 +1109,9 @@ class InstanSeg(nn.Module):
             for t in transforms:
                 with torch.cuda.amp.autocast():
                     augmented_image = t.augment_image(img)
-                    augmented_image, pad = instanseg_padding(augmented_image, extra_pad= 0, min_dim = 32)
+                    augmented_image, pad = _instanseg_padding(augmented_image, extra_pad= 0, min_dim = 32)
                     prediction = model(augmented_image)[:,i * dim_out:(i+1) * dim_out]
-                    prediction = recover_padding(prediction, pad)
+                    prediction = _recover_padding(prediction, pad)
                     mask_map = prediction[:,-1][None] 
                     mask_map = t.deaugment_mask(mask_map)
                 #  show_images(mask_map)
@@ -1256,6 +1256,7 @@ class InstanSeg_Torchscript(nn.Module):
                 window_size: Optional[int] = None,
                 cleanup_fragments: Optional[bool] = None,
                 resolve_cell_and_nucleus: Optional[bool] = None,
+                precomputed_seeds: torch.Tensor = torch.tensor([]),
                 ) -> torch.Tensor:
         
         min_size = int(min_size) if min_size is not None else self.default_min_size
@@ -1281,11 +1282,12 @@ class InstanSeg_Torchscript(nn.Module):
         window_size = int(args.get('window_size', torch.tensor(float(window_size))).item())
         cleanup_fragments = args.get('cleanup_fragments', torch.tensor(cleanup_fragments)).item()
         resolve_cell_and_nucleus = args.get('resolve_cell_and_nucleus', torch.tensor(resolve_cell_and_nucleus)).item()
+        precomputed_seeds = args.get('precomputed_seeds', precomputed_seeds)
 
         torch.clamp_max_(x, 3) #Safety check, please normalize inputs properly!
         torch.clamp_min_(x, -2)
 
-        x, pad = instanseg_padding(x, extra_pad=0)
+        x, pad = _instanseg_padding(x, extra_pad=0)
 
 
         with torch.no_grad():
@@ -1311,7 +1313,7 @@ class InstanSeg_Torchscript(nn.Module):
                     else:
                         x = x_full[image_index,dim_out:, :, :]
 
-                    x = recover_padding(x, pad)
+                    x = _recover_padding(x, pad)
 
                     height, width = x.size(1), x.size(2)
 
@@ -1329,8 +1331,11 @@ class InstanSeg_Torchscript(nn.Module):
                     #mask_map = torch.sigmoid(x[self.dim_coords + self.n_sigma]) #legacy
                     mask_map = ((x[self.dim_coords + self.n_sigma]) / 15) + 0.5 # inverse transform applied to edt during training.
 
-                    centroids_idx = torch_peak_local_max(mask_map, neighbourhood_size=peak_distance,
-                                                        minimum_value=seed_threshold, dtype= self.index_dtype)  # .to(prediction.device)
+                    if precomputed_seeds is None or precomputed_seeds.shape[0] == 0:
+                        centroids_idx = torch_peak_local_max(mask_map, neighbourhood_size=peak_distance,
+                                                            minimum_value=seed_threshold, dtype= self.index_dtype)  # .to(prediction.device)
+                    else:
+                        centroids_idx = precomputed_seeds.to(mask_map.device).long()
 
                     fields = fields + xxyy
 
