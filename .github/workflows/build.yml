@@ -24,6 +24,7 @@ jobs:
       - name: Install
         run: |
           pip install .[full,test]
+      - uses: psf/black@24.10.0
       - name: basic smoke test
         run: |
           cd notebooks # because the folder InstanSeg and the module InstanSeg are treated the same (thanks python!)
