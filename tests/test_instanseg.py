@@ -85,3 +85,20 @@ def test_image_readers():
     np.testing.assert_equal(fluoro_outputs[1][1], fluoro_outputs[2][1])
 
 
+
+def test_whole_slide_image():
+    sys.path = sys.path[1:]
+
+    example_image_folder = Path(os.path.join(os.path.dirname(__file__),"../instanseg/examples/"))
+    print(example_image_folder)
+    for reader in ["bioio", "skimage.io", "tiffslide"]:
+
+        device = "cuda" if sys.platform == "linux" else "cpu"
+        instanseg_brightfield = InstanSeg("brightfield_nuclei", verbosity=0, device=device, image_reader=reader, vram_size_threshold=10, ram_size_threshold=10)
+        instanseg_brightfield.eval_whole_slide_image(str(example_image_folder/"HE_example.tif"))
+
+        he_outputs.append(labeled_output)
+        instanseg_fluorescence = InstanSeg("fluorescence_nuclei_and_cells", verbosity=0, device=device, vram_size_threshold=10, ram_size_threshold=10)
+
+        instanseg_fluorescence.eval_whole_slide_image(image_array)
+

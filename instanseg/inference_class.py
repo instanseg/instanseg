@@ -1,6 +1,7 @@
 from typing import Union, List, Optional, Tuple
 import numpy as np
 import torch
+import math
 from torch import nn
 from torch.nn.functional import interpolate
 from pathlib import Path, PosixPath
@@ -88,6 +89,8 @@ class InstanSeg():
                  model_type: Union[str,nn.Module] = "brightfield_nuclei", 
                  device: Optional[str] = None, 
                  image_reader: str = "tiffslide",
+                 vram_size_threshold = 1500,
+                 ram_size_threshold = 10000,
                  github_token: str = os.environ.get("GITHUB_TOKEN"),
                  verbosity: int = 1 #0,1,2
                  ):
@@ -95,7 +98,9 @@ class InstanSeg():
         """
         :param model_type: The type of model to use. If a string is provided, the model will be downloaded. If the model is not public, it will look for a model in your bioimageio folder. If an nn.Module is provided, this model will be used.
         :param device: The device to run the model on. If None, the device will be chosen automatically.
-        :param image_reader: The image reader to use. Options are "tiffslide", "skimage.io", "bioio", "AICSImageIO".
+        :param image_reader: The image reader to use. Options are "tiffslide", "skimage.io", "bioio".
+        :param vram_size_threshold: The width/height in pixels corresponding to the largest image that can be run on the GPU.
+        :param ram_size_threshold: The width/height in pixels corresponding to the largest image that can be run in memory.
         :param github_token: The GitHub API token to use to authenticate model downloads. May be necessary to avoid rate limits in some circumstances.
         :param verbosity: The verbosity level. 0 is silent, 1 is normal, 2 is verbose.
         """
@@ -113,8 +118,8 @@ class InstanSeg():
         self.instanseg = self.instanseg.to(self.inference_device)
 
         self.prefered_image_reader = image_reader
-        self.small_image_threshold = 3 * 1500 * 1500 #max number of image pixels to be processed on GPU.
-        self.medium_image_threshold = 10000 * 10000 #max number of image pixels that could be loaded in RAM.
+        self.small_image_threshold = 3 * math.pow(vram_size_threshold, 2)
+        self.medium_image_threshold = math.pow(ram_size_threshold, 2)
         self.prediction_tag = "_instanseg_prediction"
 
     def read_image(self, image_str: str) -> Union[Tuple[str, float], Tuple[np.ndarray, float]]:
@@ -210,16 +215,12 @@ class InstanSeg():
         """
         if self.prefered_image_reader == "tiffslide":
             slide = TiffSlide(image_str)
-        # elif self.prefered_image_reader == "AICSImageIO":
-        #     from aicsimageio import AICSImage
-        #     slide = AICSImage(image_str)
-        # elif self.prefered_image_reader == "bioio":
-        #     from bioio import BioImage
-        #     slide = BioImage(image_str)
+        elif self.prefered_image_reader == "bioio":
+            from bioio import BioImage
+            slide = BioImage(image_str)
         # elif self.prefered_image_reader == "slideio":
         #     import slideio
         #     slide = slideio.open_slide(image_str, driver = "AUTO")
-
         else:
             raise NotImplementedError(f"Image reader {self.prefered_image_reader} is not implemented for whole slide images.")
         return slide
