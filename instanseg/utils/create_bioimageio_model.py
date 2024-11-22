@@ -2,7 +2,7 @@ import os
 import bioimageio.core
 import numpy as np
 import torch
-from aicsimageio import AICSImage
+from bioio import BioImage
 
 from instanseg.utils.augmentations import Augmentations
 from instanseg.utils.utils import _choose_device, show_images
@@ -190,7 +190,7 @@ def export_bioimageio(torchsript: torch.jit._script.RecursiveScriptModule,
     device = _choose_device()
     torchsript.to(device)
 
-    img = AICSImage(test_img_path)
+    img = BioImage(test_img_path)
     if "S" in img.dims.order and img.dims.S > img.dims.C:
         input_data = img.get_image_data("SYX")
     else:

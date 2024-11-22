@@ -148,16 +148,6 @@ class InstanSeg():
                 image_array = slide.get_image_data().squeeze()
             else:
                 return image_str, img_pixel_size
-
-        elif self.prefered_image_reader == "AICSImageIO":
-            from aicsimageio import AICSImage
-            slide = AICSImage(image_str)
-            img_pixel_size = slide.physical_pixel_sizes.X
-            num_pixels = np.cumprod(slide.shape)[-1]
-            if num_pixels < self.medium_image_threshold:
-                image_array = slide.get_image_data().squeeze()
-            else:
-                return image_str, img_pixel_size
         else:
             raise NotImplementedError(f"Image reader {self.prefered_image_reader} is not implemented.")
         
@@ -182,16 +172,6 @@ class InstanSeg():
             from tiffslide import TiffSlide
             slide = TiffSlide(image_str)
             img_pixel_size = slide.properties['tiffslide.mpp-x']
-            if img_pixel_size is not None and img_pixel_size > 0 and img_pixel_size < 2:
-                return img_pixel_size
-        except Exception as e:
-            print(e)
-            pass
-        from aicsimageio import AICSImage 
-        try:
-            
-            slide = AICSImage(image_str)
-            img_pixel_size = slide.physical_pixel_sizes.X
             if img_pixel_size is not None and img_pixel_size > 0 and img_pixel_size < 2:
                 return img_pixel_size
         except Exception as e:
@@ -563,7 +543,7 @@ class InstanSeg():
             """
             Evaluate a whole slide input image using the InstanSeg model. This function uses slideio to read an image and then segments it using the instanseg model. The segmentation is done in a tiled manner to avoid memory issues. 
             
-            :param image:: The input image to be evaluated.
+            :param image: The input image to be evaluated.
             :param pixel_size: The pixel size of the image, in microns. If not provided, it will be read from the image metadata.
             :param normalise: Controls whether the image is normalised.
             :param tile_size: The width/height of the tiles that the image will be split into.
