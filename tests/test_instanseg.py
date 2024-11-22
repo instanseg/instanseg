@@ -1,11 +1,13 @@
-from pathlib import Path
-from instanseg import InstanSeg
 import torch
 import sys
+import os
+import numpy as np
+
+from pathlib import Path
+from instanseg import InstanSeg
 
 
 def test_inference():
-    import os
     sys.path = sys.path[1:]
 
     example_image_folder = Path(os.path.join(os.path.dirname(__file__),"../instanseg/examples/"))
@@ -53,4 +55,33 @@ def test_inference():
     input = torch.randn(1,1,2560,2560)
     label,img = instanseg_fluorescence.eval_medium_image(input, 0.1, rescale_output=True)
     assert label.shape[-2:] == input.shape[-2:]
+
+
+def test_image_readers():
+    sys.path = sys.path[1:]
+
+    example_image_folder = Path(os.path.join(os.path.dirname(__file__),"../instanseg/examples/"))
+    print(example_image_folder)
+    fluoro_outputs=[]
+    he_outputs=[]
+    for reader in ["bioio", "skimage.io", "tiffslide"]:
+
+        device = "cuda" if sys.platform == "linux" else "cpu"
+        instanseg_brightfield = InstanSeg("brightfield_nuclei", verbosity=0, device=device, image_reader=reader)
+        labeled_output = instanseg_brightfield.eval(str(example_image_folder/"HE_example.tif")).cpu().numpy()
+
+        he_outputs.append(labeled_output)
+        instanseg_fluorescence = InstanSeg("fluorescence_nuclei_and_cells", verbosity=0, device=device)
+        image_array, pixel_size = instanseg_fluorescence.read_image(str(example_image_folder/"Fluorescence_example.tif"))
+
+        labeled_output = [x.cpu().numpy() for x in instanseg_fluorescence.eval_small_image(image_array)]
+        fluoro_outputs.append(labeled_output)
+
+    np.testing.assert_equal(he_outputs[0], he_outputs[1])
+    np.testing.assert_equal(he_outputs[1], he_outputs[2])
+    np.testing.assert_equal(fluoro_outputs[0][0], fluoro_outputs[1][0])
+    np.testing.assert_equal(fluoro_outputs[0][1], fluoro_outputs[1][1])
+    np.testing.assert_equal(fluoro_outputs[1][0], fluoro_outputs[2][0])
+    np.testing.assert_equal(fluoro_outputs[1][1], fluoro_outputs[2][1])
+
 

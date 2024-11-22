@@ -18,8 +18,9 @@ classifiers = [
 ]
 
 dependencies = [
-    "aicsimageio>=4.11.0",
-    "bioio>=1.1.0",
+    "bioio~=1.1.0",
+    "bioio-ome-tiff~=1.0.1",
+    "bioio-ome-tiff~=1.0.1",
     "colorcet>=3.0.1",
     "einops>=0.7.0",
     "fastremap>=1.14.0",
@@ -44,9 +45,8 @@ test = [
     "genbadge~=1.1.1"
 ]
 full = [
-    "aicsimageio>=4.10.0",
-    "bioimageio.core==0.5.11",
-    "bioimageio.spec==0.4.9",
+    "bioimageio.core~=0.5.11",
+    "bioimageio.spec~=0.4.9",
     "colorcet>=3.0.1",
     "cucim>=23.10.00; platform_system=='Linux'",
     "edt",
