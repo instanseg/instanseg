@@ -1,7 +1,7 @@
 
-import torch
 import numpy as np
 import warnings
+
 def _keep_images(item, args):
     if args.source_dataset != "all" and item[
         'parent_dataset'] not in args.source_dataset:  # remove items that are not of the desired dataset

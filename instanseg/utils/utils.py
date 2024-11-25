@@ -2,7 +2,6 @@
 
 import json
 import os
-import pdb
 import fastremap
 import numpy as np
 import tifffile
@@ -14,7 +13,6 @@ from pathlib import Path
 import rasterio.features
 from rasterio.transform import Affine
 from matplotlib.colors import LinearSegmentedColormap
-from matplotlib.cm import get_cmap
 import colorcet as cc
 import matplotlib as mpl
 import os
@@ -22,7 +20,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 import torch
 import tifffile
-from typing import Optional
+from typing import Optional, List
+import geojson
 
 def moving_average(x, w):
     """Moving average of an array x with window size w"""
@@ -41,25 +40,20 @@ def plot_average(train, test, clip=99, window_size=10):
     return fig
 
 
-def _to_shape(a, shape):
-    """Pad an array to a given shape."""
-    a = _move_channel_axis(a)
-    if len(np.shape(a)) == 2:
-        a = a[None,]
-    y_, x_ = shape
-    y, x = a[0].shape
-    y_pad = np.max([0, (y_ - y)])
-    x_pad = np.max([0, (x_ - x)])
-    return np.pad(a, ((0, 0), (y_pad // 2, y_pad // 2 + y_pad % 2),
-                      (x_pad // 2, x_pad // 2 + x_pad % 2)),
-                  mode='constant')
-
-
-def labels_to_features(lab: np.ndarray, object_type='annotation', connectivity: int = 4,
-                       transform: Affine = None, downsample: float = 1.0, include_labels=False,
-                       classification=None, offset=None):
+def labels_to_features(lab: np.ndarray,
+                       object_type='annotation',
+                       connectivity: int = 4,
+                       transform: Affine = None,
+                       downsample: float = 1.0,
+                       include_labels: bool = False,
+                       classification: str = None,
+                       offset: int = None) -> geojson.FeatureCollection:
     """
     Create a GeoJSON FeatureCollection from a labeled image.
+
+    :param classification: Optional classification added to output features.
+    :param offset: Offset added to x coordinates of output features.
+    :return: A GeoJSON FeatureCollection.
     """
     features = []
 
@@ -86,7 +80,7 @@ def labels_to_features(lab: np.ndarray, object_type='annotation', connectivity: 
 
         # Just to show how a classification can be added
         if classification is not None:
-            props['classification'] = str(classification)
+            props['classification'] = classification
 
         if offset is not None:
             coordinates = obj[0]['coordinates']
@@ -94,32 +88,36 @@ def labels_to_features(lab: np.ndarray, object_type='annotation', connectivity: 
                 [(int(x[0] + offset[0]), int(x[1] + offset[1])) for x in coordinates[0]]]
             obj[0]['coordinates'] = coordinates
 
-        # Wrap in a dict to effectively create a GeoJSON Feature
-        po = dict(type="Feature", geometry=obj[0], properties=props)
+        po = geojson.Feature(geometry = obj[0], properties=props)
 
         features.append(po)
+    return geojson.FeatureCollection(features)
 
-    return features
 
+def interp(image: np.ndarray, shape: float = None, scale:float = None):
 
-def interp(image: np.ndarray, shape=None, scale=None):
-    """Interpolate an image to a new shape or scale."""
     from scipy import interpolate
     x = np.array(range(image.shape[1]))
     y = np.array(range(image.shape[0]))
     interpolate_fn = interpolate.interp2d(x, y, image)
+
     if shape:
         x_new = np.linspace(0, image.shape[1] - 1, shape[1])
         y_new = np.linspace(0, image.shape[0] - 1, shape[0])
     elif scale:
         x_new = np.linspace(0, image.shape[1] - 1, int(np.floor(image.shape[1] * scale) + 1))
         y_new = np.linspace(0, image.shape[0] - 1, int(np.floor(image.shape[0] * scale) + 1))
+    
     znew = interpolate_fn(x_new, y_new)
     return znew
 
 
 
-def apply_cmap(x, fg_mask = None, cmap = "coolwarm_r", bg_intensity = 255, normalize = True):
+def apply_cmap(x,
+               fg_mask: np.ndarray = None,
+               cmap: str = "coolwarm_r",
+               bg_intensity: int = 255,
+               normalize: bool = True):
     """
     Apply a colormap to an image, with a background mask.
     x  and fg_mask should have the same shape, and be numpy arrays.
@@ -226,7 +224,14 @@ def show_images(*img_list, clip_pct=None, titles=None, save_str=False, n_cols=3,
 
 
 
-def display_as_grid(display_list, ncols,padding = 2, left_titles = None, top_titles = None, right_side = None, title_height = 20, fontsize = 12):
+def display_as_grid(display_list,
+                    ncols: int,
+                    padding: int = 2,
+                    left_titles: Optional[List[str]] = None,
+                    top_titles = None,
+                    right_side = None,
+                    title_height: int = 20,
+                    fontsize: float = 12):
 
     from instanseg.utils.augmentations import Augmentations
     Augmenter = Augmentations()
@@ -274,7 +279,7 @@ def _scale_area(size: float, pixel_size: float, do_round=True) -> float:
     return np.round(size_pixels) if do_round else size_pixels
 
 
-def _move_channel_axis(img: Union[np.ndarray, torch.Tensor], to_back: bool = False):
+def _move_channel_axis(img: Union[np.ndarray, torch.Tensor], to_back: bool = False) -> Union[np.ndarray, torch.Tensor]:
     if isinstance(img, np.ndarray):
         img = img.squeeze()
         if img.ndim != 3:
@@ -299,8 +304,11 @@ def _move_channel_axis(img: Union[np.ndarray, torch.Tensor], to_back: bool = Fal
         return img.movedim(ch, 0)
 
 
-def percentile_normalize(img: Union[np.ndarray, torch.Tensor], percentile=0.1, subsampling_factor: int = 1,
+def percentile_normalize(img: Union[np.ndarray, torch.Tensor],
+                         percentile: float = 0.1,
+                         subsampling_factor: int = 1,
                          epsilon: float = 1e-3):
+
     if isinstance(img, np.ndarray):
         assert img.ndim == 2 or img.ndim == 3, "Image must be 2D or 3D, got image of shape" + str(img.shape)
         img = np.atleast_3d(img)
@@ -341,16 +349,6 @@ def generate_colors(num_colors: int):
     return rgb_colors
 
 
-def tensor_or_np_copy(x):
-    if isinstance(x, torch.Tensor):
-        return x.clone()
-    else:
-        return x.copy()
-
-
-
-
-
 def export_annotations_and_images(output_dir, original_image, lab, base_name=None):
     from pathlib import Path
     import os
@@ -383,15 +381,13 @@ def export_annotations_and_images(output_dir, original_image, lab, base_name=Non
 
 
 import matplotlib.colors as mcolors
-def color_name_to_rgb(color_name):
+def color_name_to_rgb(color_name: str):
     """
     Convert a color name to its corresponding RGB values.
     
-    Args:
-    color_name (str): The name of the color.
+    :param color_name: The name of the color.
     
-    Returns:
-    tuple: A tuple containing the RGB values.
+    :return: A tuple containing the RGB values.
     """
     return mcolors.to_rgb(color_name)
 
@@ -423,6 +419,7 @@ def save_image_with_label_overlay(im: np.ndarray,
                                 one of 'thick', 'inner', 'outer', 'subpixel'. If None, the lab is used directly.
     :param alpha: Alpha value for the underlying image when using the overlay.
                   Setting this less than 1 can help the overlay stand out more prominently.
+    :return: The input image with corresponding label overlay if lab is a torch Tensor, or nothing otherwise.
     """
 
     import imageio
@@ -447,7 +444,6 @@ def save_image_with_label_overlay(im: np.ndarray,
             bg = (lab.sum(0) == 0)
 
             if label_boundary_mode is None:
-                from palettable import wesanderson as wes
                 from palettable.scientific import diverging as div
                 colour_cells = list((np.array(div.Berlin_12.colors[1]) /255))
                 colour_nuclei = list( np.array(div.Berlin_12.colors[11] ) /255)
@@ -528,6 +524,7 @@ def save_image_with_label_overlay(im: np.ndarray,
 def display_cells_and_nuclei(lab):
     display = save_image_with_label_overlay(torch.zeros((lab.shape[-2],lab.shape[-1],3)), lab, return_image= True, label_boundary_mode=None,alpha = 1)
     return display
+
 def display_colourized(mIF, random_seed = 0):
     from instanseg.utils.augmentations import Augmentations
     Augmenter=Augmentations()
@@ -541,7 +538,7 @@ def display_colourized(mIF, random_seed = 0):
     colour_render = _move_channel_axis(colour_render,to_back = True).detach().numpy()*255
     return colour_render.astype(np.uint8)
 
-def display_overlay(im, lab):
+def _display_overlay(im, lab):
     assert lab.ndim == 4, "lab must be 4D"
     assert im.ndim == 3, "im must be 3D"
     output_dimension = lab.shape[1]
@@ -623,7 +620,12 @@ def _choose_device(device: str = None, verbose=True) -> str:
     return device
 
 
-def count_instances(labels: Union[np.ndarray, torch.Tensor]):
+def count_instances(labels: Union[np.ndarray, torch.Tensor]) -> int:
+    """
+    Count the total number of labelled pixels in an input tensor.
+    :param labels: The input tensor.
+    :return: The total number of non-zero labels.
+    """
     import fastremap
     if isinstance(labels, torch.Tensor):
         num_labels = len(torch.unique(labels[labels > 0]))

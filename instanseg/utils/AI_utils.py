@@ -1,19 +1,12 @@
 import torch
 import torch
-import torchvision.transforms.functional as TF
-import sys
-import torch.nn as nn
-import pdb
 import numpy as np
 import matplotlib.pyplot as plt
 from tqdm.auto import tqdm
 from instanseg.utils.metrics import _robust_average_precision, _robust_f1_mean_calculator
 
-
 from instanseg.utils.augmentations import Augmentations
-from instanseg.utils.utils import timer
 import time
-import torchvision
 
 from instanseg.utils.utils import show_images
 import warnings
@@ -285,7 +278,7 @@ def optimize_hyperparameters(model,postprocessing_fn, data_loader = None, val_im
                 return 1 - mean_f1
         
         elif val_images is not None and val_labels is not None:
-            from instanseg.utils.tiling import instanseg_padding, recover_padding
+            from instanseg.utils.tiling import _instanseg_padding, _recover_padding
             def objective(params={}):
                 pred_masks = []
                 gt_masks = []
@@ -300,9 +293,9 @@ def optimize_hyperparameters(model,postprocessing_fn, data_loader = None, val_im
                     gt_mask = val_labels[i]
                     with torch.no_grad():
                         imgs = imgs.to(device)
-                        imgs, pad = instanseg_padding(imgs, min_dim = 32)
+                        imgs, pad = _instanseg_padding(imgs, min_dim = 32)
                         output = _model(imgs[None,])
-                        output = recover_padding(output, pad).squeeze(0)
+                        output = _recover_padding(output, pad).squeeze(0)
                         lab = postprocessing_fn(output.to(device), **params).cpu()
                         pred_masks.append(lab)
                         gt_masks.append(gt_mask)

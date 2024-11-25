@@ -1,7 +1,4 @@
 import numpy as np
-import torch
-import pdb
-
 from stardist import matching
 import fastremap
 

@@ -1,7 +1,6 @@
 
-import sys
 from pathlib import Path
-from instanseg.utils.utils import show_images, _move_channel_axis
+from instanseg.utils.utils import _move_channel_axis
 import fastremap
 from tqdm import tqdm
 from skimage import io
@@ -10,7 +9,6 @@ from scipy import ndimage
 import skimage
 import numpy as np
 import os
-import subprocess
 
 import requests
 import zipfile
