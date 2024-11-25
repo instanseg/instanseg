@@ -9,7 +9,7 @@ import zarr
 import os
 
 
-def to_ndim(x: torch.Tensor, n: int) -> torch.Tensor:
+def _to_ndim(x: torch.Tensor, n: int) -> torch.Tensor:
     """
     Ensure that the input tensor has the desired number of dimensions.
     If the input tensor has fewer dimensions, it will be unsqueezed.
@@ -33,6 +33,19 @@ def to_ndim(x: torch.Tensor, n: int) -> torch.Tensor:
     return x
 
 def _to_tensor_float32(image: Union[np.ndarray, torch.Tensor]) -> torch.Tensor:
+    """
+    Convert the input image to a PyTorch tensor with float32 data type.
+    If the input is a NumPy array, it will be converted to a PyTorch tensor.
+    The tensor will be squeezed to remove any singleton dimensions.
+    The channel dimension will be moved to the first position if it is not already there.
+    
+    Args:
+        image (Union[np.ndarray, torch.Tensor]): The input image, which can be either a NumPy array or a PyTorch tensor.
+        
+    Returns:
+        torch.Tensor: The input image as a PyTorch tensor with float32 data type and the channel dimension in the first position.
+    """
+
     if isinstance(image, np.ndarray):      
         if image.dtype == np.uint16:
             image = image.astype(np.int32)
@@ -55,14 +68,14 @@ def _rescale_to_pixel_size(image: torch.Tensor,
     
     original_dim = image.dim()
 
-    image = to_ndim(image, 4)
+    image = _to_ndim(image, 4)
 
     scale_factor = requested_pixel_size / model_pixel_size
 
     if not np.allclose(scale_factor,1, 0.01):
         image = interpolate(image, scale_factor=scale_factor, mode="bilinear")
 
-    return to_ndim(image, original_dim)
+    return _to_ndim(image, original_dim)
     
 
 def _display_colourized(mIF):
@@ -338,7 +351,7 @@ class InstanSeg():
 
         if save_geojson:
 
-            labels = to_ndim(labels, 4)
+            labels = _to_ndim(labels, 4)
         
             output_dimension = labels.shape[1]
             from instanseg.utils.utils import labels_to_features
@@ -391,7 +404,7 @@ class InstanSeg():
 
         image = _to_tensor_float32(image)
 
-        image = to_ndim(image, 4)
+        image = _to_ndim(image, 4)
 
         original_shape = image.shape
 
@@ -408,7 +421,7 @@ class InstanSeg():
         assert image.dim() ==3 or image.dim() == 4, f"Input image shape {image.shape} is not supported."
 
         if normalise:
-                image = to_ndim(image, 4)
+                image = _to_ndim(image, 4)
                 image = torch.stack([percentile_normalize(i) for i in image]) #over the batch dimension
 
         if target != "all_outputs" and self.instanseg.cells_and_nuclei:
@@ -484,7 +497,7 @@ class InstanSeg():
                 img_has_been_rescaled = False
         
 
-        image = to_ndim(image, 3)
+        image = _to_ndim(image, 3)
         
         if normalise:
             image = percentile_normalize(image, subsampling_factor=normalisation_subsampling_factor)
@@ -512,17 +525,17 @@ class InstanSeg():
                                               target_segmentation = target_segmentation,
                                               **kwargs).float()
 
-        instances = to_ndim(instances, 4)
-        image = to_ndim(image, 4)
+        instances = _to_ndim(instances, 4)
+        image = _to_ndim(image, 4)
         
         if pixel_size is not None and img_has_been_rescaled and rescale_output:  
             instances = interpolate(instances, size=original_shape[-2:], mode="nearest")
-            instances = to_ndim(instances, 4)
+            instances = _to_ndim(instances, 4)
 
             if return_image_tensor:
                 image = interpolate(image, size=original_shape[-2:], mode="bilinear")
 
-        image = to_ndim(image, original_ndim)
+        image = _to_ndim(image, original_ndim)
 
         if return_image_tensor:
             return instances.cpu(), image.cpu()
@@ -770,8 +783,8 @@ class InstanSeg():
         import scanpy as sc
         import matplotlib.pyplot as plt
 
-        labeled_output = to_ndim(labeled_output, 4)
-        image_tensor = to_ndim(image_tensor, 3)
+        labeled_output = _to_ndim(labeled_output, 4)
+        image_tensor = _to_ndim(image_tensor, 3)
 
         X_features = get_mean_object_features( image_tensor.to("cuda"), labeled_output.to("cuda"),)
 

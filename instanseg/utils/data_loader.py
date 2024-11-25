@@ -225,12 +225,12 @@ def get_loaders(train_images_local, train_labels_local, val_images_local, val_la
                                               pixel_size=args.requested_pixel_size, augmentation_type=args.augmentation_type)
 
     train_data = Segmentation_Dataset(train_images_local, train_labels_local, metadata=train_meta,
-                                      size=(256, 256), augmentation_dict=augmentation_dict['train'],
+                                      size=(args.tile_size, args.tile_size), augmentation_dict=augmentation_dict['train'],
                                       debug=False,
                                       dim_in=args.dim_in, cells_and_nuclei=args.cells_and_nuclei,
                                       target_segmentation=args.target_segmentation, channel_invariant = args.channel_invariant)
 
-    test_data = Segmentation_Dataset(val_images_local, val_labels_local, size=(256, 256), metadata=val_meta,
+    test_data = Segmentation_Dataset(val_images_local, val_labels_local, size=(args.tile_size, args.tile_size), metadata=val_meta,
                                      dim_in=args.dim_in,
                                      augmentation_dict=augmentation_dict['test'],
                                      cells_and_nuclei=args.cells_and_nuclei,
