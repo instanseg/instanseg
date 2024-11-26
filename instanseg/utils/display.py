@@ -1,6 +1,7 @@
+import torch
 import matplotlib.pyplot as plt
 import numpy as np
-
+from typing import Optional, List, Tuple, Union
 
 def moving_average(x: np.ndarray, 
                    w: int) -> np.ndarray:
@@ -470,3 +471,27 @@ def _to_scaled_uint8(im: np.ndarray, clip_percentile=1.0) -> np.ndarray:
     im_float *= 255
     return np.clip(im_float, a_min=0, a_max=255).astype(np.uint8)
 
+
+def _move_channel_axis(img: Union[np.ndarray, torch.Tensor], to_back: bool = False) -> Union[np.ndarray, torch.Tensor]:
+    if isinstance(img, np.ndarray):
+        img = img.squeeze()
+        if img.ndim != 3:
+            if img.ndim == 2:
+                img = img[None,]
+            if img.ndim != 3:
+                raise ValueError("Input array should be 3D or 2D")
+        ch = np.argmin(img.shape)
+        if to_back:
+            return np.rollaxis(img, ch, 3)
+
+        return np.rollaxis(img, ch, 0)
+    elif isinstance(img, torch.Tensor):
+        if img.dim() != 3:
+            if img.dim() == 2:
+                img = img[None,]
+            if img.dim() != 3:
+                raise ValueError("Input array should be 3D or 2D")
+        ch = np.argmin(img.shape)
+        if to_back:
+            return img.movedim(ch, -1)
+        return img.movedim(ch, 0)

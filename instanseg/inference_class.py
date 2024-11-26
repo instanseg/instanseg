@@ -160,7 +160,7 @@ class InstanSeg():
         :param github_token: The GitHub API token to use to authenticate model downloads. May be necessary to avoid rate limits in some circumstances.
         :param verbosity: The verbosity level. 0 is silent, 1 is normal, 2 is verbose.
         """
-        from instanseg.utils.utils import download_model, _choose_device
+        from instanseg.utils.utils import _choose_device
 
         self.verbosity = verbosity
         self.verbose = verbosity != 0

@@ -36,7 +36,8 @@ from instanseg.utils.display import (
     display_colourized,
     _display_overlay,
     _to_rgb_channels_last,
-    _to_scaled_uint8
+    _to_scaled_uint8,
+    _move_channel_axis
 )
 
 def timer(func: callable) -> callable:
@@ -337,30 +338,6 @@ def labels_to_features(lab: np.ndarray,
         features.append(po)
     return geojson.FeatureCollection(features)
 
-
-def _move_channel_axis(img: Union[np.ndarray, torch.Tensor], to_back: bool = False) -> Union[np.ndarray, torch.Tensor]:
-    if isinstance(img, np.ndarray):
-        img = img.squeeze()
-        if img.ndim != 3:
-            if img.ndim == 2:
-                img = img[None,]
-            if img.ndim != 3:
-                raise ValueError("Input array should be 3D or 2D")
-        ch = np.argmin(img.shape)
-        if to_back:
-            return np.rollaxis(img, ch, 3)
-
-        return np.rollaxis(img, ch, 0)
-    elif isinstance(img, torch.Tensor):
-        if img.dim() != 3:
-            if img.dim() == 2:
-                img = img[None,]
-            if img.dim() != 3:
-                raise ValueError("Input array should be 3D or 2D")
-        ch = np.argmin(img.shape)
-        if to_back:
-            return img.movedim(ch, -1)
-        return img.movedim(ch, 0)
 
 
 def percentile_normalize(img: Union[np.ndarray, torch.Tensor],
