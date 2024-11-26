@@ -9,7 +9,13 @@ import matplotlib.pyplot as plt
 from instanseg.utils.pytorch_utils import torch_sparse_onehot, torch_fastremap, remap_values, torch_onehot
 
 def get_intersection_over_union(label: torch.Tensor, return_lab: bool = True) -> torch.Tensor:
+    """
+    Calculate the intersection over union (IoU) for a 2-channel labeled image.
 
+    :param label: The input label tensor of shape (1, 2, H, W).
+    :param return_lab: Whether to return the remapped label tensor.
+    :return: The IoU tensor, and optionally the remapped label tensor.
+    """
     from instanseg.utils.pytorch_utils import fast_sparse_dual_iou, torch_sparse_onehot
     label = torch.stack((torch_fastremap(label[0,0]),torch_fastremap(label[0,1])))[None]
     nucleus_onehot = torch_sparse_onehot(label[0, 0], flatten=True)[0]
@@ -22,9 +28,11 @@ def get_intersection_over_union(label: torch.Tensor, return_lab: bool = True) ->
 
 def get_intersection_over_nucleus_area(label: torch.Tensor, return_lab: bool = False) -> Tuple[torch.Tensor, torch.Tensor]:
     """
-    Returns the intersection over nucleus area in a 2 channel labeled image
-     
-    label must be a 1,2,H,W tensor where the first channel is nuclei and the second is whole cell
+    Calculate the intersection over nucleus area for a 2-channel labeled image.
+
+    :param label: The input label tensor of shape (1, 2, H, W).
+    :param return_lab: Whether to return the remapped label tensor.
+    :return: The intersection over nucleus area tensor, and optionally the remapped label tensor.
     """
     label = torch.stack((torch_fastremap(label[0,0]),torch_fastremap(label[0,1])))[None]
     nuclei_onehot = torch_sparse_onehot(label[0, 0], flatten=True)[0]
@@ -41,9 +49,11 @@ def get_intersection_over_nucleus_area(label: torch.Tensor, return_lab: bool = F
 
 def get_intersection_over_cell_area(label: torch.Tensor, return_lab = False) -> Tuple[torch.Tensor, torch.Tensor]:
     """
-    Returns the intersection over cell area in a 2 channel labeled image
-     
-    label must be a 1,2,H,W tensor where the first channel is nuclei and the second is whole cell
+    Calculate the intersection over cell area for a 2-channel labeled image.
+
+    :param label: The input label tensor of shape (1, 2, H, W).
+    :param return_lab: Whether to return the remapped label tensor.
+    :return: The intersection over cell area tensor, and optionally the remapped label tensor.
     """
     label = torch.stack((torch_fastremap(label[0,0]),torch_fastremap(label[0,1])))[None]
     nuclei_onehot = torch_sparse_onehot(label[0, 0], flatten=True)[0]
@@ -58,8 +68,10 @@ def get_intersection_over_cell_area(label: torch.Tensor, return_lab = False) -> 
 
 def nc_heatmap(label: torch.Tensor) -> torch.Tensor:
     """
-    label is a 1,2,H,W tensor where the first channel is nuclei and the second is whole cell
-    This function takes two labeled images and returns the nucleus/cell ratio heatmap
+    Calculate the nucleus/cell ratio heatmap for a 2-channel labeled image.
+
+    :param label: The input label tensor of shape (1, 2, H, W).
+    :return: The nucleus/cell ratio heatmap tensor.
     """
 
     if label[0, 0].max() == 0 or label[0, 1].max() == 0:
@@ -79,7 +91,19 @@ def nc_heatmap(label: torch.Tensor) -> torch.Tensor:
 
 
 
-def get_nonnucleated_cell_ids( lab: torch.Tensor,iou: torch.Tensor = None, threshold: float = 0.5, return_lab: bool = True) -> torch.Tensor:
+def get_nonnucleated_cell_ids(lab: torch.Tensor, 
+                              iou: torch.Tensor = None, 
+                              threshold: float = 0.5, 
+                              return_lab: bool = True) -> torch.Tensor:
+    """
+    Get the IDs of non-nucleated cells.
+
+    :param lab: The input label tensor of shape (1, 2, H, W).
+    :param iou: The IoU tensor. If None, it will be calculated.
+    :param threshold: The IoU threshold to consider a cell as nucleated.
+    :param return_lab: Whether to return the remapped label tensor.
+    :return: The IDs of non-nucleated cells, and optionally the remapped label tensor.
+    """
 
     if iou is None:
         iou,lab = get_intersection_over_nucleus_area(lab, return_lab=True)
@@ -95,8 +119,19 @@ def get_nonnucleated_cell_ids( lab: torch.Tensor,iou: torch.Tensor = None, thres
     return lab_ids[nonnucleated]
 
 
-def get_nucleated_cell_ids( lab: torch.Tensor,iou: torch.Tensor = None, threshold: float = 0.5, return_lab: bool = True) -> torch.Tensor:
+def get_nucleated_cell_ids(lab: torch.Tensor, 
+                           iou: torch.Tensor = None, 
+                           threshold: float = 0.5, 
+                           return_lab: bool = True) -> torch.Tensor:
+    """
+    Get the IDs of nucleated cells.
 
+    :param lab: The input label tensor of shape (1, 2, H, W).
+    :param iou: The IoU tensor. If None, it will be calculated.
+    :param threshold: The IoU threshold to consider a cell as nucleated.
+    :param return_lab: Whether to return the remapped label tensor.
+    :return: The IDs of nucleated cells, and optionally the remapped label tensor.
+    """
     if iou is None:
         iou,lab = get_intersection_over_nucleus_area(lab, return_lab=True)
         lab = lab[0,1]
@@ -111,8 +146,19 @@ def get_nucleated_cell_ids( lab: torch.Tensor,iou: torch.Tensor = None, threshol
     return lab_ids[nucleated]
 
 
-def get_multinucleated_cell_ids( lab: torch.Tensor,iou: torch.Tensor = None, threshold: float = 0.5, return_lab: bool = True):
-    #lab is 1,2,H,W
+def get_multinucleated_cell_ids(lab: torch.Tensor, 
+                                iou: torch.Tensor = None, 
+                                threshold: float = 0.5, 
+                                return_lab: bool = True) -> torch.Tensor:
+    """
+    Get the IDs of multinucleated cells.
+
+    :param lab: The input label tensor of shape (1, 2, H, W).
+    :param iou: The IoU tensor. If None, it will be calculated.
+    :param threshold: The IoU threshold to consider a cell as nucleated.
+    :param return_lab: Whether to return the remapped label tensor.
+    :return: The IDs of multinucleated cells, and optionally the remapped label tensor.
+    """
     if iou is None:
         iou,lab = get_intersection_over_nucleus_area(lab, return_lab=True)
         lab = lab[0,1]
@@ -127,10 +173,14 @@ def get_multinucleated_cell_ids( lab: torch.Tensor,iou: torch.Tensor = None, thr
                 lab * torch.isin(lab, lab_ids[~multinucleated]))
     return lab_ids[multinucleated]
 
-def keep_only_largest_nucleus_per_cell(labels: torch.Tensor, return_lab: bool = True)-> Tuple[torch.Tensor, torch.Tensor]:
+def keep_only_largest_nucleus_per_cell(labels: torch.Tensor, 
+                                       return_lab: bool = True) -> Tuple[torch.Tensor, torch.Tensor]:
     """
-    labels: tensor of shape 1,2,H,W containing nucleus and cell labels respectively
-    return_lab: if True, returns the labels with only the largest nucleus per cell, and only cells that have a nucleus.
+    Keep only the largest nucleus per cell.
+
+    :param labels: Tensor of shape (1, 2, H, W) containing nucleus and cell labels respectively.
+    :param return_lab: Whether to return the labels with only the largest nucleus per cell, and only cells that have a nucleus.
+    :return: The labels with only the largest nucleus per cell, and optionally the remapped label tensor.
     """
     labels = torch_fastremap(labels)
     iou, nuclei_area = get_intersection_over_nucleus_area(labels)
@@ -150,17 +200,14 @@ def keep_only_largest_nucleus_per_cell(labels: torch.Tensor, return_lab: bool = 
 
 def resolve_cell_and_nucleus_boundaries(lab: torch.Tensor, allow_unnucleated_cells: bool = True) -> torch.Tensor:
     """
-    lab: tensor of shape 1,2,H,W containing nucleus and cell labels respectively
+    Resolve the boundaries between cells and nuclei.
+    First, match the labels of the largest nucleus and its cell.
+    Then, erase from the cell masks all the nuclei pixels. This resolves nuclei "just" overlapping adjacent cells.
+    Then, recover the nuclei pixels that were erased by adding them back to the cell masks.
 
-    returns: tensor of the same shape as lab
-
-    This function will resolve the boundaries between cells and nuclei. 
-    It will first match the labels of the largest nucleus and its cell.
-    It will then erase from the cell masks all the nuclei pixels. This resolves nuclei "just" overlapping adjacent cell.
-    It will then recover the nuclei pixels that were erased by adding them back to the cell masks.
-
-    allow_unnucleated_cells: If False, this will remove all cells that don't have a nucleus.
-
+    :param lab: Tensor of shape (1, 2, H, W) containing nucleus and cell labels respectively.
+    :param allow_unnucleated_cells: If False, this will remove all cells that don't have a nucleus.
+    :return: Tensor of the same shape as lab with resolved boundaries.
     """
 
     if lab[0,0].max() == 0: # No nuclei
@@ -216,10 +263,13 @@ def resolve_cell_and_nucleus_boundaries(lab: torch.Tensor, allow_unnucleated_cel
 
 
 def get_mean_object_features(image: torch.Tensor, label: torch.Tensor) -> torch.Tensor:
-    # image is C,H,W
-    # label is H,W
-    # returns a tensor of size N,C for N objects and C channels
+    """
+    Calculate the mean features of objects in an image.
 
+    :param image: The input image tensor of shape (C, H, W).
+    :param label: The label tensor of shape (H, W).
+    :return: A tensor of size (N, C) for N objects and C channels.
+    """
     if label.max() == 0:
         return torch.tensor([])
     label = label.squeeze()
@@ -232,9 +282,14 @@ def get_mean_object_features(image: torch.Tensor, label: torch.Tensor) -> torch.
 
 
 def get_features_by_location(input_tensor: torch.Tensor, lab: torch.Tensor, to_numpy: bool = True) -> tuple:
-    # input tensor is C,H,W
-    # lab is 1,2,H,W where the first channel is nuclei and the second is whole cell
+    """
+    Get features by location (cell, nuclei, cytoplasm).
 
+    :param input_tensor: The input tensor of shape (C, H, W).
+    :param lab: The label tensor of shape (1, 2, H, W) where the first channel is nuclei and the second is whole cell.
+    :param to_numpy: Whether to convert the output tensors to numpy arrays.
+    :return: A tuple of features for cell, nuclei, and cytoplasm.
+    """
     X_cell = get_mean_object_features(input_tensor, lab[0, 1])
     X_nuclei = get_mean_object_features(input_tensor, lab[0, 0])
 
@@ -252,9 +307,14 @@ def get_features_by_location(input_tensor: torch.Tensor, lab: torch.Tensor, to_n
 
 
 from instanseg.utils.utils import _move_channel_axis
-def get_nc_ratio(lab):
-    # lab is 1,2,H,W where the first channel is nuclei and the second is whole cell
-    
+
+def get_nc_ratio(lab: torch.Tensor) -> torch.Tensor:
+    """
+    Calculate the nucleus/cytoplasm ratio for a labeled image.
+
+    :param lab: The label tensor of shape (1, 2, H, W) where the first channel is nuclei and the second is whole cell.
+    :return: The nucleus/cytoplasm ratio tensor.
+    """
     lab = _move_channel_axis(torch.atleast_3d(lab.squeeze()))[None].long()
     nuclei_mask = lab[0,0]
     cell_mask = lab[0,1]
@@ -277,7 +337,22 @@ def get_nc_ratio(lab):
 
 
 
-def violin_plot_feature_location(X_nuclei: np.ndarray, X_cytoplasm: np.ndarray, channel_names = None, labels = None, title = None, clamp = None):
+def violin_plot_feature_location(X_nuclei: np.ndarray, 
+                                 X_cytoplasm: np.ndarray, 
+                                 channel_names = None, 
+                                 labels = None, 
+                                 title = None, 
+                                 clamp = None):
+    """
+    Create a violin plot to compare feature distributions between nuclei and cytoplasm.
+
+    :param X_nuclei: The feature array for nuclei.
+    :param X_cytoplasm: The feature array for cytoplasm.
+    :param channel_names: The names of the channels.
+    :param labels: The labels for the plot.
+    :param title: The title of the plot.
+    :param clamp: The range to clamp the values.
+    """
     df = pd.DataFrame(columns=['Location', 'Channel', 'Value'])
 
     for i in range(X_nuclei.shape[1]):
@@ -315,7 +390,12 @@ def violin_plot_feature_location(X_nuclei: np.ndarray, X_cytoplasm: np.ndarray, 
     plt.show()
 
 
-def show_umap_and_cluster(X_features):
+def show_umap_and_cluster(X_features: np.ndarray):
+    """
+    Perform UMAP and clustering on the feature data and display the results.
+
+    :param X_features: The feature array.
+    """
     import scanpy as sc
     # Create a Scanpy AnnData object
     adata = sc.AnnData(X_features)

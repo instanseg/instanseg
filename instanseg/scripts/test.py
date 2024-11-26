@@ -158,7 +158,8 @@ def instanseg_inference(val_images, val_labels, model, postprocessing_fn, device
 
 if __name__ == "__main__":
 
-    from instanseg.utils.utils import show_images, save_image_with_label_overlay, _move_channel_axis
+    from instanseg.utils.display import show_images
+    from instanseg.utils.utils save_image_with_label_overlay, _move_channel_axis
     from instanseg.utils.model_loader import load_model
     from instanseg.utils.metrics import compute_and_export_metrics
     from instanseg.utils.augmentations import Augmentations

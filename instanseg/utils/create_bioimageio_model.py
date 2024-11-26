@@ -5,38 +5,9 @@ import torch
 from bioio import BioImage
 
 from instanseg.utils.augmentations import Augmentations
-from instanseg.utils.utils import _choose_device, show_images
+from instanseg.utils.utils import _choose_device, set_export_paths
+from instanseg.utils.display import show_images
 from instanseg.utils.model_loader import load_model
-
-
-def set_export_paths():
-    from pathlib import Path
-    if os.environ.get('INSTANSEG_BIOIMAGEIO_PATH'):
-        path = Path(os.environ['INSTANSEG_BIOIMAGEIO_PATH'])
-    else:
-        path = Path(os.path.join(os.path.dirname(__file__),"../bioimageio_models/"))
-        os.environ['INSTANSEG_BIOIMAGEIO_PATH'] = str(path)
-
-    if not path.exists():
-        path.mkdir(exist_ok=True,parents=True)
-
-    if os.environ.get('INSTANSEG_TORCHSCRIPT_PATH'):
-        path = Path(os.environ['INSTANSEG_TORCHSCRIPT_PATH'])
-    else:
-        path = Path(os.path.join(os.path.dirname(__file__),"../torchscripts/"))
-        os.environ['INSTANSEG_TORCHSCRIPT_PATH'] = str(path)
-
-    if not path.exists():
-        path.mkdir(exist_ok=True,parents=True)
-
-    if os.environ.get('INSTANSEG_MODEL_PATH'):
-        path = Path(os.environ['INSTANSEG_MODEL_PATH'])
-    else:
-        path = Path(os.path.join(os.path.dirname(__file__),"../models/"))
-        os.environ['INSTANSEG_MODEL_PATH'] = str(path)
-
-    if not path.exists():
-        path.mkdir(exist_ok=True,parents=True)
 
 
 dataset_dict = {
@@ -61,6 +32,11 @@ from bioimageio.core.build_spec import build_model
 from bioimageio.core.resource_tests import test_model
 
 def readme(model_name: str, model_dict: dict = None):
+    """
+    Create a README.md for your model.
+
+    Write a file that describes the license of the model, the relevant citations, and the datasets it was trained on.
+    """
     # create markdown documentation for your model
     # this should describe how the model was trained, (and on which data)
     # and also what to take into consideration when running the model, especially how to validate the model
@@ -83,14 +59,19 @@ def readme(model_name: str, model_dict: dict = None):
                     f.write(f"  - License: Not specified \n")
                     f.write(f"  - URL: Not specified \n")
         
-
         f.write("\n The user is responsible for ensuring that the model is used in accordance with the licenses of the source datasets. \n")
 
-          #  f.write(str(model_dict["source_dataset"]))
 
+def modify_yaml_for_qupath_config(yaml_path: str, pixel_size: float, dim_in: int = 3, dim_out: int = 2, version: str = None):
+    """
+    Modify the InstanSeg RDF YAML file to contain information relevant to QuPath.
 
-def modify_yaml_for_qupath_config(yaml_path, pixel_size: float, dim_in: int = 3, dim_out: int = 2, version: str = None):
-
+    :param yaml_path: Path to the YAML file to be modified.
+    :param pixel_size: The pixel size in microns.
+    :param dim_in: The number of input channels.
+    :param dim_out: The number of output channels.
+    :param version: The semantic version of the model.
+    """
     #copy ijm files
     import shutil
     shutil.copyfile(os.path.join(os.path.dirname(__file__),"./rdf_scripts/instanseg_preprocess.ijm"), os.path.join(os.path.dirname(yaml_path), "instanseg_preprocess.ijm"))
@@ -150,13 +131,18 @@ def modify_yaml_for_qupath_config(yaml_path, pixel_size: float, dim_in: int = 3,
 
 import os, shutil
 def make_archive(source, destination):
-        base = os.path.basename(destination)
-        name = base.split('.')[0]
-        format = base.split('.')[1]
-        archive_from = os.path.dirname(source)
-        archive_to = os.path.basename(source.strip(os.sep))
-        shutil.make_archive(name, format, archive_from, archive_to)
-        shutil.move('%s.%s'%(name,format), destination)
+    """
+    Make a zip archive of a source directory.
+    :param source: The source folder.
+    :param destination: The destination file.
+    """
+    base = os.path.basename(destination)
+    name = base.split('.')[0]
+    format = base.split('.')[1]
+    archive_from = os.path.dirname(source)
+    archive_to = os.path.basename(source.strip(os.sep))
+    shutil.make_archive(name, format, archive_from, archive_to)
+    shutil.move('%s.%s'%(name,format), destination)
 
 
 
@@ -166,9 +152,17 @@ def export_bioimageio(torchsript: torch.jit._script.RecursiveScriptModule,
                       model_dict: dict = None, 
                       output_name = None,
                       version: str = None):
-    
-    set_export_paths()
+    """
+    Export a TorchScript model to BioImage.io format.
 
+    :param torchsript: The TorchScript model to export.
+    :param model_name: The name of the model.
+    :param test_img_path: The path to the test image.
+    :param model_dict: The model dictionary containing model configuration.
+    :param output_name: The name of the output directory.
+    :param version: The version of the model.
+    """
+    set_export_paths()
     output_path = os.environ['INSTANSEG_BIOIMAGEIO_PATH']
 
     if output_name is None:

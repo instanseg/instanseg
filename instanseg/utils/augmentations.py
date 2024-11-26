@@ -1,4 +1,5 @@
-from instanseg.utils.utils import show_images, _move_channel_axis
+from instanseg.utils.display import show_images
+from instanseg.utils.utils import _move_channel_axis
 import torchvision
 import torchvision.transforms.functional as TF
 import torch

@@ -7,7 +7,7 @@ from instanseg.utils.metrics import _robust_average_precision, _robust_f1_mean_c
 from instanseg.utils.augmentations import Augmentations
 import time
 
-from instanseg.utils.utils import show_images
+from instanseg.utils.display import show_images
 import warnings
 
 

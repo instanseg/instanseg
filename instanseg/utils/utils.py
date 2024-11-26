@@ -22,212 +22,22 @@ import torch
 import tifffile
 from typing import Optional, List
 import geojson
-
-
-
-
-def labels_to_features(lab: np.ndarray,
-                       object_type='annotation',
-                       connectivity: int = 4,
-                       transform: Affine = None,
-                       downsample: float = 1.0,
-                       include_labels: bool = False,
-                       classification: str = None,
-                       offset: int = None) -> geojson.FeatureCollection:
-    """
-    Create a GeoJSON FeatureCollection from a labeled image.
-
-    :param classification: Optional classification added to output features.
-    :param offset: Offset added to x coordinates of output features.
-    :return: A GeoJSON FeatureCollection.
-    """
-    features = []
-
-    # Ensure types are valid
-    if lab.dtype == bool:
-        mask = lab
-        lab = lab.astype(np.uint8)
-    else:
-        mask = lab != 0
-
-    # Create transform from downsample if needed
-    if transform is None:
-        transform = Affine.scale(downsample)
-
-    # Trace geometries
-    for i, obj in enumerate(rasterio.features.shapes(lab, mask=mask,
-                                                     connectivity=connectivity, transform=transform)):
-
-        # Create properties
-        props = dict(object_type=object_type)
-        if include_labels:
-            props['measurements'] = [{'name': 'Label', 'value': i}]
-        #  pdb.set_trace()
-
-        # Just to show how a classification can be added
-        if classification is not None:
-            props['classification'] = classification
-
-        if offset is not None:
-            coordinates = obj[0]['coordinates']
-            coordinates = [
-                [(int(x[0] + offset[0]), int(x[1] + offset[1])) for x in coordinates[0]]]
-            obj[0]['coordinates'] = coordinates
-
-        po = geojson.Feature(geometry = obj[0], properties=props)
-
-        features.append(po)
-    return geojson.FeatureCollection(features)
-
-
-def _move_channel_axis(img: Union[np.ndarray, torch.Tensor], to_back: bool = False) -> Union[np.ndarray, torch.Tensor]:
-    if isinstance(img, np.ndarray):
-        img = img.squeeze()
-        if img.ndim != 3:
-            if img.ndim == 2:
-                img = img[None,]
-            if img.ndim != 3:
-                raise ValueError("Input array should be 3D or 2D")
-        ch = np.argmin(img.shape)
-        if to_back:
-            return np.rollaxis(img, ch, 3)
-
-        return np.rollaxis(img, ch, 0)
-    elif isinstance(img, torch.Tensor):
-        if img.dim() != 3:
-            if img.dim() == 2:
-                img = img[None,]
-            if img.dim() != 3:
-                raise ValueError("Input array should be 3D or 2D")
-        ch = np.argmin(img.shape)
-        if to_back:
-            return img.movedim(ch, -1)
-        return img.movedim(ch, 0)
-
-
-def percentile_normalize(img: Union[np.ndarray, torch.Tensor],
-                         percentile: float = 0.1,
-                         subsampling_factor: int = 1,
-                         epsilon: float = 1e-3) -> Union[np.ndarray, torch.Tensor]:
-    """
-    Normalize an image using percentile normalization.
-
-    :param img: The input image array or tensor.
-    :param percentile: The percentile for normalization.
-    :param subsampling_factor: The subsampling factor.
-    :param epsilon: A small value to avoid division by zero.
-    :return: The normalized image array or tensor.
-    """
-
-    if isinstance(img, np.ndarray):
-        assert img.ndim == 2 or img.ndim == 3, "Image must be 2D or 3D, got image of shape" + str(img.shape)
-        img = np.atleast_3d(img)
-        channel_axis = np.argmin(img.shape)
-        img = _move_channel_axis(img, to_back=True)
-
-        for c in range(img.shape[-1]):
-            im_temp = img[::subsampling_factor, ::subsampling_factor, c]
-            (p_min, p_max) = np.percentile(im_temp, [percentile, 100 - percentile])
-            img[:, :, c] = (img[:, :, c] - p_min) / max(epsilon, p_max - p_min)
-       # img = img / np.maximum(0.01, np.max(img))
-        return np.moveaxis(img, 2, channel_axis)
-
-    elif isinstance(img, torch.Tensor):
-        assert img.ndim == 2 or img.ndim == 3, "Image must be 2D or 3D, got image of shape" + str(img.shape)
-        img = torch.atleast_3d(img)
-        channel_axis = np.argmin(img.shape)
-        img = _move_channel_axis(img, to_back=True)
-        for c in range(img.shape[-1]):
-            im_temp = img[::subsampling_factor, ::subsampling_factor, c]
-            if img.is_cuda or img.is_mps:
-                (p_min, p_max) = torch.quantile(im_temp, torch.tensor([percentile / 100, (100 - percentile) / 100],device = im_temp.device))
-            else:
-                (p_min, p_max) = np.percentile(im_temp.cpu(), [percentile, 100 - percentile])
-            img[:, :, c] = (img[:, :, c] - p_min) / max(epsilon, p_max - p_min)
-       # img = img / np.maximum(0.01, torch.max(img))
-        return img.movedim(2, channel_axis)
-
-
-
-def _choose_device(device: str = None, verbose=True) -> str:
-    """
-    Choose a device to use with PyTorch, given the desired device name.
-    If a requested device is not specified or not available, then a default is chosen.
-    """
-    if device is not None:
-        if device == 'cuda' and not torch.cuda.is_available():
-            device = None
-            print('CUDA device requested but not available!')
-        if device == 'mps' and not torch.backends.mps.is_available():
-            device = None
-            print('MPS device requested but not available!')
-
-    if device is None:
-        if torch.cuda.is_available():
-            device = 'cuda'
-        elif torch.backends.mps.is_available():
-            device = 'mps'
-        else:
-            device = 'cpu'
-        if verbose:
-            print(f'Requesting default device: {device}')
-
-    return device
-
-
-def count_instances(labels: Union[np.ndarray, torch.Tensor]) -> int:
-    """
-    Count the total number of labelled pixels in an input tensor.
-    :param labels: The input tensor.
-    :return: The total number of non-zero labels.
-    """
-    import fastremap
-    if isinstance(labels, torch.Tensor):
-        num_labels = len(torch.unique(labels[labels > 0]))
-    elif isinstance(labels, np.ndarray):
-        num_labels = len(fastremap.unique(labels[labels > 0]))
-    else:
-        raise Exception("Labels must be numpy array or torch tensor")
-    return num_labels
-
-
-def _estimate_image_modality(img, mask):
-    """
-    This function estimates the modality of an image (i.e. brightfield, chromogenic or fluorescence) based on the
-    mean intensity of the pixels inside and outside the mask.
-    """
-
-    if isinstance(img, np.ndarray):
-        img = np.atleast_3d(_move_channel_axis(img))
-        mask = np.squeeze(mask)
-
-        assert mask.ndim == 2, print("Mask must be 2D, but got shape", mask.shape)
-        if count_instances(mask) < 1:
-            return "Fluorescence"  # The images don't contain any cells, but they look like fluorescence images.
-        elif np.mean(img[:, mask > 0]) > np.mean(img[:, mask == 0]):
-            return "Fluorescence"
-        else:
-            if img.shape[0] == 1:
-                return "Brightfield"
-            else:
-                return "Brightfield"  # "Chromogenic"
-
-
-    elif isinstance(img, torch.Tensor):
-        img = torch.at_least_3d(_move_channel_axis(img))
-        mask = torch.squeeze(mask)
-        assert mask.ndim == 2, "Mask must be 2D"
-
-        if count_instances(mask) < 1:
-            return "Fluorescence"  # The images don't contain any cells, but they look like fluorescence images.
-        elif torch.mean(img[:, mask > 0]) > torch.mean(img[:, mask == 0]):
-            return "Fluorescence"
-        else:
-            if img.shape[0] == 1:
-                return "Brightfield"
-            else:
-                return "Brightfield"  # "Chromogenic"
-
+## temporarily re-import display functions to avoid breaking code. Should be deprecated
+from instanseg.utils.display import (
+    moving_average,
+    plot_average,
+    apply_cmap,
+    show_images,
+    display_as_grid,
+    generate_colors,
+    color_name_to_rgb,
+    save_image_with_label_overlay,
+    display_cells_and_nuclei,
+    display_colourized,
+    _display_overlay,
+    _to_rgb_channels_last,
+    _to_scaled_uint8
+)
 
 def timer(func: callable) -> callable:
     """
@@ -249,6 +59,21 @@ def timer(func: callable) -> callable:
 
     return wrapper
 
+
+def count_instances(labels: Union[np.ndarray, torch.Tensor]) -> int:
+    """
+    Count the total number of labelled pixels in an input tensor.
+    :param labels: The input tensor.
+    :return: The total number of non-zero labels.
+    """
+    import fastremap
+    if isinstance(labels, torch.Tensor):
+        num_labels = len(torch.unique(labels[labels > 0]))
+    elif isinstance(labels, np.ndarray):
+        num_labels = len(fastremap.unique(labels[labels > 0]))
+    else:
+        raise Exception("Labels must be numpy array or torch tensor")
+    return num_labels
 
 
 
@@ -291,8 +116,6 @@ def set_export_paths():
     else:
         path = Path(os.path.join(os.path.dirname(__file__),"../examples/"))
         os.environ['EXAMPLE_IMAGE_PATH'] = str(path)
-
-        
 
 
 def export_to_torchscript(model_str: str,
@@ -458,3 +281,193 @@ def drag_and_drop_file() -> str:
     save_button.pack(pady=10)
     root.mainloop()
     return entry_var.get()
+
+
+
+def labels_to_features(lab: np.ndarray,
+                       object_type='annotation',
+                       connectivity: int = 4,
+                       transform: Affine = None,
+                       downsample: float = 1.0,
+                       include_labels: bool = False,
+                       classification: str = None,
+                       offset: int = None) -> geojson.FeatureCollection:
+    """
+    Create a GeoJSON FeatureCollection from a labeled image.
+
+    :param classification: Optional classification added to output features.
+    :param offset: Offset added to x coordinates of output features.
+    :return: A GeoJSON FeatureCollection.
+    """
+    features = []
+
+    # Ensure types are valid
+    if lab.dtype == bool:
+        mask = lab
+        lab = lab.astype(np.uint8)
+    else:
+        mask = lab != 0
+
+    # Create transform from downsample if needed
+    if transform is None:
+        transform = Affine.scale(downsample)
+
+    # Trace geometries
+    for i, obj in enumerate(rasterio.features.shapes(lab, mask=mask,
+                                                     connectivity=connectivity, transform=transform)):
+
+        # Create properties
+        props = dict(object_type=object_type)
+        if include_labels:
+            props['measurements'] = [{'name': 'Label', 'value': i}]
+        #  pdb.set_trace()
+
+        # Just to show how a classification can be added
+        if classification is not None:
+            props['classification'] = classification
+
+        if offset is not None:
+            coordinates = obj[0]['coordinates']
+            coordinates = [
+                [(int(x[0] + offset[0]), int(x[1] + offset[1])) for x in coordinates[0]]]
+            obj[0]['coordinates'] = coordinates
+
+        po = geojson.Feature(geometry = obj[0], properties=props)
+
+        features.append(po)
+    return geojson.FeatureCollection(features)
+
+
+def _move_channel_axis(img: Union[np.ndarray, torch.Tensor], to_back: bool = False) -> Union[np.ndarray, torch.Tensor]:
+    if isinstance(img, np.ndarray):
+        img = img.squeeze()
+        if img.ndim != 3:
+            if img.ndim == 2:
+                img = img[None,]
+            if img.ndim != 3:
+                raise ValueError("Input array should be 3D or 2D")
+        ch = np.argmin(img.shape)
+        if to_back:
+            return np.rollaxis(img, ch, 3)
+
+        return np.rollaxis(img, ch, 0)
+    elif isinstance(img, torch.Tensor):
+        if img.dim() != 3:
+            if img.dim() == 2:
+                img = img[None,]
+            if img.dim() != 3:
+                raise ValueError("Input array should be 3D or 2D")
+        ch = np.argmin(img.shape)
+        if to_back:
+            return img.movedim(ch, -1)
+        return img.movedim(ch, 0)
+
+
+def percentile_normalize(img: Union[np.ndarray, torch.Tensor],
+                         percentile: float = 0.1,
+                         subsampling_factor: int = 1,
+                         epsilon: float = 1e-3) -> Union[np.ndarray, torch.Tensor]:
+    """
+    Normalize an image using percentile normalization.
+
+    :param img: The input image array or tensor.
+    :param percentile: The percentile for normalization.
+    :param subsampling_factor: The subsampling factor.
+    :param epsilon: A small value to avoid division by zero.
+    :return: The normalized image array or tensor.
+    """
+
+    if isinstance(img, np.ndarray):
+        assert img.ndim == 2 or img.ndim == 3, "Image must be 2D or 3D, got image of shape" + str(img.shape)
+        img = np.atleast_3d(img)
+        channel_axis = np.argmin(img.shape)
+        img = _move_channel_axis(img, to_back=True)
+
+        for c in range(img.shape[-1]):
+            im_temp = img[::subsampling_factor, ::subsampling_factor, c]
+            (p_min, p_max) = np.percentile(im_temp, [percentile, 100 - percentile])
+            img[:, :, c] = (img[:, :, c] - p_min) / max(epsilon, p_max - p_min)
+       # img = img / np.maximum(0.01, np.max(img))
+        return np.moveaxis(img, 2, channel_axis)
+
+    elif isinstance(img, torch.Tensor):
+        assert img.ndim == 2 or img.ndim == 3, "Image must be 2D or 3D, got image of shape" + str(img.shape)
+        img = torch.atleast_3d(img)
+        channel_axis = np.argmin(img.shape)
+        img = _move_channel_axis(img, to_back=True)
+        for c in range(img.shape[-1]):
+            im_temp = img[::subsampling_factor, ::subsampling_factor, c]
+            if img.is_cuda or img.is_mps:
+                (p_min, p_max) = torch.quantile(im_temp, torch.tensor([percentile / 100, (100 - percentile) / 100],device = im_temp.device))
+            else:
+                (p_min, p_max) = np.percentile(im_temp.cpu(), [percentile, 100 - percentile])
+            img[:, :, c] = (img[:, :, c] - p_min) / max(epsilon, p_max - p_min)
+       # img = img / np.maximum(0.01, torch.max(img))
+        return img.movedim(2, channel_axis)
+
+
+
+def _choose_device(device: str = None, verbose=True) -> str:
+    """
+    Choose a device to use with PyTorch, given the desired device name.
+    If a requested device is not specified or not available, then a default is chosen.
+    """
+    if device is not None:
+        if device == 'cuda' and not torch.cuda.is_available():
+            device = None
+            print('CUDA device requested but not available!')
+        if device == 'mps' and not torch.backends.mps.is_available():
+            device = None
+            print('MPS device requested but not available!')
+
+    if device is None:
+        if torch.cuda.is_available():
+            device = 'cuda'
+        elif torch.backends.mps.is_available():
+            device = 'mps'
+        else:
+            device = 'cpu'
+        if verbose:
+            print(f'Requesting default device: {device}')
+
+    return device
+
+
+
+def _estimate_image_modality(img, mask):
+    """
+    This function estimates the modality of an image (i.e. brightfield, chromogenic or fluorescence) based on the
+    mean intensity of the pixels inside and outside the mask.
+    """
+
+    if isinstance(img, np.ndarray):
+        img = np.atleast_3d(_move_channel_axis(img))
+        mask = np.squeeze(mask)
+
+        assert mask.ndim == 2, print("Mask must be 2D, but got shape", mask.shape)
+        if count_instances(mask) < 1:
+            return "Fluorescence"  # The images don't contain any cells, but they look like fluorescence images.
+        elif np.mean(img[:, mask > 0]) > np.mean(img[:, mask == 0]):
+            return "Fluorescence"
+        else:
+            if img.shape[0] == 1:
+                return "Brightfield"
+            else:
+                return "Brightfield"  # "Chromogenic"
+
+
+    elif isinstance(img, torch.Tensor):
+        img = torch.at_least_3d(_move_channel_axis(img))
+        mask = torch.squeeze(mask)
+        assert mask.ndim == 2, "Mask must be 2D"
+
+        if count_instances(mask) < 1:
+            return "Fluorescence"  # The images don't contain any cells, but they look like fluorescence images.
+        elif torch.mean(img[:, mask > 0]) > torch.mean(img[:, mask == 0]):
+            return "Fluorescence"
+        else:
+            if img.shape[0] == 1:
+                return "Brightfield"
+            else:
+                return "Brightfield"  # "Chromogenic"
+

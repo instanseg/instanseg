@@ -41,12 +41,20 @@ If you use InstanSeg for nucleus and/or cell segmentation in fluorescence images
 
 ## Table of Contents
 
-- [Installation](#installation)
+- [Overview](#overview)
+- [Why should I use InstanSeg?](#why-should-i-use-instanseg)
+- [InstanSeg has its own QuPath extension!](#instanseg-has-its-own-qupath-extension)
+- [How to cite InstanSeg:](#how-to-cite-instanseg)
+- [Table of Contents](#table-of-contents)
+- [Installing using pip](#installing-using-pip)
   - [Local Installation](#local-installation)
   - [GPU Version (CUDA) for Windows and Linux](#gpu-version-cuda-for-windows-and-linux)
+  - [Setup Repository](#setup-repository)
 - [Usage](#usage)
+  - [Download Datasets](#download-datasets)
   - [Training Models](#training-models)
   - [Testing Models](#testing-models)
+  - [Using InstanSeg for inference](#using-instanseg-for-inference)
 
 
 ## Installing using pip
@@ -81,7 +89,7 @@ labeled_output, image_tensor  = instanseg_brightfield.eval_small_image(image_arr
 
 display = instanseg_brightfield.display(image_tensor, labeled_output)
 
-from instanseg.utils.utils import show_images
+from instanseg.utils.display import show_images
 show_images(image_tensor,display, colorbar=False, titles = ["Normalized Image", "Image with segmentation"])
 ```
 
