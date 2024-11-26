@@ -598,6 +598,7 @@ class InstanSeg(nn.Module):
                  to_centre: bool = True, 
                  multi_centre: bool = False,
                  window_size = 256, 
+                 tile_size = 256,
                  feature_engineering_function = "0",
                  dim_coords = 2):
         
@@ -621,7 +622,7 @@ class InstanSeg(nn.Module):
         self.num_instance_cap = 50
         self.sort_by_eccentricity = False
 
-        xxyy = generate_coordinate_map(mode = "linear", spatial_dim = self.dim_coords, height = 256, width = 256, device = device)
+        xxyy = generate_coordinate_map(mode = "linear", spatial_dim = self.dim_coords, height = tile_size, width = tile_size, device = device)
 
         self.feature_engineering, self.feature_engineering_width = feature_engineering_generator(feature_engineering_function)
         self.feature_engineering_function = feature_engineering_function

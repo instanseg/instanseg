@@ -447,4 +447,3 @@ def _estimate_image_modality(img, mask):
                 return "Brightfield"
             else:
                 return "Brightfield"  # "Chromogenic"
-
