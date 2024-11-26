@@ -1,20 +1,24 @@
 import collections
 
-def get_augmentation_dict(dim_in,nuclei_channel,amount,pixel_size=0.5, augmentation_type="minimal"):
+def get_augmentation_dict(dim_in: int,
+                          nuclei_channel: int,
+                          amount: float,
+                          pixel_size: float=0.5,
+                          augmentation_type: str="minimal"):
 
     """
     This function returns the augmentation dictionary for the training and test sets.
 
-    Args:
-        image_modality (str): The image modality. Options are ["Brightfield","Fluorescence","Chromogenic"]
-        dim_in (int): The number of input channels
-        nuclei_channel (int): The channel that contains the nuclei
-        amount (float): The amount of augmentation to apply (between 0 and 1)
-        minmax (tuple): The min and max values instance surface area to rescale the image to. If None, rescaling is done on a per image basis.
-    
     In the augmentations.py file, the image modality is automatically determined by checking if the mean pixel
     values under the labels is darker than the mean pixel values of the background. If so, the image is assumed to be brightfield.
-    
+
+    :param augmentation_type: The type of augmentation ("light" or "heavy").
+    :param pixel_size: The pixel size in microns per pixel.
+    :param channel_invariance: Whether to use channel invariance.
+    :param dim_in: Number of input dimensions.
+    :param amount: The amount of augmentation.
+
+    :return: The augmentation dictionary.
     """
 
     channel_invariance = (dim_in is None or dim_in <= 0)

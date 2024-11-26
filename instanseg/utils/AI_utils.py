@@ -1,5 +1,4 @@
 import torch
-import torch
 import numpy as np
 import matplotlib.pyplot as plt
 from tqdm.auto import tqdm
@@ -13,14 +12,25 @@ import warnings
 
 
 global_step = 0
-def train_epoch(train_model, 
-                train_device, 
-                train_dataloader, 
-                train_loss_fn, 
-                train_optimizer, 
-                args,
-                ):
-    
+def train_epoch(train_model: torch.nn.Module,
+                train_device: torch.device,
+                train_dataloader: torch.utils.data.DataLoader, 
+                train_loss_fn: callable,
+                train_optimizer: torch.optim.Optimizer, 
+                args
+                ) -> Tuple[float, float]:
+    """
+    Train the model for one epoch.
+
+    :param train_model: The model to train.
+    :param train_device: The device to train on.
+    :param train_dataloader: The dataloader for training data.
+    :param train_loss_fn: The loss function.
+    :param train_optimizer: The optimizer.
+    :param args: Additional arguments.
+
+    :return: The average training loss and the time taken for the epoch.
+    """
     global global_step
     start = time.time()
     train_model.train()
@@ -45,18 +55,36 @@ def train_epoch(train_model,
     
 
 global_step_test = 0
-def test_epoch(test_model, 
-               test_device, 
-               test_dataloader, 
-               test_loss_fn, 
+def test_epoch(test_model: torch.nn.Module,
+               test_device:  torch.device, 
+               test_dataloader: torch.utils.data.DataLoader,
+               test_loss_fn: callable,
                args,
-               postprocessing_fn,
-               method,
-               iou_threshold,
-               debug=False, 
-               save_str=None, 
-               save_bool=False,
-               best_f1=None):
+               postprocessing_fn: callable,
+               method: str,
+               iou_threshold: float,
+               debug: bool=False, 
+               save_str: Optional[str]=None, 
+               save_bool: bool=False,
+               best_f1: Optional[float]=None) -> Tuple[float, np.ndarray, float]:
+    """
+    Test the model for one epoch.
+
+    :param test_model: The model to test.
+    :param test_device: The device to test on.
+    :param test_dataloader: The dataloader for  testing data.
+    :param test_loss_fn: The loss function.
+    :param args: (Namespace): Additional arguments.
+    :param postprocessing_fn: The postprocessing function.
+    :param method: The method used for testing.
+    :param iou_threshold: The IoU threshold.
+    :param debug: Debug mode. Defaults to False.
+    :param save_str:  String for saving results. Defaults to None.
+    :param save_bool: Whether to save results. Defaults to False.
+    :param best_f1: The best F1 score. Defaults to None.
+
+    :return: A tuple of the average test loss, the mean F1 scores, and the time taken for the epoch.
+    """
     global global_step_test
     start = time.time()
 
@@ -122,15 +150,13 @@ def test_epoch(test_model,
     return np.mean(test_loss), mean1_f1, end - start
 
 
-def collate_fn(data):
-    # data is of length batch size
-    # data[0][0] is first image, data[0][1] os the first label
-
-    # print(data[0][0].shape,len(data))
+def collate_fn(data: List[Tuple]) -> Tuple[torch.tensor, torch.tensor, torch.tensor]:
     """
-       data: is a list of tuples with (example, label, length)
-             where 'example' is a tensor of arbitrary shape
-             and label/length are scalars
+    Custom collate function for DataLoader.
+
+    :param data: List of tuples with (example, label, length).
+
+    :return: A tuple of torch.Tensor: Padded images, torch.Tensor: Stacked labels, torch.Tensor: Lengths of the images.
     """
     imgs, labels = zip(*data)
     lengths = [img.shape[0] for img in imgs]
@@ -149,8 +175,33 @@ def collate_fn(data):
 
 # import fastremap
 class Segmentation_Dataset():
-    def __init__(self, img, label, common_transforms=True, metadata=None, size=(256, 256), augmentation_dict=None,
-                 dim_in=3, debug=False, cells_and_nuclei=False, target_segmentation="N", channel_invariant = False):
+    """
+    Custom dataset for segmentation tasks.
+
+    :param img: List of images.
+    :param label: List of labels.
+    :param common_transforms: Whether to apply common transforms. Defaults to True.
+    :param metadata: List of metadata. Defaults to None.
+    :param size: Size of the images. Defaults to (256, 256).
+    :param augmentation_dict: Dictionary of augmentations. Defaults to None.
+    :param dim_in: Number of input dimensions. Defaults to 3.
+    :param debug: Debug mode. Defaults to False.
+    :param cells_and_nuclei: Whether to use cells and nuclei. Defaults to False.
+    :param target_segmentation: Target segmentation type. Defaults to "N".
+    :param channel_invariant: Whether to use channel invariant. Defaults to False.
+    """
+    def __init__(self,
+                 img: List,
+                 label: List,
+                 common_transforms: bool=True,
+                 metadata: Optional[List]=None,
+                 size: Tuple(int, int)=(256, 256),
+                 augmentation_dict: Optional[Dict]=None,
+                 dim_in: int=3,
+                 debug: bool=False,
+                 cells_and_nuclei: bool=False,
+                 target_segmentation: str="N",
+                 channel_invariant: bool=False):
         self.X = img
         self.Y = label
         self.common_transforms = common_transforms
@@ -191,7 +242,12 @@ class Segmentation_Dataset():
 
 
 
-def plot_loss(_model):
+def plot_loss(_model: torch.nn.Module):
+    """
+    Plot the loss of the model.
+
+    :param _model: The model to plot the loss for.
+    """
     loss_fig = plt.figure()
     timer = loss_fig.canvas.new_timer(interval=300000)
     timer.add_callback(plt.close)
@@ -208,25 +264,66 @@ def plot_loss(_model):
     plt.show()
 
 
+def check_max_grad(_model: torch.nn.Module) -> float:
+    """
+    Check the maximum gradient of the model.
 
-def check_max_grad(_model):
+    :param _model: The model to check the gradient for.
+
+    :return: The maximum gradient.
+    """
     losses = np.array([param.grad.norm().item() for name, param in _model.named_parameters() if param.grad is not None])
     return losses.max()
 
+def check_min_grad(_model: torch.nn.Module) -> float:
+    """
+    Check the minimum gradient of the model.
 
-def check_min_grad(_model):
+    :param _model: The model to check the gradient for.
+
+    :return: The minimum gradient.
+    """
     losses = np.array([param.grad.norm().item() for name, param in _model.named_parameters() if param.grad is not None])
     return losses.min()
 
+def check_mean_grad(_model: torch.nn.Module) -> float:):
+    """
+    Check the mean gradient of the model.
 
-def check_mean_grad(_model):
+    :param _model: The model to check the gradient for.
+    
+    :return: The mean gradient.
+    """
     losses = np.array([param.grad.norm().item() for name, param in _model.named_parameters() if param.grad is not None])
     return losses.mean()
 
+def optimize_hyperparameters(model: torch.nn.Module,
+                             postprocessing_fn: callable,
+                             data_loader: Optional[torch.utils.data.DataLoader] = None,
+                             val_images: Optional[List] = None,
+                             val_labels: Optional[List] = None,
+                             max_evals: int = 50,
+                             verbose: bool = False,
+                             threshold: List[float] = [0.5, 0.7, 0.9],
+                             show_progressbar: bool = True,
+                             device: Optional[torch.device] = None) -> Dict:
+    """
+    Optimize hyperparameters using Bayesian optimization.
 
+    
+    :param model: The model to optimize.
+    :param postprocessing_fn: The postprocessing function.
+    :param data_loader: The dataloader for training data. Defaults to None.
+    :param val_images: List of validation images. Defaults to None.
+    :param val_labels: List of validation labels. Defaults to None.
+    :param max_evals: Maximum number of evaluations. Defaults to 50.
+    :param verbose: Verbose mode. Defaults to False.
+    :param threshold: List of thresholds. Defaults to [0.5, 0.7, 0.9].
+    :param show_progressbar: Whether to show the progress bar. Defaults to True.
+    :param device: The device to use. Defaults to None.
 
-def optimize_hyperparameters(model,postprocessing_fn, data_loader = None, val_images = None, val_labels = None,max_evals = 50, verbose = False, threshold = [0.5, 0.7, 0.9], show_progressbar = True, device = None):
-
+    :return: The best hyperparameters.
+    """
 
     from instanseg.utils.metrics import _robust_average_precision
     from instanseg.utils.utils import _choose_device

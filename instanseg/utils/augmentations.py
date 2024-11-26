@@ -15,7 +15,13 @@ import fastremap
 time_dict = {}
 
 
-def measure_time(f):
+def measure_time(f: callable) -> callable:
+    """
+    Decorator to measure the execution time of a function and store it in a dictionary.
+
+    :param f: The function to be timed.
+    :return: The wrapped function with timing.
+    """
     def timed(*args, **kw):
         ts = time.time()
         result = f(*args, **kw)
@@ -30,7 +36,13 @@ def measure_time(f):
     return timed
 
 
-def measure_average_instance_area(lab):
+def measure_average_instance_area(lab: torch.Tensor) -> float:
+    """
+    Measure the average instance area in a label.
+
+    :param lab: The label tensor.
+    :return: The average instance area.
+    """
     if torch.is_tensor(lab):
         if (len(torch.unique(lab) - 1)) > 0:
             return torch.sum((lab > 0).float()) / (len(torch.unique(lab) - 1))
@@ -43,8 +55,17 @@ def measure_average_instance_area(lab):
             return 0
 
 
-def resize_lab(lab, size, double_check=False):
-    """This function resizes a label to required instance area. It does so by first measuring the average instance area and assumes instances are roughly circular"""
+def resize_lab(lab: torch.Tensor,
+               size: tuple,
+               double_check: bool=False) -> torch.Tensor:
+    """
+    Resize a label to the required instance area. Assumes instances are roughly circular.
+
+    :param lab: The label tensor.
+    :param size: The target size.
+    :param double_check: Whether to double check the resizing. Defaults to False.
+    :return: The resized label tensor.
+    """
     avg_size = measure_average_instance_area(lab)
 
     if avg_size == 0:
@@ -67,7 +88,15 @@ def resize_lab(lab, size, double_check=False):
     return list(((shape / ratio).int()))
 
 
-def generate_random_label_area(min=30, max=30): 
+def generate_random_label_area(min: int=30,
+                               max: int=30) -> float:
+    """
+    Generate a random label area using a skewed normal distribution.
+
+    :param min: The minimum label area. Defaults to 30.
+    :param max: The maximum label area. Defaults to 30.
+    :return: The generated label area.
+    """
     from scipy.stats import skewnorm
     a = 5
     # mean, var, skew, kurt = skewnorm.stats(a, moments='mvsk')
@@ -78,8 +107,13 @@ def generate_random_label_area(min=30, max=30):
     return r
 
 
+def get_marker_location(meta: dict) -> dict:
+    """
+    Get the subcellular location of markers from metadata.
 
-def get_marker_location(meta):
+    :param meta: The metadata dictionary.
+    :return: The updated metadata dictionary with subcellular locations.
+    """
     from instanseg.utils.augmentation_config import markers_info
     stains = [channel_str.split(" ")[0] for channel_str in meta['channel_names']]
     subcellular_location = ["N/A" if channel.upper() not in markers_info.keys() else markers_info[channel.upper()]['Subcellular Location'] for channel in stains]
@@ -87,19 +121,62 @@ def get_marker_location(meta):
     return meta
     
 class Augmentations(object):
-    def __init__(self, augmentation_dict={}, shape=(256, 256), dim_in=3,
-                 nuclei_channel=None, debug=False, modality=None, cells_and_nuclei=False, target_segmentation="N",channel_invariant = False):
-        self.debug = debug
-        self.shape = shape
+    """
+    A class to apply various augmentations to images and labels.
+
+    This class provides methods to perform different types of augmentations such as
+    converting to tensor, applying perspective transformations, and more. It supports
+    both debugging and non-debugging modes, and can handle different image modalities.
+    """
+    def __init__(self,
+                 augmentation_dict: dict={},
+                 shape: tuple=(256, 256),
+                 dim_in: int=3,
+                 nuclei_channel: int=None,
+                 debug: bool=False,
+                 modality: str=None,
+                 cells_and_nuclei: bool=False,
+                 target_segmentation: str="N",
+                 channel_invariant: bool=False):
+        
         self.augmentation_dict = augmentation_dict
+        self.shape = shape
+        self.dim_in = dim_in  # Note, this is the number of input channels to the model, not the number of channels in the raw image. (Can be 'None' for channel invariant models)
+        self.nuclei_channel = nuclei_channel  # The channel that contains the nuclei. (Can be 'None' for brightfield images or if in image metadata)
+        self.debug = debug
         self.modality = modality
         self.cells_and_nuclei = cells_and_nuclei
         self.target_segmentation = target_segmentation
-        self.dim_in = dim_in  # Note, this is the number of input channels to the model, not the number of channels in the raw image. (Can be 'None' for channel invariant models)
-        self.nuclei_channel = nuclei_channel  # The channel that contains the nuclei. (Can be 'None' for brightfield images or if in image metadata)
         self.channel_invariant = channel_invariant
-    def to_tensor(self, image, labels=None, normalize=False, amount=None, metadata=None):
+        """
+        Initialize the Augmentations class.
 
+        :param augmentation_dict: The dictionary of augmentations.
+        :param shape: The shape of the images.
+        :param dim_in: The number of input dimensions.
+        :param nuclei_channel: The channel that contains the nuclei.
+        :param debug: Whether to enable debug mode.
+        :param modality: The modality of the images.
+        :param cells_and_nuclei: Whether to use cells and nuclei.
+        :param target_segmentation: The target segmentation type.
+        :param channel_invariant: Whether to use channel invariance.
+        """
+    def to_tensor(self,
+                  image: np.ndarray,
+                  labels: np.ndarray=None,
+                  normalize: bool=False,
+                  amount: float=None,
+                  metadata: dict=None) -> torch.Tensor:
+        """
+        Convert the image and labels to tensors.
+
+        :param image: The image array.
+        :param labels: The labels array.
+        :param normalize: Whether to normalize the image.
+        :param amount: The amount of normalization.
+        :param metadata: The metadata dictionary.
+        :return: The image tensor.
+        """
 
         if isinstance(image, np.ndarray):
             if self.debug:
@@ -144,14 +221,43 @@ class Augmentations(object):
             show_images([orig, out], titles=["Original", "Transformed"])
         return out, labels
 
-    def normalize(self, image: torch.Tensor, labels=None, amount: float = 0., subsampling_factor: int = 1,
-                  percentile=0.1, metadata=None):
+    def normalize(self,
+                  image: torch.Tensor,
+                  labels: torch.Tensor=None,
+                  amount: float=0.0,
+                  subsampling_factor: int=1,
+                  percentile: float=0.1,
+                  metadata: dict=None) -> tuple:
+        """
+        Normalize the image using percentile normalization.
+
+        :param image: The image tensor.
+        :param labels: The labels tensor.
+        :param amount: The amount of normalization.
+        :param subsampling_factor: The subsampling factor.
+        :param percentile: The percentile for normalization.
+        :param metadata: The metadata dictionary.
+        :return: The normalized image and labels tensors.
+        """
         out = percentile_normalize(image, subsampling_factor=subsampling_factor, percentile=percentile)
 
         return out, labels
     
 
-    def extract_hematoxylin_stain(self, image: torch.Tensor, labels=None, amount=0, metadata=None):
+    def extract_hematoxylin_stain(self,
+                                  image: torch.Tensor,
+                                  labels: torch.Tensor=None,
+                                  amount: float=0.0,
+                                  metadata: dict=None) -> tuple:
+        """
+        Extract the hematoxylin stain from the image.
+
+        :param image: The image tensor.
+        :param labels: The labels tensor.
+        :param amount: The amount of stain extraction.
+        :param metadata: The metadata dictionary.
+        :return: The image with extracted hematoxylin stain and labels tensors.
+        """
         # image should be 3 channel RGB between 0 and 255 (float32)
         if metadata is not None and metadata["image_modality"] != "Brightfield":
             return image, labels
@@ -182,7 +288,20 @@ class Augmentations(object):
 
         return out, labels
 
-    def normalize_HE_stains(self, image: torch.Tensor, labels=None, amount=0, metadata=None):
+    def normalize_HE_stains(self,
+                            image: torch.Tensor,
+                            labels: torch.Tensor=None,
+                            amount: float=0.0,
+                            metadata: dict=None) -> tuple:
+        """
+        Normalize the image using H&E stain normalization.
+
+        :param image: The image tensor.
+        :param labels: The labels tensor.
+        :param amount: The amount of normalization.
+        :param metadata: The metadata dictionary.
+        :return: The normalized image and labels tensors.
+        """
         # image should be 3 channel RGB between 0 and 255 (float32)
         if metadata is not None and metadata["image_modality"] != "Brightfield":
             return image, labels
@@ -215,11 +334,19 @@ class Augmentations(object):
 
         return out, labels
 
-    def randomJPEGcompression(self, image, labels=None, amount=0, metadata=None):
-        """ This function applies random JPEG compression to an image. It is used to simulate the effect of JPEG compression on the image.
+    def randomJPEGcompression(self,
+                              image: torch.Tensor,
+                              labels: torch.Tensor=None,
+                              amount: float=0.0,
+                              metadata: dict=None) -> tuple:
+        """
+        Apply random JPEG compression to the image.
 
-        :param image: A tensor of shape C,H,W
-        :param labels: any labels associated with the image
+        :param image: The image tensor.
+        :param labels: The labels tensor.
+        :param amount: The amount of compression.
+        :param metadata: The metadata dictionary.
+        :return: The compressed image and labels tensors.
         """
 
         if image.shape[0] != 3:  # Not implemented for >3 channels
@@ -256,7 +383,20 @@ class Augmentations(object):
 
         return out, labels
 
-    def brightness_augment(self, image, labels=None, amount=0, metadata=None):
+    def brightness_augment(self,
+                           image: torch.Tensor,
+                           labels: torch.Tensor=None,
+                           amount: float=0,
+                           metadata: dict=None) -> tuple:
+        """
+        Apply random brightness augmentation to the image.
+
+        :param image: The image tensor.
+        :param labels: The labels tensor.
+        :param amount: The amount of brightness augmentation.
+        :param metadata: The metadata dictionary.
+        :return: The brightness-augmented image and labels tensors.
+        """
         if self.debug:
             orig = torch.clone(image)  # .copy()
         rand = 1 + ((torch.rand(len(image)) - 0.5) * amount)
@@ -266,7 +406,20 @@ class Augmentations(object):
             show_images([orig, out], titles=["Original", "Transformed"])
         return out, labels
 
-    def RandGaussianNoise(self, image, labels=None, amount=0, metadata=None):
+    def RandGaussianNoise(self,
+                          image: torch.Tensor,
+                          labels: torch.Tensor=None,
+                          amount: float=0,
+                          metadata: dict=None) -> tuple:
+        """
+        Apply random Gaussian noise to the image.
+
+        :param image: The image tensor.
+        :param labels: The labels tensor.
+        :param amount: The amount of Gaussian noise.
+        :param metadata: The metadata dictionary.
+        :return: The image with added Gaussian noise and labels tensors.
+        """
 
         if self.debug:
             orig = torch.clone(image)  # .copy()
@@ -278,7 +431,20 @@ class Augmentations(object):
             show_images([orig, out], titles=["Original", "Transformed"])
         return out, labels
 
-    def HistogramNormalize(self, image, labels=None, amount=0, metadata=None):
+    def HistogramNormalize(self,
+                           image: torch.Tensor,
+                           labels: torch.Tensor=None,
+                           amount: float=0,
+                           metadata: dict=None) -> tuple:
+        """
+        Apply histogram normalization to the image.
+
+        :param image: The image tensor.
+        :param labels: The labels tensor.
+        :param amount: The amount of normalization.
+        :param metadata: The metadata dictionary.
+        :return: The histogram-normalized image and labels tensors.
+        """
         from monai.transforms import RandStdShiftIntensity
 
         if self.debug:
@@ -294,7 +460,20 @@ class Augmentations(object):
         return out, labels
     
 
-    def AdjustContrast(self, image, labels=None, amount=0, metadata=None):
+    def AdjustContrast(self,
+                   image: torch.Tensor,
+                   labels: torch.Tensor=None,
+                   amount: float=0,
+                   metadata: dict=None) -> tuple:
+        """
+        Adjust the contrast of the image.
+
+        :param image: The image tensor.
+        :param labels: The labels tensor.
+        :param amount: The amount of contrast adjustment.
+        :param metadata: The metadata dictionary.
+        :return: The contrast-adjusted image and labels tensors.
+        """
 
         if self.debug:
             orig = torch.clone(image)  # .copy()
@@ -306,8 +485,20 @@ class Augmentations(object):
             show_images([orig, out], titles=["Original", "Transformed"])
         return out, labels
     
-    def flips(self, image, labels, amount=0, metadata=None):
+    def flips(self,
+            image: torch.Tensor,
+            labels: torch.Tensor,
+            amount: float=0,
+            metadata: dict=None) -> tuple:
+        """
+        Apply random horizontal and vertical flips to the image and labels.
 
+        :param image: The image tensor.
+        :param labels: The labels tensor.
+        :param amount: The probability of applying the flips.
+        :param metadata: The metadata dictionary.
+        :return: The flipped image and labels tensors.
+        """
         amount = 0.5
 
         if self.debug:
@@ -357,8 +548,20 @@ class Augmentations(object):
             show_images([orig, out], titles=["Original", "Transformed"])
         return out, labels
 
-    def perspective(self, image, labels, amount=0, metadata=None):
+    def perspective(self,
+                    image: torch.Tensor,
+                    labels: torch.Tensor,
+                    amount: float=0,
+                    metadata: dict=None) -> tuple:
+        """
+        Apply perspective transformation to the image and labels.
 
+        :param image: The image tensor.
+        :param labels: The labels tensor.
+        :param amount: The amount of distortion.
+        :param metadata: The metadata dictionary.
+        :return: The transformed image and labels tensors.
+        """
         if self.debug:
             orig = torch.clone(image)  # .copy()
         perspective_transformer = RandomPerspective(distortion_scale=amount / 2, p=1.0,
@@ -381,8 +584,20 @@ class Augmentations(object):
             show_images([orig, out, labels], )
         return out, labels
 
-    def invert(self, image, labels, amount=0, metadata=None):
+    def invert(self,
+               image: torch.Tensor,
+               labels: torch.Tensor,
+               amount: float=0,
+               metadata: dict=None) -> tuple:
+        """
+        Invert the image.
 
+        :param image: The image tensor.
+        :param labels: The labels tensor.
+        :param amount: The amount of inversion.
+        :param metadata: The metadata dictionary.
+        :return: The inverted image and labels tensors.
+        """
         out = 1 - image
 
         if self.debug:
@@ -392,7 +607,24 @@ class Augmentations(object):
 
 
     # @measure_time
-    def pseudo_brightfield(self, image, labels=None, amount=0, c_nuclei=0, metadata=None, random_seed=None):
+    def pseudo_brightfield(self,
+                           image: torch.Tensor,
+                           labels: torch.Tensor=None,
+                           amount: float=0,
+                           c_nuclei: int=0,
+                           metadata: dict=None,
+                           random_seed: int=None) -> tuple:
+        """
+        Simulate a brightfield image from a fluorescence image.
+
+        :param image: The image tensor.
+        :param labels: The labels tensor.
+        :param amount: The amount of transformation.
+        :param c_nuclei: The channel index for nuclei.
+        :param metadata: The metadata dictionary.
+        :param random_seed: The random seed for reproducibility.
+        :return: The simulated brightfield image and labels tensors.
+        """
 
         if self.debug:
             orig = torch.clone(image)  # .copy()
@@ -451,7 +683,24 @@ class Augmentations(object):
 
         return torch.Tensor(im_output).to(orig_dtype), labels
 
-    def colourize(self, image, labels=None, amount=0, c_nuclei=-1, random_seed=None, metadata=None):
+    def colourize(self,
+                  image: torch.Tensor,
+                  labels: torch.Tensor=None,
+                  amount: float=0,
+                  c_nuclei: int=-1,
+                  random_seed: int=None,
+                  metadata: dict=None) -> tuple:
+        """
+        Apply colorization to the image.
+
+        :param image: The image tensor.
+        :param labels: The labels tensor.
+        :param amount: The amount of colorization.
+        :param c_nuclei: The channel index for nuclei.
+        :param random_seed: The random seed for reproducibility.
+        :param metadata: The metadata dictionary.
+        :return: The colorized image and labels tensors.
+        """
 
         # Expects a 3D tensor C,H,W
 
@@ -490,7 +739,20 @@ class Augmentations(object):
         assert not coloured_image.isnan().any()
         return image, labels
 
-    def pseudo_imc(self, image, labels, amount=0, metadata=None):
+    def pseudo_imc(self,
+                   image: torch.Tensor,
+                   labels: torch.Tensor,
+                   amount: float=0,
+                   metadata: dict=None) -> tuple:
+        """
+        Simulate an IMC (Imaging Mass Cytometry) image from a fluorescence image.
+
+        :param image: The image tensor.
+        :param labels: The labels tensor.
+        :param amount: The amount of transformation.
+        :param metadata: The metadata dictionary.
+        :return: The simulated IMC image and labels tensors.
+        """
 
         # Expects a 3D tensor C,H,W and labels C,H,W
         
@@ -536,7 +798,20 @@ class Augmentations(object):
 
         return image, labels
     
-    def channel_shuffle(self, image, labels=None, amount=0, metadata=None):
+    def channel_shuffle(self,
+                        image: torch.Tensor,
+                        labels: torch.Tensor=None,
+                        amount: float=0,
+                        metadata: dict=None) -> tuple:
+        """
+        Shuffle the channels of the image.
+
+        :param image: The image tensor.
+        :param labels: The labels tensor.
+        :param amount: The amount of shuffling.
+        :param metadata: The metadata dictionary.
+        :return: The channel-shuffled image and labels tensors.
+        """
         if self.debug:
             orig = torch.clone(image)
         channels = torch.randperm(image.shape[0])
@@ -546,19 +821,34 @@ class Augmentations(object):
             show_images([orig, out], titles=["Original", "Transformed"])
         return out, labels
     
-    def add_noisy_channels(self, image, labels=None, max_channels = 30, amount=0, metadata=None):
+    def add_noisy_channels(self,
+                           image: torch.Tensor,
+                           labels: torch.Tensor=None,
+                           max_channels: int=30,
+                           amount: float=0,
+                           metadata: dict=None) -> tuple:
+        """
+        Add noisy channels to the image.
+
+        :param image: The image tensor.
+        :param labels: The labels tensor.
+        :param max_channels: The maximum number of noisy channels to add.
+        :param amount: The amount of noise.
+        :param metadata: The metadata dictionary.
+        :return: The image with added noisy channels and labels tensors.
+        """
         if self.debug:
             orig = torch.clone(image)
 
-        new_channels_num = np.random.randint(1,max_channels)
+        new_channels_num = np.random.randint(1, max_channels)
 
-        new_channels =np.random.choice(range(image.shape[0]),new_channels_num,replace = True)
+        new_channels = np.random.choice(range(image.shape[0]), new_channels_num, replace = True)
 
         out = image[new_channels]
         out[out<0]=0
         amount = np.random.randint(2, 30 * amount)
 
-        channel_weights = torch.randint(1,amount,size = [new_channels_num,1,1],dtype = torch.float32)
+        channel_weights = torch.randint(1, amount, size = [new_channels_num,1,1], dtype = torch.float32)
 
 
         out = torch.poisson(out * channel_weights) / (channel_weights*2) 
@@ -572,7 +862,20 @@ class Augmentations(object):
         return out, labels
 
     # @measure_time
-    def add_gradient(self, image, labels=None, amount=0, metadata=None):
+    def add_gradient(self,
+                     image: torch.Tensor,
+                     labels: torch.Tensor=None,
+                     amount: float=0,
+                     metadata: dict=None) -> tuple:
+        """
+        Add a gradient to the image.
+
+        :param image: The image tensor.
+        :param labels: The labels tensor.
+        :param amount: The amount of gradient.
+        :param metadata: The metadata dictionary.
+        :return: The gradient-added image and labels tensors.
+        """
         if self.debug:
             orig = torch.clone(image)  # .copy()
         _, h, w = image.shape
@@ -596,7 +899,25 @@ class Augmentations(object):
 
     # @measure_time
 
-    def channel_subsample(self, image, labels=None, max_channels=None, c_nuclei=None, min_channels=1, metadata=None):
+    def channel_subsample(self, 
+                          image: torch.Tensor, 
+                          labels: torch.Tensor=None, 
+                          max_channels: int=None, 
+                          c_nuclei: int=None, 
+                          min_channels: int=1, 
+                          metadata: dict=None) -> tuple:
+        """
+        Subsample the channels of the image.
+
+        :param image: The image tensor.
+        :param labels: The labels tensor.
+        :param max_channels: The maximum number of channels to retain.
+        :param c_nuclei: The channel index for nuclei.
+        :param min_channels: The minimum number of channels to retain.
+        :param metadata: The metadata dictionary.
+        :return: The subsampled image, labels tensors, and updated nuclei channel index.
+        """
+        
         channel_num = image.shape[0]
 
         if channel_num > max_channels:
@@ -620,7 +941,20 @@ class Augmentations(object):
 
         return image, labels, c_nuclei
     
-    def channel_suppress(self, image, labels=None, amount = None, metadata=None):
+    def channel_suppress(self, 
+                         image: torch.Tensor, 
+                         labels: torch.Tensor=None, 
+                         amount: float=None, 
+                         metadata: dict=None) -> tuple:
+        """
+        Suppress random channels of the image.
+
+        :param image: The image tensor.
+        :param labels: The labels tensor.
+        :param amount: The amount of suppression.
+        :param metadata: The metadata dictionary.
+        :return: The channel-suppressed image and labels tensors.
+        """
 
         slice = torch.rand(image.shape[0]) < (1- amount)
 
@@ -631,7 +965,22 @@ class Augmentations(object):
 
         return image, labels
 
-    def extract_nucleus_and_cytoplasm_channels(self, image, labels=None, c_nuclei=None, metadata=None, amount=None):
+    def extract_nucleus_and_cytoplasm_channels(self, 
+                                               image: torch.Tensor, 
+                                               labels: torch.Tensor=None, 
+                                               c_nuclei: int=None, 
+                                               metadata: dict=None, 
+                                               amount: float=None) -> tuple:
+        """
+        Extract nucleus and cytoplasm channels from the image.
+
+        :param image: The image tensor.
+        :param labels: The labels tensor.
+        :param c_nuclei: The channel index for nuclei.
+        :param metadata: The metadata dictionary.
+        :param amount: The amount of extraction.
+        :return: The image with extracted nucleus and cytoplasm channels, labels tensors, and updated nuclei channel index.
+        """
         channel_num = image.shape[0]
 
         if metadata is None or "subcellular_location" not in metadata.keys() or len(
@@ -655,10 +1004,30 @@ class Augmentations(object):
         return image, labels, c_nuclei
 
     
-    def torch_rescale(self, image, labels=None, amount=0, current_pixel_size=None, requested_pixel_size=None, crop=True,
-                      random_seed=None, metadata=None, modality = None):
+    def torch_rescale(self, 
+                      image: torch.Tensor, 
+                      labels: torch.Tensor=None, 
+                      amount: float=0, 
+                      current_pixel_size: float=None, 
+                      requested_pixel_size: float=None, 
+                      crop: bool=True, 
+                      random_seed: int=None, 
+                      metadata: dict=None, 
+                      modality: str=None) -> tuple:
+        """
+        Rescale the image and labels to the requested pixel size.
 
-    
+        :param image: The image tensor.
+        :param labels: The labels tensor.
+        :param amount: The amount of rescaling.
+        :param current_pixel_size: The current pixel size.
+        :param requested_pixel_size: The requested pixel size.
+        :param crop: Whether to crop the image to the original size.
+        :param random_seed: The random seed for reproducibility.
+        :param metadata: The metadata dictionary.
+        :param modality: The modality of the images.
+        :return: The rescaled image and labels tensors.
+        """
 
         if random_seed is not None:
             torch.manual_seed(random_seed)
@@ -736,7 +1105,18 @@ class Augmentations(object):
             return out_image.float(), out_labels #torch.Tensor(out_labels)  # .short()
         
         
-    def duplicate_grayscale_channels(self, image, labels, metadata=None):
+    def duplicate_grayscale_channels(self, 
+                                     image: torch.Tensor, 
+                                     labels: torch.Tensor, 
+                                     metadata: dict=None) -> tuple:
+        """
+        Duplicate grayscale channels to match the expected number of input channels.
+
+        :param image: The image tensor.
+        :param labels: The labels tensor.
+        :param metadata: The metadata dictionary.
+        :return: The image with duplicated channels and labels tensors.
+        """
         if self.debug:
             orig = torch.clone(image)
         if image.shape[0] == 1 and self.dim_in != 1 and not self.channel_invariant:
@@ -751,7 +1131,18 @@ class Augmentations(object):
             show_images([orig, image], titles=["Original", "Transformed"])
         return image, labels
 
-    def __call__(self, image, labels, meta=None):
+    def __call__(self, 
+                 image: torch.Tensor, 
+                 labels: torch.Tensor, 
+                 meta: dict=None) -> tuple:
+        """
+        Apply the augmentations to the image and labels.
+
+        :param image: The image tensor.
+        :param labels: The labels tensor.
+        :param meta: The metadata dictionary.
+        :return: The augmented image and labels tensors.
+        """
 
         from instanseg.utils.utils import _estimate_image_modality
 
