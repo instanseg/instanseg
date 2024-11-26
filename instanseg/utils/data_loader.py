@@ -1,64 +1,13 @@
-
 import numpy as np
 import warnings
 
-def _keep_images(item, args):
-    if args.source_dataset != "all" and item[
-        'parent_dataset'] not in args.source_dataset:  # remove items that are not of the desired dataset
-        return False
-    elif 'duplicate' in item.keys() and item['duplicate']:  # remove items that are duplicates
-        return False
-    elif args.target_segmentation == "N" and "nucleus_masks" not in item.keys():
-        return False
-    elif args.target_segmentation == "C" and "cell_masks" not in item.keys():
-        return False
-    else:
-        return True
-    
- 
-def _format_labels(item,target_segmentation):
-            
-    if "cell_masks" in item.keys():
-        item["cell_masks"] = get_image(item["cell_masks"])
-    
-    if "nucleus_masks" in item.keys():
-        item["nucleus_masks"] = get_image(item["nucleus_masks"])
- 
-    elif "masks" in item.keys():
-        item["nucleus_masks"] = get_image(item["masks"])
-    
-    if target_segmentation == "N":
-        if "nucleus_masks" not in item.keys():
-            c,h,w = item['image'].shape
-            labels = np.zeros((h,w)) -1
-        else:
-            labels = item["nucleus_masks"]
-    elif target_segmentation == "C":
-        if "cell_masks" not in item.keys():
-            c,h,w = item['image'].shape
-            labels = np.zeros((h,w)) -1
-        else:
-            labels = item["cell_masks"]
-    elif "N" in target_segmentation and "C" in target_segmentation:
-            if "nucleus_masks" in item.keys() and "cell_masks" in item.keys():
-                labels = np.stack((item["nucleus_masks"], item["cell_masks"]))
-            elif "nucleus_masks" in item.keys() and "cell_masks" not in item.keys():
-                labels = item['nucleus_masks']
-                labels = np.stack((labels, np.zeros_like(labels) - 1))
-            elif "nucleus_masks" not in item.keys() and "cell_masks" in item.keys():
-                labels = item['cell_masks']
-                labels = np.stack((np.zeros_like(labels) - 1, labels))
-            else:
-                raise NotImplementedError("No labels found")
-    else:
-        raise NotImplementedError("Target segmentation not recognized", target_segmentation)
-    
- 
-    return labels
- 
-
-
 def export_dataset_dict_as_folder(dataset,destination = "benchmarking_data"):
+    """
+    Export a dataset dictionary as a folder structure.
+
+    :param dataset: The dataset dictionary to export.
+    :param destination: The destination folder for the exported dataset.
+    """
     from collections import defaultdict
     from tqdm import tqdm
     import pandas as pd
@@ -100,47 +49,13 @@ def export_dataset_dict_as_folder(dataset,destination = "benchmarking_data"):
 
 
 
-
-def _read_images_from_path(data_path, dataset, data_slice, dummy, args, sets = ["Train","Validation"]):
-    # from pathlib import Path
-
-    # for set in sets:
-    #     if set = "Validation":
-    
-
-    # if master_set == "Validation":
-    #     df = pd.read_csv(Path(parser_args.data_path) / "dataset_info.csv")
-    #     result_dict = df.set_index("ID")["TRAIN/TEST?"].apply(lambda x: x == "Validation Set").to_dict()
-    #     benchmark_path = Path(parser_args.data_path) / "Datasets" / parser_args.inference_folder / "Training"
-    #     images_files = sorted([file for file in list(benchmark_path.glob("*.tif")) if
-    #                         "mask" not in file.stem and result_dict[file.stem.replace("img_", "")]])
-    #     labels_files = sorted([file for file in list(benchmark_path.glob("*.tif")) if
-    #                         "mask" in file.stem and result_dict[
-    #                             file.stem.replace("img_", "").replace("_masks", "")]])
-
-    # elif master_set == "Test":
-    #     benchmark_path = Path(parser_args.data_path) / "Datasets" / parser_args.inference_folder / "Testing"
-    #     images_files = sorted([file for file in list(benchmark_path.glob("*.tif")) if "mask" not in file.stem])
-    #     labels_files = sorted([file for file in list(benchmark_path.glob("*.tif")) if "mask" in file.stem])
-
-    # val_images = [io.imread(file) for file in images_files]
-    # val_labels = [io.imread(file) for file in labels_files]
-
-    # val_data = [Augmenter.duplicate_grayscale_channels(*Augmenter.to_tensor(img, label)) for img, label in
-    #             zip(val_images, val_labels)]
-
-    # val_images = [item[0] for item in val_data]
-    # val_labels = [item[1] for item in val_data]
-
-    # a = [file.stem.replace("img_", "") for file in list(benchmark_path.glob("*.tif"))]
-    # # pdb.set_trace()
-    # assert len(val_images) >= 1, "No images found in the folder"
-
-    raise NotImplementedError("This function is not implemented yet")
-
-
-
 def get_image(img_object):
+    """
+    Get an image from a file path or a Path object.
+
+    :param img_object: The image file path or Path object.
+    :return: The image array.
+    """
     import tifffile
     import os
     from pathlib import Path
@@ -171,50 +86,25 @@ def get_image(img_object):
         return img_object
 
 
-def _read_images_from_pth(data_path= "../datasets", dataset = "segmentation", data_slice = None, dummy = False, args = None, sets = ["Train","Validation"], complete_dataset = None):
-    from pathlib import Path
-    import torch
-    import os 
+def get_loaders(train_images_local: List[np.ndarray],
+                train_labels_local: List[np.ndarray],
+                val_images_local: List[np.ndarray],
+                val_labels_local: List[np.ndarray],
+                train_meta: List[Dict[str, Any]],
+                val_meta: List[Dict[str, Any]],
+                args: Any) -> (DataLoader, DataLoader):
+    """
+    Get the data loaders for training and validation datasets.
 
-    if complete_dataset is None:
-        if not os.environ.get("INSTANSEG_DATASET_PATH"):
-            os.environ["INSTANSEG_DATASET_PATH"] = Path(os.path.join(os.path.dirname(__file__),data_path))
-        data_path = os.environ["INSTANSEG_DATASET_PATH"]
-        if ".pth" in dataset:
-            path_of_pth = os.path.join(data_path,dataset)
-        else:
-            path_of_pth = os.path.join(data_path,str(dataset + "_dataset.pth"))
-
-        print("Loading dataset from ", os.path.abspath(path_of_pth))
-        complete_dataset = torch.load(path_of_pth)
-    
-
-    data_dicts = {}
-    
-    for set in sets:
-        data_dicts[set] = []
-        images_local = [get_image(item['image']) for item in complete_dataset[set] if _keep_images(item, args)][:data_slice]
- 
-        labels_local = [_format_labels(item,target_segmentation = args.target_segmentation) for item in complete_dataset[set] if _keep_images(item, args)][:data_slice]
-        metadata = [{k: v for k, v in item.items() if k not in ('image', 'cell_masks','nucleus_masks', 'class_masks')} for item in complete_dataset[set] if _keep_images(item, args)][:data_slice]
-
-        data_dicts[set].extend([images_local,labels_local,metadata])
-
-    if dummy:
-        warnings.warn("Using same train and validation sets !")
-        data_dicts["Validation"] = data_dicts["Train"]
-
-    return_list = []
-    for set in sets:
-        return_list.extend(data_dicts[set])
-
-        assert len(data_dicts[set][0]) > 0, "No images in the dataset meet the requirements. (Hint: Check that the source argument is correct)"
-
-    return return_list
-
-
-
-def get_loaders(train_images_local, train_labels_local, val_images_local, val_labels_local, train_meta, val_meta, args):
+    :param train_images_local: List of training images.
+    :param train_labels_local: List of training labels.
+    :param val_images_local: List of validation images.
+    :param val_labels_local: List of validation labels.
+    :param train_meta: Metadata for the training dataset.
+    :param val_meta: Metadata for the validation dataset.
+    :param args: Additional arguments for data loading and augmentation.
+    :return: A tuple containing the training and validation data loaders.
+    """
     from torch.utils.data.sampler import RandomSampler, WeightedRandomSampler
     from instanseg.utils.augmentation_config import get_augmentation_dict
     from instanseg.utils.AI_utils import Segmentation_Dataset, collate_fn
@@ -281,3 +171,142 @@ def get_loaders(train_images_local, train_labels_local, val_images_local, val_la
                              sampler=test_sampler, persistent_workers=True)
 
     return train_loader, test_loader
+
+
+
+def _keep_images(item, args):
+    if args.source_dataset != "all" and item[
+        'parent_dataset'] not in args.source_dataset:  # remove items that are not of the desired dataset
+        return False
+    elif 'duplicate' in item.keys() and item['duplicate']:  # remove items that are duplicates
+        return False
+    elif args.target_segmentation == "N" and "nucleus_masks" not in item.keys():
+        return False
+    elif args.target_segmentation == "C" and "cell_masks" not in item.keys():
+        return False
+    else:
+        return True
+    
+ 
+def _format_labels(item,target_segmentation):
+            
+    if "cell_masks" in item.keys():
+        item["cell_masks"] = get_image(item["cell_masks"])
+    
+    if "nucleus_masks" in item.keys():
+        item["nucleus_masks"] = get_image(item["nucleus_masks"])
+ 
+    elif "masks" in item.keys():
+        item["nucleus_masks"] = get_image(item["masks"])
+    
+    if target_segmentation == "N":
+        if "nucleus_masks" not in item.keys():
+            c,h,w = item['image'].shape
+            labels = np.zeros((h,w)) -1
+        else:
+            labels = item["nucleus_masks"]
+    elif target_segmentation == "C":
+        if "cell_masks" not in item.keys():
+            c,h,w = item['image'].shape
+            labels = np.zeros((h,w)) -1
+        else:
+            labels = item["cell_masks"]
+    elif "N" in target_segmentation and "C" in target_segmentation:
+            if "nucleus_masks" in item.keys() and "cell_masks" in item.keys():
+                labels = np.stack((item["nucleus_masks"], item["cell_masks"]))
+            elif "nucleus_masks" in item.keys() and "cell_masks" not in item.keys():
+                labels = item['nucleus_masks']
+                labels = np.stack((labels, np.zeros_like(labels) - 1))
+            elif "nucleus_masks" not in item.keys() and "cell_masks" in item.keys():
+                labels = item['cell_masks']
+                labels = np.stack((np.zeros_like(labels) - 1, labels))
+            else:
+                raise NotImplementedError("No labels found")
+    else:
+        raise NotImplementedError("Target segmentation not recognized", target_segmentation)
+    
+ 
+    return labels
+ 
+
+def _read_images_from_path(data_path, dataset, data_slice, dummy, args, sets = ["Train","Validation"]):
+    # from pathlib import Path
+
+    # for set in sets:
+    #     if set = "Validation":
+    
+
+    # if master_set == "Validation":
+    #     df = pd.read_csv(Path(parser_args.data_path) / "dataset_info.csv")
+    #     result_dict = df.set_index("ID")["TRAIN/TEST?"].apply(lambda x: x == "Validation Set").to_dict()
+    #     benchmark_path = Path(parser_args.data_path) / "Datasets" / parser_args.inference_folder / "Training"
+    #     images_files = sorted([file for file in list(benchmark_path.glob("*.tif")) if
+    #                         "mask" not in file.stem and result_dict[file.stem.replace("img_", "")]])
+    #     labels_files = sorted([file for file in list(benchmark_path.glob("*.tif")) if
+    #                         "mask" in file.stem and result_dict[
+    #                             file.stem.replace("img_", "").replace("_masks", "")]])
+
+    # elif master_set == "Test":
+    #     benchmark_path = Path(parser_args.data_path) / "Datasets" / parser_args.inference_folder / "Testing"
+    #     images_files = sorted([file for file in list(benchmark_path.glob("*.tif")) if "mask" not in file.stem])
+    #     labels_files = sorted([file for file in list(benchmark_path.glob("*.tif")) if "mask" in file.stem])
+
+    # val_images = [io.imread(file) for file in images_files]
+    # val_labels = [io.imread(file) for file in labels_files]
+
+    # val_data = [Augmenter.duplicate_grayscale_channels(*Augmenter.to_tensor(img, label)) for img, label in
+    #             zip(val_images, val_labels)]
+
+    # val_images = [item[0] for item in val_data]
+    # val_labels = [item[1] for item in val_data]
+
+    # a = [file.stem.replace("img_", "") for file in list(benchmark_path.glob("*.tif"))]
+    # # pdb.set_trace()
+    # assert len(val_images) >= 1, "No images found in the folder"
+
+    raise NotImplementedError("This function is not implemented yet")
+
+
+
+
+def _read_images_from_pth(data_path= "../datasets", dataset = "segmentation", data_slice = None, dummy = False, args = None, sets = ["Train","Validation"], complete_dataset = None):
+    from pathlib import Path
+    import torch
+    import os 
+
+    if complete_dataset is None:
+        if not os.environ.get("INSTANSEG_DATASET_PATH"):
+            os.environ["INSTANSEG_DATASET_PATH"] = Path(os.path.join(os.path.dirname(__file__),data_path))
+        data_path = os.environ["INSTANSEG_DATASET_PATH"]
+        if ".pth" in dataset:
+            path_of_pth = os.path.join(data_path,dataset)
+        else:
+            path_of_pth = os.path.join(data_path,str(dataset + "_dataset.pth"))
+
+        print("Loading dataset from ", os.path.abspath(path_of_pth))
+        complete_dataset = torch.load(path_of_pth)
+    
+
+    data_dicts = {}
+    
+    for set in sets:
+        data_dicts[set] = []
+        images_local = [get_image(item['image']) for item in complete_dataset[set] if _keep_images(item, args)][:data_slice]
+ 
+        labels_local = [_format_labels(item,target_segmentation = args.target_segmentation) for item in complete_dataset[set] if _keep_images(item, args)][:data_slice]
+        metadata = [{k: v for k, v in item.items() if k not in ('image', 'cell_masks','nucleus_masks', 'class_masks')} for item in complete_dataset[set] if _keep_images(item, args)][:data_slice]
+
+        data_dicts[set].extend([images_local,labels_local,metadata])
+
+    if dummy:
+        warnings.warn("Using same train and validation sets !")
+        data_dicts["Validation"] = data_dicts["Train"]
+
+    return_list = []
+    for set in sets:
+        return_list.extend(data_dicts[set])
+
+        assert len(data_dicts[set][0]) > 0, "No images in the dataset meet the requirements. (Hint: Check that the source argument is correct)"
+
+    return return_list
+

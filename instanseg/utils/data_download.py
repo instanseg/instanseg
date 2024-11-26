@@ -15,7 +15,12 @@ import zipfile
 
 
 def get_raw_datasets_dir(*others) -> Path:
+    """
+    Get the directory for raw datasets.
 
+    :param others: Additional path components.
+    :return: The path to the raw datasets directory.
+    """
     if os.environ.get('INSTANSEG_RAW_DATASETS'):
         path = Path(os.environ['INSTANSEG_RAW_DATASETS'])
     else:
@@ -28,7 +33,12 @@ def get_raw_datasets_dir(*others) -> Path:
     return path
 
 def get_processed_datasets_dir(*others) -> Path:
+    """
+    Get the directory for processed datasets.
 
+    :param others: Additional path components.
+    :return: The path to the processed datasets directory.
+    """
     if os.environ.get('INSTANSEG_DATASET_PATH'):
         path = Path(os.environ['INSTANSEG_DATASET_PATH'])
     else:
@@ -45,20 +55,38 @@ def get_processed_datasets_dir(*others) -> Path:
     
 
 def create_raw_datasets_dir(*others) -> Path:
+    """
+    Create the directory for raw datasets if it does not exist.
+
+    :param others: Additional path components.
+    :return: The path to the raw datasets directory.
+    """
     path = get_raw_datasets_dir(*others)
     if not path.exists():
         path.mkdir(parents=True, exist_ok=True)
     return path
 
 def create_processed_datasets_dir(*others) -> Path:
+    """
+    Create the directory for processed datasets if it does not exist.
+
+    :param others: Additional path components.
+    :return: The path to the processed datasets directory.
+    """
     path = get_processed_datasets_dir(*others)
     if not path.exists():
         path.mkdir(parents=True, exist_ok=True)
     return path
 
     
-def load_Cellpose(Segmentation_Dataset: dict, verbose: bool = True) -> dict:
+def load_Cellpose(segmentation_dataset: dict, verbose: bool = True) -> dict:
+    """
+    Load the Cellpose dataset.
 
+    :param segmentation_dataset: The segmentation dataset dictionary.
+    :param verbose: Whether to print verbose output.
+    :return: The updated segmentation dataset dictionary.
+    """
     from instanseg.utils.augmentations import Augmentations
     from instanseg.utils.pytorch_utils import torch_fastremap
 
@@ -91,9 +119,9 @@ def load_Cellpose(Segmentation_Dataset: dict, verbose: bool = True) -> dict:
 
     np.random.seed(42)
     np.random.shuffle(train_items)
-    Segmentation_Dataset['Train'] += train_items[:int(len(train_items) * 0.8)]
-    Segmentation_Dataset['Validation'] += train_items[int(len(train_items) * 0.8):]
-    Segmentation_Dataset['Test'] += train_items[int(len(train_items) * 0.9):]
+    segmentation_dataset['Train'] += train_items[:int(len(train_items) * 0.8)]
+    segmentation_dataset['Validation'] += train_items[int(len(train_items) * 0.8):]
+    segmentation_dataset['Test'] += train_items[int(len(train_items) * 0.9):]
 
     # Process Test Data
     test_file_path = Path(cellpose_dir) / "test"
@@ -120,11 +148,18 @@ def load_Cellpose(Segmentation_Dataset: dict, verbose: bool = True) -> dict:
             test_items.append(item)
 
 
-    Segmentation_Dataset['Test'] += test_items
+    segmentation_dataset['Test'] += test_items
 
-    return Segmentation_Dataset
+    return segmentation_dataset
 
-def load_TNBC_2018(Segmentation_Dataset: dict, verbose: bool = True) -> dict:
+def load_TNBC_2018(segmentation_dataset: dict, verbose: bool = True) -> dict:
+    """
+    Load the TNBC 2018 dataset.
+
+    :param segmentation_dataset: The segmentation dataset dictionary.
+    :param verbose: Whether to print verbose output.
+    :return: The updated segmentation dataset dictionary.
+    """
 
     tnbc_dir = create_raw_datasets_dir("Nucleus_Segmentation", "TNBC_NucleiSegmentation")
     zip_file_path = tnbc_dir / "TNBC_NucleiSegmentation.zip"
@@ -181,13 +216,20 @@ def load_TNBC_2018(Segmentation_Dataset: dict, verbose: bool = True) -> dict:
 
     np.random.seed(42) 
     np.random.shuffle(items)
-    Segmentation_Dataset['Train']+=items[:int(len(items)*0.8)]
-    Segmentation_Dataset['Validation']+=items[int(len(items)*0.8):int(len(items)*0.9)]
-    Segmentation_Dataset['Test']+=items[int(len(items)*0.9):]
+    segmentation_dataset['Train']+=items[:int(len(items)*0.8)]
+    segmentation_dataset['Validation']+=items[int(len(items)*0.8):int(len(items)*0.9)]
+    segmentation_dataset['Test']+=items[int(len(items)*0.9):]
 
-    return Segmentation_Dataset
+    return segmentation_dataset
 
-def load_LyNSeC(Segmentation_Dataset: dict, verbose: bool = True) -> dict:
+def load_LyNSeC(segmentation_dataset: dict, verbose: bool = True) -> dict:
+    """
+    Load the LyNSeC dataset.
+
+    :param segmentation_dataset: The segmentation dataset dictionary.
+    :param verbose: Whether to print verbose output.
+    :return: The updated segmentation dataset dictionary.
+    """
     lynsec_dir = create_raw_datasets_dir("Nucleus_Segmentation", "LyNSeC")
     zip_file_path = lynsec_dir / "LyNSeC.zip"
     download_url = "https://zenodo.org/record/8065174/files/lynsec.zip?download=1"
@@ -241,13 +283,20 @@ def load_LyNSeC(Segmentation_Dataset: dict, verbose: bool = True) -> dict:
 
     np.random.seed(42) 
     np.random.shuffle(items)
-    Segmentation_Dataset['Train'] += items[:int(len(items) * 0.8)]
-    Segmentation_Dataset['Validation'] += items[int(len(items) * 0.8):int(len(items) * 0.9)]
-    Segmentation_Dataset['Test'] += items[int(len(items) * 0.9):]
+    segmentation_dataset['Train'] += items[:int(len(items) * 0.8)]
+    segmentation_dataset['Validation'] += items[int(len(items) * 0.8):int(len(items) * 0.9)]
+    segmentation_dataset['Test'] += items[int(len(items) * 0.9):]
 
-    return Segmentation_Dataset
+    return segmentation_dataset
 
-def load_NuInsSeg(Segmentation_Dataset: dict, verbose: bool = True) -> dict:
+def load_NuInsSeg(segmentation_dataset: dict, verbose: bool = True) -> dict:
+    """
+    Load the NuInsSeg dataset.
+
+    :param segmentation_dataset: The segmentation dataset dictionary.
+    :param verbose: Whether to print verbose output.
+    :return: The updated segmentation dataset dictionary.
+    """
     nuinsseg_dir = create_raw_datasets_dir("Nucleus_Segmentation", "NuInsSeg")
     zip_file_path = nuinsseg_dir / "NuInsSeg.zip"
     download_url = "https://zenodo.org/record/10518968/files/NuInsSeg.zip?download=1"
@@ -305,14 +354,21 @@ def load_NuInsSeg(Segmentation_Dataset: dict, verbose: bool = True) -> dict:
 
     np.random.seed(42) 
     np.random.shuffle(items)
-    Segmentation_Dataset['Train']+=items[:int(len(items)*0.8)]
-    Segmentation_Dataset['Validation']+=items[int(len(items)*0.8):int(len(items)*0.9)]
-    Segmentation_Dataset['Test']+=items[int(len(items)*0.9):]
+    segmentation_dataset['Train']+=items[:int(len(items)*0.8)]
+    segmentation_dataset['Validation']+=items[int(len(items)*0.8):int(len(items)*0.9)]
+    segmentation_dataset['Test']+=items[int(len(items)*0.9):]
 
-    return Segmentation_Dataset
+    return segmentation_dataset
             
 
-def load_IHC_TMA(Segmentation_Dataset: dict, verbose: bool = True) -> dict:
+def load_IHC_TMA(segmentation_dataset: dict, verbose: bool = True) -> dict:
+    """
+    Load the IHC TMA dataset.
+
+    :param segmentation_dataset: The segmentation dataset dictionary.
+    :param verbose: Whether to print verbose output.
+    :return: The updated segmentation dataset dictionary.
+    """
     ihc_tma_dir = create_raw_datasets_dir("Nucleus_Segmentation", "IHC_TMA_dataset")
     zip_file_path = ihc_tma_dir / "IHC_TMA_dataset.zip"
     download_url = "https://zenodo.org/record/7647846/files/IHC_TMA_dataset.zip?download=1"
@@ -382,13 +438,20 @@ def load_IHC_TMA(Segmentation_Dataset: dict, verbose: bool = True) -> dict:
 
     np.random.seed(42)
     np.random.shuffle(items)
-    Segmentation_Dataset['Train'] += items[:int(len(items) * 0.8)]
-    Segmentation_Dataset['Validation'] += items[int(len(items) * 0.8):int(len(items) * 0.9)]
-    Segmentation_Dataset['Test'] += items[int(len(items) * 0.9):]
+    segmentation_dataset['Train'] += items[:int(len(items) * 0.8)]
+    segmentation_dataset['Validation'] += items[int(len(items) * 0.8):int(len(items) * 0.9)]
+    segmentation_dataset['Test'] += items[int(len(items) * 0.9):]
 
-    return Segmentation_Dataset
+    return segmentation_dataset
 
-def load_CoNSeP(Segmentation_Dataset: dict, verbose: bool = True) -> dict:
+def load_CoNSeP(segmentation_dataset: dict, verbose: bool = True) -> dict:
+    """
+    Load the CoNSeP dataset.
+
+    :param segmentation_dataset: The segmentation dataset dictionary.
+    :param verbose: Whether to print verbose output.
+    :return: The updated segmentation dataset dictionary.
+    """
     consep_dir = create_raw_datasets_dir("Nucleus_Segmentation", "CoNSeP")
     zip_file_path = consep_dir / "CoNSeP.zip"
     download_url = "https://warwick.ac.uk/fac/cross_fac/tia/data/hovernet/consep_dataset.zip"
@@ -439,8 +502,8 @@ def load_CoNSeP(Segmentation_Dataset: dict, verbose: bool = True) -> dict:
 
     np.random.seed(42)
     np.random.shuffle(items)
-    Segmentation_Dataset['Train'] += items[:int(len(items) * 0.8)]
-    Segmentation_Dataset['Validation'] += items[int(len(items) * 0.8):]
+    segmentation_dataset['Train'] += items[:int(len(items) * 0.8)]
+    segmentation_dataset['Validation'] += items[int(len(items) * 0.8):]
 
     # Process Testing Data
     testing_path = consep_dir / "CoNSeP" / "Testing"
@@ -464,11 +527,18 @@ def load_CoNSeP(Segmentation_Dataset: dict, verbose: bool = True) -> dict:
             item['pixel_size'] = 0.275
             items.append(item)
 
-    Segmentation_Dataset['Test'] += items
+    segmentation_dataset['Test'] += items
 
-    return Segmentation_Dataset
+    return segmentation_dataset
 
-def load_MoNuSeg(Segmentation_Dataset: dict, verbose: bool = True) -> dict:
+def load_MoNuSeg(segmentation_dataset: dict, verbose: bool = True) -> dict:
+    """
+    Load the MoNuSeg dataset.
+
+    :param segmentation_dataset: The segmentation dataset dictionary.
+    :param verbose: Whether to print verbose output.
+    :return: The updated segmentation dataset dictionary.
+    """
     monuseg_dir = create_raw_datasets_dir("Nucleus_Segmentation", "MoNuSeg")
     zip_file_path = monuseg_dir / "MoNuSeg.zip"
     download_url = "https://github.com/juglab/EmbedSeg/releases/download/v0.1.0/monuseg-2018.zip"
@@ -516,7 +586,7 @@ def load_MoNuSeg(Segmentation_Dataset: dict, verbose: bool = True) -> dict:
             item['stain'] = "H&E"
             items.append(item)
 
-    Segmentation_Dataset['Test'] += items
+    segmentation_dataset['Test'] += items
 
     # Process Train Data
     items = []
@@ -541,14 +611,21 @@ def load_MoNuSeg(Segmentation_Dataset: dict, verbose: bool = True) -> dict:
 
     np.random.seed(42)
     np.random.shuffle(items)
-    Segmentation_Dataset['Train'] += items[:int(len(items) * 0.8)]
-    Segmentation_Dataset['Validation'] += items[int(len(items) * 0.8):]
+    segmentation_dataset['Train'] += items[:int(len(items) * 0.8)]
+    segmentation_dataset['Validation'] += items[int(len(items) * 0.8):]
 
-    return Segmentation_Dataset
+    return segmentation_dataset
 
 
 
-def load_CIL(Segmentation_Dataset: dict, verbose: bool = True) -> dict:
+def load_CIL(segmentation_dataset: dict, verbose: bool = True) -> dict:
+    """
+    Load the CIL dataset.
+
+    :param segmentation_dataset: The segmentation dataset dictionary.
+    :param verbose: Whether to print verbose output.
+    :return: The updated segmentation dataset dictionary.
+    """
     CIL_dir = create_raw_datasets_dir("Cell_Segmentation", "CIL")
     image_zip_path = CIL_dir / "CIL_images.zip"
     label_zip_path = CIL_dir / "CIL_labels.zip"
@@ -630,11 +707,11 @@ def load_CIL(Segmentation_Dataset: dict, verbose: bool = True) -> dict:
 
     np.random.seed(42)
     np.random.shuffle(items)
-    Segmentation_Dataset['Train'] += items[:int(len(items) * 0.8)]
-    Segmentation_Dataset['Validation'] += items[int(len(items) * 0.8):int(len(items) * 0.9)]
-    Segmentation_Dataset['Test'] += items[int(len(items) * 0.9):]
+    segmentation_dataset['Train'] += items[:int(len(items) * 0.8)]
+    segmentation_dataset['Validation'] += items[int(len(items) * 0.8):int(len(items) * 0.9)]
+    segmentation_dataset['Test'] += items[int(len(items) * 0.9):]
 
-    return Segmentation_Dataset
+    return segmentation_dataset
 
 
 
@@ -658,7 +735,14 @@ def download_and_extract(url, dest_path, extract_to, verbose=True):
 
 
 
-def load_pannuke(Segmentation_Dataset: dict, verbose: bool = True, no_zip = False) -> dict:
+def load_pannuke(segmentation_dataset: dict, verbose: bool = True, no_zip = False) -> dict:
+    """
+    Load the pannuke dataset.
+
+    :param segmentation_dataset: The segmentation dataset dictionary.
+    :param verbose: Whether to print verbose output.
+    :return: The updated segmentation dataset dictionary.
+    """
     from pathlib import Path
     import numpy as np
     import fastremap
@@ -732,21 +816,28 @@ def load_pannuke(Segmentation_Dataset: dict, verbose: bool = True, no_zip = Fals
 
         return items
     
-    Segmentation_Dataset['Train']+=get_data("train")
-    Segmentation_Dataset['Validation']+=get_data("val")
-    Segmentation_Dataset['Test']+=get_data("test")
+    segmentation_dataset['Train']+=get_data("train")
+    segmentation_dataset['Validation']+=get_data("val")
+    segmentation_dataset['Test']+=get_data("test")
 
     if no_zip:
-        return Segmentation_Dataset
+        return segmentation_dataset
 
     import shutil
     print("Zipping...")#Zip the processed data
     shutil.make_archive(processed_pannuke_dir, 'zip', processed_pannuke_dir)
 
-    return Segmentation_Dataset
+    return segmentation_dataset
 
 
-def load_tissuenet(Segmentation_Dataset: dict, verbose: bool = True, no_zip = False) -> dict:
+def load_tissuenet(segmentation_dataset: dict, verbose: bool = True, no_zip = False) -> dict:
+    """
+    Load the tissuenet dataset.
+
+    :param segmentation_dataset: The segmentation dataset dictionary.
+    :param verbose: Whether to print verbose output.
+    :return: The updated segmentation dataset dictionary.
+    """
     from pathlib import Path
     import numpy as np
     import tifffile
@@ -806,21 +897,27 @@ def load_tissuenet(Segmentation_Dataset: dict, verbose: bool = True, no_zip = Fa
 
         return items
 
-    Segmentation_Dataset['Train'] += get_data("train")
-    Segmentation_Dataset['Validation'] += get_data("val")
-    Segmentation_Dataset['Test'] += get_data("test")
+    segmentation_dataset['Train'] += get_data("train")
+    segmentation_dataset['Validation'] += get_data("val")
+    segmentation_dataset['Test'] += get_data("test")
 
     if no_zip:
-        return Segmentation_Dataset
+        return segmentation_dataset
 
     print("Zipping...")  # Zip the processed data
     shutil.make_archive(processed_tissuenet_dir, 'zip', processed_tissuenet_dir)
 
-    return Segmentation_Dataset
+    return segmentation_dataset
 
 
-def load_CPDMI_Vectra(Segmentation_Dataset: dict):
+def load_CPDMI_Vectra(segmentation_dataset: dict):
+    """
+    Load the CPDMI_Vectra dataset.
 
+    :param segmentation_dataset: The segmentation dataset dictionary.
+    :param verbose: Whether to print verbose output.
+    :return: The updated segmentation dataset dictionary.
+    """
     from pathlib import Path
     from tifffile import TiffFile
     from skimage import io
@@ -946,17 +1043,23 @@ def load_CPDMI_Vectra(Segmentation_Dataset: dict):
 
     np.random.seed(42) 
     np.random.shuffle(items)
-    Segmentation_Dataset['Train']+=items[:int(len(items)*0.8)]
-    Segmentation_Dataset['Validation']+=items[int(len(items)*0.8):]
+    segmentation_dataset['Train']+=items[:int(len(items)*0.8)]
+    segmentation_dataset['Validation']+=items[int(len(items)*0.8):]
 
-    return Segmentation_Dataset
-
-
+    return segmentation_dataset
 
 
 
-def load_CPDMI_Zeiss(Segmentation_Dataset: dict):
 
+
+def load_CPDMI_Zeiss(segmentation_dataset: dict):
+    """
+    Load the CPDMI_Zeiss dataset.
+
+    :param segmentation_dataset: The segmentation dataset dictionary.
+    :param verbose: Whether to print verbose output.
+    :return: The updated segmentation dataset dictionary.
+    """
     from pathlib import Path
     from tifffile import TiffFile
     from skimage import io
@@ -1031,14 +1134,20 @@ def load_CPDMI_Zeiss(Segmentation_Dataset: dict):
 
     np.random.seed(42) 
     np.random.shuffle(items)
-    Segmentation_Dataset['Train']+=items[:int(len(items)*0.8)]
-    Segmentation_Dataset['Validation']+=items[int(len(items)*0.8):]
+    segmentation_dataset['Train']+=items[:int(len(items)*0.8)]
+    segmentation_dataset['Validation']+=items[int(len(items)*0.8):]
 
-    return Segmentation_Dataset
+    return segmentation_dataset
 
 
-def load_CPDMI_CODEX(Segmentation_Dataset: dict):
+def load_CPDMI_CODEX(segmentation_dataset: dict):
+    """
+    Load the CPDMI_CODEX dataset.
 
+    :param segmentation_dataset: The segmentation dataset dictionary.
+    :param verbose: Whether to print verbose output.
+    :return: The updated segmentation dataset dictionary.
+    """
     from pathlib import Path
     from tifffile import TiffFile
     from skimage import io
@@ -1107,13 +1216,20 @@ def load_CPDMI_CODEX(Segmentation_Dataset: dict):
 
         items.append(item)
 
-    Segmentation_Dataset['Test']+=items
+    segmentation_dataset['Test']+=items
 
-    return Segmentation_Dataset
+    return segmentation_dataset
 
 
 
-def load_BSST265(Segmentation_Dataset: dict, verbose: bool = True) -> dict:
+def load_BSST265(segmentation_dataset: dict, verbose: bool = True) -> dict:
+    """
+    Load the BSST265 dataset.
+
+    :param segmentation_dataset: The segmentation dataset dictionary.
+    :param verbose: Whether to print verbose output.
+    :return: The updated segmentation dataset dictionary.
+    """
     bsst265_dir = create_raw_datasets_dir("Nucleus_Segmentation", "BSST265")
     zip_file_path = bsst265_dir / "BSST265.zip"
     download_url = "https://www.ebi.ac.uk/biostudies/files/S-BSST265/dataset.zip"
@@ -1164,7 +1280,7 @@ def load_BSST265(Segmentation_Dataset: dict, verbose: bool = True) -> dict:
         items.append(item)
     np.random.seed(42) 
     np.random.shuffle(items)
-    Segmentation_Dataset['Train']+=items[:int(len(items)*0.8)]
-    Segmentation_Dataset['Validation']+=items[int(len(items)*0.8):int(len(items)*0.9)]
-    Segmentation_Dataset['Test']+=items[int(len(items)*0.9):]
-    return Segmentation_Dataset
+    segmentation_dataset['Train']+=items[:int(len(items)*0.8)]
+    segmentation_dataset['Validation']+=items[int(len(items)*0.8):int(len(items)*0.9)]
+    segmentation_dataset['Test']+=items[int(len(items)*0.9):]
+    return segmentation_dataset

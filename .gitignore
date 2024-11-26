@@ -35,3 +35,4 @@ Raw_Datasets
 instanseg/bio_2_delete/
 dist/
 env
+bioimageio_models

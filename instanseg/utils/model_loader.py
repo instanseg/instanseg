@@ -2,8 +2,13 @@ import numpy as np
 
 
 def build_monai_model(model_str: str, build_model_dictionary: dict):
+    """
+    Build a MONAI model based on the provided model string and configuration dictionary.
 
-
+    :param model_str: The model string indicating which model to build.
+    :param build_model_dictionary: The dictionary containing model configuration.
+    :return: The built MONAI model.
+    """
     if model_str == "AttentionUNet":
         from monai.networks.nets import AttentionUnet
 
@@ -50,6 +55,13 @@ def build_monai_model(model_str: str, build_model_dictionary: dict):
 
 
 def read_model_args_from_csv(path=r"../results/", folder=""):
+    """
+    Read model arguments from a CSV file.
+
+    :param path: The path to the directory containing the CSV file.
+    :param folder: The folder name containing the CSV file.
+    :return: A dictionary containing the model arguments.
+    """
     import pandas as pd
     from pathlib import Path
     model_path = Path(path) / folder
@@ -97,6 +109,12 @@ def read_model_args_from_csv(path=r"../results/", folder=""):
 
 
 def build_model_from_dict(build_model_dictionary):
+    """
+    Build a model from a configuration dictionary.
+
+    :param build_model_dictionary: The dictionary containing model configuration.
+    :return: The built model.
+    """
     if build_model_dictionary["dim_in"] == 0 or build_model_dictionary["dim_in"] is None:
         dim_in = 3  # Channel invariance currently outputs a 3 channel image
     else:
@@ -137,11 +155,12 @@ def build_model_from_dict(build_model_dictionary):
     return model
 
 
-def remove_module_prefix_from_dict(dictionary):
+def remove_module_prefix_from_dict(dictionary: dict) -> dict:
     """
-    Removes the module prefix from a dictionary of model weights
-    :param dictionary: dictionary of model weights
-    :return: modified dictionary
+    Removes the module prefix from a dictionary of model weights.
+
+    :param dictionary: Dictionary of model weights.
+    :return: Modified dictionary without the module prefix.
     """
     modified_dict = {}
     for key, value in dictionary.items():
@@ -149,14 +168,32 @@ def remove_module_prefix_from_dict(dictionary):
     return modified_dict
 
 
-def has_pixel_classifier_state_dict(state_dict):
+def has_pixel_classifier_state_dict(state_dict: dict) -> dict:
+    """
+    Check if the state dictionary contains a pixel classifier.
+
+    :param state_dict: The state dictionary to check.
+    :return: True if the state dictionary contains a pixel classifier, False otherwise.
+    """
     return bool(sum(['pixel_classifier' in key for key in state_dict.keys()]))
 
 
-def has_adaptor_net_state_dict(state_dict):
+def has_adaptor_net_state_dict(state_dict: dict) -> bool:
+    """
+    Check if the state dictionary contains an adaptor net.
+
+    :param state_dict: The state dictionary to check.
+    :return: True if the state dictionary contains an adaptor net, False otherwise.
+    """
     return bool(sum(['AdaptorNet' in key for key in state_dict.keys()]))
 
-def has_pixel_classifier_model(model):
+def has_pixel_classifier_model(model: torch.nn.Module) -> bool:
+    """
+    Check if the model contains a pixel classifier.
+
+    :param model: The model to check.
+    :return: True if the model contains a pixel classifier, False otherwise.
+    """
     import torch
     for module in model.modules():
         if isinstance(module, torch.nn.Module):
@@ -165,8 +202,21 @@ def has_pixel_classifier_model(model):
                 return True
     return False
 
+def load_model_weights(model: torch.nn.Module, 
+                       device: str, 
+                       folder: str, 
+                       path: str = r"../models/", 
+                       dict: dict = None) -> torch.nn.Module:
+    """
+    Load model weights from a specified folder.
 
-def load_model_weights(model, device, folder, path=r"../models/", dict = None):
+    :param model: The model to load the weights into.
+    :param device: The device to load the model on.
+    :param folder: The folder containing the model weights.
+    :param path: The path to the directory containing the folder.
+    :param dict: Additional dictionary for model configuration.
+    :return: The model with loaded weights.
+    """
     import torch
     from pathlib import Path
     model_path = Path(path) / folder
@@ -203,7 +253,17 @@ def load_model_weights(model, device, folder, path=r"../models/", dict = None):
 
     return model, model_dict
 
-def load_model(folder,path=r"../models/", device='cpu'):
+def load_model(folder: str, 
+               path: str = r"../models/", 
+               device: str = 'cpu') -> Tuple[torch.nn.Module, dict]:
+    """
+    Load a model and its configuration from a specified folder.
+
+    :param folder: The folder containing the model and configuration.
+    :param path: The path to the directory containing the folder.
+    :param device: The device to load the model on.
+    :return: A tuple containing the loaded model and its configuration dictionary.
+    """
     build_model_dictionary = read_model_args_from_csv(path=path, folder=folder)
 
     empty_model = build_model_from_dict(build_model_dictionary)

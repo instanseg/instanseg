@@ -14,7 +14,7 @@ import torch.nn as nn
 binary_xloss = torch.nn.BCEWithLogitsLoss()
 l1_loss = torch.nn.L1Loss()
 
-from instanseg.utils.utils import show_images
+from instanseg.utils.display import show_images
 
 from instanseg.utils.utils import timer
 
