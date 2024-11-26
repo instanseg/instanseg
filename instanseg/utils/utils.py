@@ -887,4 +887,9 @@ def download_model(model_str: str, verbose : bool = True, headers: Optional[str]
         if os.path.exists(path_to_torchscript_model):
             return torch.jit.load(path_to_torchscript_model)
         else:
-            raise Exception(f"Model {model_str} not found in the release data or locally. Please check the model name and try again.")
+            raise Exception(f"Model {path_to_torchscript_model} not found in the release data or locally. Please check the model name and try again.")
+
+
+
+
+
