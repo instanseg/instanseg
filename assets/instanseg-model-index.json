@@ -1,7 +1,7 @@
 [
   {
     "name": "brightfield_nuclei",
-    "url": "https://github.com/instanseg/instanseg/releases/download/instanseg_models_v1/brightfield_nuclei.zip",
+    "url": "https://github.com/alanocallaghan/instanseg/releases/download/v0.0.2/brightfield_nuclei.zip",
     "version": "0.0.1",
     "license": "Apache-2.0"
   },
