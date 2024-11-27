@@ -857,7 +857,7 @@ def download_model(model_str: str, version: Optional[str] = None, verbose : bool
     # Ensure the directory exists
     os.makedirs(bioimageio_path, exist_ok=True)
     
-    index_url = "https://raw.githubusercontent.com/alanocallaghan/instanseg/refs/heads/model-downloading/assets/index.json"
+    index_url = "https://raw.githubusercontent.com/alanocallaghan/instanseg/refs/heads/model-downloading/assets/instanseg-model-index.json"
     output = urlopen(index_url).read()
     content = output.decode('utf-8')
     models = json.loads(content)
