@@ -101,7 +101,6 @@ class InstanSeg():
                  model_type: Union[str,nn.Module] = "brightfield_nuclei", 
                  device: Optional[str] = None, 
                  image_reader: str = "tiffslide",
-                 github_token: str = os.environ.get("GITHUB_TOKEN"),
                  verbosity: int = 1 #0,1,2
                  ):
         
@@ -109,7 +108,6 @@ class InstanSeg():
         :param model_type: The type of model to use. If a string is provided, the model will be downloaded. If the model is not public, it will look for a model in your bioimageio folder. If an nn.Module is provided, this model will be used.
         :param device: The device to run the model on. If None, the device will be chosen automatically.
         :param image_reader: The image reader to use. Options are "tiffslide", "skimage.io", "bioio", "AICSImageIO".
-        :param github_token: The GitHub API token to use to authenticate model downloads. May be necessary to avoid rate limits in some circumstances.
         :param verbosity: The verbosity level. 0 is silent, 1 is normal, 2 is verbose.
         """
         from instanseg.utils.utils import download_model, _choose_device
