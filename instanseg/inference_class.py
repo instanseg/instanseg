@@ -117,11 +117,10 @@ class InstanSeg():
         self.verbosity = verbosity
         self.verbose = verbosity != 0
 
-        headers = None if github_token is None else {'Authorization': 'token ' + github_token}
         if isinstance(model_type, nn.Module):
             self.instanseg = model_type
         else:
-            self.instanseg = download_model(model_type, verbose = self.verbose, headers=headers)
+            self.instanseg = download_model(model_type, verbose = self.verbose)
         self.inference_device = _choose_device(device, verbose= self.verbose)
         self.instanseg = self.instanseg.to(self.inference_device)
 

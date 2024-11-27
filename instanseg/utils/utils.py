@@ -839,7 +839,7 @@ def drag_and_drop_file():
     return entry_var.get()
 
 
-def download_model(model_str: str, version: Optional[str] = None, verbose : bool = True, headers: Optional[str]=None):
+def download_model(model_str: str, version: Optional[str] = None, verbose : bool = True):
     import os
     import requests
     import zipfile
