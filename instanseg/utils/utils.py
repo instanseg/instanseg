@@ -867,14 +867,14 @@ def download_model(model_str: str, version: Optional[str] = None, verbose : bool
         model = [model for model in models if model["version"] == version]
 
     if len(model):
-        model = models[0]
+        model = model[0] ## if we're not specifying version, then pick the first (newest)
         url = model["url"]
         output_path = Path(bioimageio_path)/model["name"]/model["version"]
         path_to_torchscript_model = output_path/"instanseg.pt"
 
         if os.path.isdir(output_path) and os.path.exists(path_to_torchscript_model) and not force:
             if verbose:
-                print(f"Model {model_str} already downloaded in {bioimageio_path}, loading")
+                print(f"Model {model["name"]} version {model["version"]} already downloaded in {bioimageio_path}, loading")
             return torch.jit.load(path_to_torchscript_model)
 
         response = requests.get(url)
@@ -884,7 +884,7 @@ def download_model(model_str: str, version: Optional[str] = None, verbose : bool
             z.extractall(output_path)
 
         if verbose:
-            print(f"Model {model_str} downloaded and extracted to {bioimageio_path}")
+            print(f"Model {model["name"]} version {model["version"]} downloaded and extracted to {bioimageio_path}")
 
         return torch.jit.load(path_to_torchscript_model)
 
@@ -895,4 +895,4 @@ def download_model(model_str: str, version: Optional[str] = None, verbose : bool
         if os.path.exists(path_to_torchscript_model):
             return torch.jit.load(path_to_torchscript_model)
         else:
-            raise Exception(f"Model {path_to_torchscript_model} with version {version} not found in the release data or locally. Please check the model name and try again.")
+            raise Exception(f"Model {path_to_torchscript_model} version {version} not found in the release data or locally. Please check the model name and try again.")
