@@ -874,7 +874,7 @@ def download_model(model_str: str, version: Optional[str] = None, verbose : bool
 
         if os.path.isdir(output_path) and os.path.exists(path_to_torchscript_model) and not force:
             if verbose:
-                print(f"Model {model["name"]} version {model["version"]} already downloaded in {bioimageio_path}, loading")
+                print(f"Model {model['name']} version {model['version']} already downloaded in {bioimageio_path}, loading")
             return torch.jit.load(path_to_torchscript_model)
 
         response = requests.get(url)
@@ -884,7 +884,7 @@ def download_model(model_str: str, version: Optional[str] = None, verbose : bool
             z.extractall(output_path)
 
         if verbose:
-            print(f"Model {model["name"]} version {model["version"]} downloaded and extracted to {bioimageio_path}")
+            print(f"Model {model['name']} version {model['version']} downloaded and extracted to {bioimageio_path}")
 
         return torch.jit.load(path_to_torchscript_model)
 
