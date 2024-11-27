@@ -7,7 +7,7 @@
   },
   {
     "name": "fluorescence_nuclei_and_cells",
-    "url": "https://github.com/instanseg/instanseg/releases/download/instanseg_models_v1/fluorescence_nuclei_and_cells.zip",
+    "url": "https://github.com/alanocallaghan/instanseg/releases/download/v0.0.2/fluorescence_nuclei_and_cells.zip",
     "version": "0.0.1",
     "license": "Apache-2.0"
   }

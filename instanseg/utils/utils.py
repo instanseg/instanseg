@@ -865,11 +865,13 @@ def download_model(model_str: str, version: Optional[str] = None, verbose : bool
     model = [model for model in models if model["name"] == model_str]
     if version is not None and len(model):
         model = [model for model in models if model["version"] == version]
+
     if len(model):
         model = models[0]
         url = model["url"]
-        output_path = Path(bioimageio_path)/model["name"]/model["version"]/
-        path_to_torchscript_model = output_path"/instanseg.pt"
+        output_path = Path(bioimageio_path)/model["name"]/model["version"]
+        path_to_torchscript_model = output_path/"instanseg.pt"
+
         if os.path.isdir(output_path) and os.path.exists(path_to_torchscript_model) and not force:
             if verbose:
                 print(f"Model {model_str} already downloaded in {bioimageio_path}, loading")
