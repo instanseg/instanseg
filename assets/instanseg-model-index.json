@@ -1,14 +1,14 @@
 [
   {
     "name": "brightfield_nuclei",
-    "url": "https://github.com/alanocallaghan/instanseg/releases/download/v0.0.2/brightfield_nuclei.zip",
-    "version": "0.0.2",
+    "url": "https://github.com/alanocallaghan/instanseg/releases/download/v0.0.1/brightfield_nuclei.zip",
+    "version": "0.0.1",
     "license": "Apache-2.0"
   },
   {
     "name": "fluorescence_nuclei_and_cells",
-    "url": "https://github.com/alanocallaghan/instanseg/releases/download/v0.0.2/fluorescence_nuclei_and_cells.zip",
-    "version": "0.0.2",
+    "url": "https://github.com/alanocallaghan/instanseg/releases/download/v0.0.1/fluorescence_nuclei_and_cells.zip",
+    "version": "0.0.1",
     "license": "Apache-2.0"
   }
 ]
