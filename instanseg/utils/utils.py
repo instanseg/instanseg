@@ -839,13 +839,14 @@ def drag_and_drop_file():
     return entry_var.get()
 
 
-def download_model(model_str: str, verbose : bool = True, headers: Optional[str]=None):
+def download_model(model_str: str, version: Optional[str] = None, verbose : bool = True, headers: Optional[str]=None):
     import os
     import requests
     import zipfile
     from io import BytesIO
     import torch
-
+    import json
+    from urllib.request import urlopen
 
     if not os.environ.get("INSTANSEG_BIOIMAGEIO_PATH"):
         os.environ["INSTANSEG_BIOIMAGEIO_PATH"] = os.path.join(os.path.dirname(__file__),"../bioimageio_models/")
@@ -856,21 +857,21 @@ def download_model(model_str: str, verbose : bool = True, headers: Optional[str]
     # Ensure the directory exists
     os.makedirs(bioimageio_path, exist_ok=True)
     
-    release_tag = "instanseg_models_v1"
-    url = f"https://api.github.com/repos/instanseg/instanseg/releases/tags/{release_tag}"
-    response = requests.get(url, headers=headers)
-    response.raise_for_status()  # Raise an error for bad response
+    index_url = "https://raw.githubusercontent.com/alanocallaghan/instanseg/refs/heads/model-downloading/assets/index.json"
+    output = urlopen(index_url).read()
+    content = output.decode('utf-8')
+    models = json.loads(content)
 
-    release_data = response.json()
-    assets = release_data.get("assets", [])
-
-    if model_str in [asset["name"].replace(".zip","") for asset in assets if asset["name"].endswith(".zip")]:
-        url = r"https://github.com/instanseg/instanseg/releases/download/instanseg_models_v1/{}.zip".format(model_str)
+    model = [model for model in models if model["name"] == model_str]
+    if version is not None and len(model):
+        model = [model for model in models if model["version"] == version]
+    if len(model):
+        model = models[0]
+        url = model["url"]
         response = requests.get(url)
         response.raise_for_status()  # Raise an error for bad responses
         with zipfile.ZipFile(BytesIO(response.content)) as z:
             z.extractall(bioimageio_path)
-
 
         if verbose:
             print(f"Model {model_str} downloaded and extracted to {bioimageio_path}")
@@ -879,17 +880,10 @@ def download_model(model_str: str, verbose : bool = True, headers: Optional[str]
         return torch.jit.load(path_to_torchscript_model)
 
     else:
-
         #load model locally
-
         path_to_torchscript_model = os.path.join(bioimageio_path, model_str, "instanseg.pt")
 
         if os.path.exists(path_to_torchscript_model):
             return torch.jit.load(path_to_torchscript_model)
         else:
-            raise Exception(f"Model {path_to_torchscript_model} not found in the release data or locally. Please check the model name and try again.")
-
-
-
-
-
+            raise Exception(f"Model {path_to_torchscript_model} with version {version} not found in the release data or locally. Please check the model name and try again.")
