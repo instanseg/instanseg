@@ -847,6 +847,7 @@ def download_model(model_str: str, version: Optional[str] = None, verbose : bool
     import torch
     import json
     from urllib.request import urlopen
+    from pkgutil import get_data
 
     if not os.environ.get("INSTANSEG_BIOIMAGEIO_PATH"):
         os.environ["INSTANSEG_BIOIMAGEIO_PATH"] = os.path.join(os.path.dirname(__file__),"../bioimageio_models/")
@@ -857,8 +858,7 @@ def download_model(model_str: str, version: Optional[str] = None, verbose : bool
     # Ensure the directory exists
     os.makedirs(bioimageio_path, exist_ok=True)
     
-    index_url = "https://raw.githubusercontent.com/alanocallaghan/instanseg/refs/heads/model-downloading/assets/instanseg-model-index.json"
-    output = urlopen(index_url).read()
+    output = get_data("instanseg", "model-index.json")
     content = output.decode('utf-8')
     models = json.loads(content)
 
