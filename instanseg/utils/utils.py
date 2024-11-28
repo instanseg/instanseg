@@ -853,7 +853,6 @@ def download_model(model_str: str, version: Optional[str] = None, verbose : bool
         os.environ["INSTANSEG_BIOIMAGEIO_PATH"] = os.path.join(os.path.dirname(__file__), "../models/bioimageio_models/")
     
     output = get_data("instanseg", "models/model-index.json")
-    breakpoint()
     content = output.decode('utf-8')
     models = json.loads(content)
 
@@ -890,7 +889,12 @@ def download_model(model_str: str, version: Optional[str] = None, verbose : bool
 
     else:
         #load model locally
-        path_to_torchscript_model = os.path.join(bioimageio_path, model_str, "instanseg.pt")
+        model_path = model_str
+        if version is not None:
+            if verbose:
+                print(f"Assuming model is stored under {bioimageio_path}/{model_str}/{version}...")
+            model_path = model_str + os.path.sep + version
+        path_to_torchscript_model = os.path.join(bioimageio_path, model_path, "instanseg.pt")
 
         if os.path.exists(path_to_torchscript_model):
             return torch.jit.load(path_to_torchscript_model)
