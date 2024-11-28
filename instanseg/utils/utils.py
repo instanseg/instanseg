@@ -850,10 +850,9 @@ def download_model(model_str: str, version: Optional[str] = None, verbose : bool
     from pkgutil import get_data
 
     if not os.environ.get("INSTANSEG_BIOIMAGEIO_PATH"):
-        os.environ["INSTANSEG_BIOIMAGEIO_PATH"] = os.path.join(os.path.dirname(__file__),"../bioimageio_models/")
+        os.environ["INSTANSEG_BIOIMAGEIO_PATH"] = os.path.join(os.path.dirname(__file__), "../data/bioimageio_models/")
 
     bioimageio_path = os.environ.get("INSTANSEG_BIOIMAGEIO_PATH")
-
 
     # Ensure the directory exists
     os.makedirs(bioimageio_path, exist_ok=True)
