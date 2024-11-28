@@ -80,7 +80,7 @@ full = [
 ]
 
 [tool.hatch.build]
-include = ["instanseg/**"]
+include = ["instanseg/**", "instanseg/models/*"]
 exclude = ["notebooks/**", "instanseg/examples/*", "assets/**"]
 
 [project.urls]
