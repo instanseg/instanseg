@@ -853,6 +853,7 @@ def download_model(model_str: str, version: Optional[str] = None, verbose : bool
         os.environ["INSTANSEG_BIOIMAGEIO_PATH"] = os.path.join(os.path.dirname(__file__), "../models/bioimageio_models/")
     
     output = get_data("instanseg", "models/model-index.json")
+    breakpoint()
     content = output.decode('utf-8')
     models = json.loads(content)
 
