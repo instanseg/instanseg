@@ -850,16 +850,15 @@ def download_model(model_str: str, version: Optional[str] = None, verbose : bool
     from pkgutil import get_data
 
     if not os.environ.get("INSTANSEG_BIOIMAGEIO_PATH"):
-        os.environ["INSTANSEG_BIOIMAGEIO_PATH"] = os.path.join(os.path.dirname(__file__), "../models/bioimageio_models/")
+        os.environ["INSTANSEG_BIOIMAGEIO_PATH"] = os.path.join(os.path.dirname(__file__), "../bioimageio_models/")
     
-    output = get_data("instanseg", "models/model-index.json")
+    bioimageio_path = os.environ.get("INSTANSEG_BIOIMAGEIO_PATH")
+    os.makedirs(bioimageio_path, exist_ok=True)
+
+    output = get_data("instanseg","bioimageio_models/model-index.json")
     content = output.decode('utf-8')
     models = json.loads(content)
 
-    bioimageio_path = os.environ.get("INSTANSEG_BIOIMAGEIO_PATH")
-
-    # Ensure the directory exists
-    os.makedirs(bioimageio_path, exist_ok=True)
 
     model = [model for model in models if model["name"] == model_str]
     if version is not None and len(model):
