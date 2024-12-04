@@ -41,12 +41,21 @@ If you use InstanSeg for nucleus and/or cell segmentation in fluorescence images
 
 ## Table of Contents
 
-- [Installation](#installation)
+- [Overview](#overview)
+- [Why should I use InstanSeg?](#why-should-i-use-instanseg)
+- [InstanSeg has its own QuPath extension!](#instanseg-has-its-own-qupath-extension)
+- [How to cite InstanSeg:](#how-to-cite-instanseg)
+- [Table of Contents](#table-of-contents)
+- [Installing using pip](#installing-using-pip)
   - [Local Installation](#local-installation)
   - [GPU Version (CUDA) for Windows and Linux](#gpu-version-cuda-for-windows-and-linux)
+  - [Setup Repository](#setup-repository)
 - [Usage](#usage)
+  - [Download Datasets](#download-datasets)
   - [Training Models](#training-models)
   - [Testing Models](#testing-models)
+  - [Using InstanSeg for inference](#using-instanseg-for-inference)
+  - [Model versioning](#model-versioning)
 
 
 ## Installing using pip
@@ -168,8 +177,7 @@ python test.py --model_folder my_first_instanseg -test_set Test --params best_pa
 python inference.py --model_folder my_first_instanseg --image_path ../examples
 ```
 Replace "../examples" with the path to your images. If InstanSeg cannot read the image pixel size from the image metadata, the user is required to provide a --pixel_size parameter. InstanSeg provides (limited) support for whole slide images (WSIs). For more options and configurations, refer to the parser arguments in the inference.py file.
-<<<<<<< Updated upstream
-=======
+
 
 ### Model versioning
 
@@ -188,4 +196,3 @@ An example entry looks like this:
 ```
 
 This version of this model will then be available in all future InstanSeg releases.
->>>>>>> Stashed changes
