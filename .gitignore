@@ -1,4 +1,3 @@
-models/
 !/instanseg/utils/models/
 instanseg/datasets/
 instanseg/examples/*
@@ -22,7 +21,6 @@ __pycache__/
 *$py.class
 *.log
 .ipynb_checkpoints
-*.json
 **/__pycache__/
 **/.vs/
 *.pyc
