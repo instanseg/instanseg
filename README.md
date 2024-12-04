@@ -168,3 +168,24 @@ python test.py --model_folder my_first_instanseg -test_set Test --params best_pa
 python inference.py --model_folder my_first_instanseg --image_path ../examples
 ```
 Replace "../examples" with the path to your images. If InstanSeg cannot read the image pixel size from the image metadata, the user is required to provide a --pixel_size parameter. InstanSeg provides (limited) support for whole slide images (WSIs). For more options and configurations, refer to the parser arguments in the inference.py file.
+<<<<<<< Updated upstream
+=======
+
+### Model versioning
+
+Links to different model versions are stored in `instanseg/models/model-index.json`. When releasing new models, 
+you should add entries to this JSON file, optionally removing any previous versions that shouldn't be available in future versions.
+
+An example entry looks like this:
+
+```json
+{
+  "name": "[MODEL_NAME]",
+  "url": "https://github.com/instanseg/instanseg/releases/download/[RELEASE_NAME]/[MODEL_NAME].zip",
+  "version": "0.1.0",
+  "license": "Apache-2.0"
+}
+```
+
+This version of this model will then be available in all future InstanSeg releases.
+>>>>>>> Stashed changes
