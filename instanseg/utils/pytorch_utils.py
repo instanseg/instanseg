@@ -1,7 +1,7 @@
 import torch
 import torch.nn.functional as F
-
-from typing import Tuple
+from typing import Tuple, Union
+import numpy as np
 
 
 def remap_values(remapping: torch.Tensor, x: torch.Tensor) -> torch.Tensor:
@@ -66,6 +66,27 @@ def fast_sparse_iou(sparse_onehot: torch.Tensor) -> torch.Tensor:
     union = sparse_sum.T + sparse_sum - intersection
     return intersection / union
 
+def fast_sparse_intersection_over_minimum_area(sparse_onehot: torch.Tensor) -> torch.Tensor:
+    """
+    Computes the sparse Intersection over Minimum Area (IoMA) for a given boolean sparse one-hot tensor.
+
+    Args:
+        sparse_onehot (torch.Tensor): A boolean sparse tensor of shape (N, M).
+
+    Returns:
+        torch.Tensor: A dense tensor of shape (N, N) containing the IoMA values.
+    """
+    # Compute intersection
+    intersection = torch.sparse.mm(sparse_onehot, sparse_onehot.T).to_dense()
+    
+    # Compute the area (sum of ones for each row)
+    sparse_sum = torch.sparse.sum(sparse_onehot, dim=(1,)).to_dense()
+    
+    # Compute the minimum area for each pair
+    min_area = torch.min(sparse_sum[:, None], sparse_sum[None, :])
+    
+    # Compute Intersection over Minimum Area
+    return intersection / min_area
 
 
 def instance_wise_edt(x: torch.Tensor, edt_type: str = 'auto') -> torch.Tensor:
@@ -455,3 +476,113 @@ def eccentricity_batch(mask_tensor):
     
     return eccentricity.squeeze(1,2)
 
+
+
+def _to_ndim(x: torch.Tensor, n: int) -> torch.Tensor:
+    """
+    Ensure that the input tensor has the desired number of dimensions.
+    If the input tensor has fewer dimensions, it will be unsqueezed.
+    If the input tensor has more dimensions, it will be squeezed.
+    If the input tensor has the desired number of dimensions, it will be returned as is.
+    
+    Args:
+        x (torch.Tensor): The input tensor.
+        n (int): The desired number of dimensions.
+        
+    Returns:
+        torch.Tensor: The input tensor with the desired number of dimensions.
+    """
+    if x.dim() == n:
+        return x
+    if x.dim() > n:
+        x = x.squeeze()
+    x = x[(None,) * (n - x.dim())]
+    if x.dim() != n:
+        raise ValueError(f"Input tensor has shape {x.shape}, which is not compatible with the desired dimension {n}.")
+    return x
+
+def _to_tensor_float32(image: Union[np.ndarray, torch.Tensor]) -> torch.Tensor:
+    """
+    Convert the input image to a PyTorch tensor with float32 data type.
+    If the input is a NumPy array, it will be converted to a PyTorch tensor.
+    The tensor will be squeezed to remove any singleton dimensions.
+    The channel dimension will be moved to the first position if it is not already there.
+    
+    Args:
+        image (Union[np.ndarray, torch.Tensor]): The input image, which can be either a NumPy array or a PyTorch tensor.
+        
+    Returns:
+        torch.Tensor: The input image as a PyTorch tensor with float32 data type and the channel dimension in the first position.
+    """
+
+    if isinstance(image, np.ndarray):      
+        if image.dtype == np.uint16:
+            image = image.astype(np.int32)
+        image = torch.from_numpy(image).float()
+    
+    image = image.squeeze()
+
+    assert image.dim() <= 3 and image.dim() >= 2, f"Input image shape {image.shape()} is not supported."
+
+    image = torch.atleast_3d(image)
+    channel_index = np.argmin(image.shape) #Note, this could break for small, highly multiplexed images.
+    if channel_index != 0:
+        image = image.movedim(channel_index, 0)
+
+    return image
+
+
+from instanseg.utils.utils import show_images
+def flood_fill(bw_mask: torch.Tensor, bw_seed: torch.Tensor):
+
+    bw_mask = _to_ndim(bw_mask, 4).clone().float()
+    bw_seed = _to_ndim(bw_seed, 4).clone()
+    
+    max_iterations = max(bw_seed.shape[-1], bw_seed.shape[-2])
+    for ii in range(max_iterations):
+        bw_seed2 = torch.nn.functional.max_pool2d(bw_seed.float(), kernel_size=3, stride=1, padding=1)
+        bw_seed2 = torch.bitwise_and(bw_seed2 > 0, bw_mask > 0)
+        if torch.equal(bw_seed, bw_seed2):
+            return bw_seed2 > 0
+        bw_seed = bw_seed2
+    print('Reached maximum number of iterations - this is not expected!')
+
+    return bw_seed > 0
+
+def fill_holes(bw_mask: torch.Tensor):
+    bw_mask = _to_ndim(bw_mask, 4)
+    bw_seed = dilate(bw_mask, mask = torch.ones_like(bw_mask), num_iterations = 3) > 0
+    return ~flood_fill(~bw_mask, ~bw_seed)
+
+
+def dilate(x: torch.Tensor, mask, num_iterations: int = 3) -> torch.Tensor:
+    original_dim = x.dim()
+    x = _to_ndim(x, 4).float()
+    mask = _to_ndim(mask, 4)
+
+    for _ in range(num_iterations):
+        x[mask] = torch.nn.functional.max_pool2d(x.float(), kernel_size=3, stride=1, padding=1)[mask]
+    return _to_ndim(x, original_dim)
+
+def find_boundaries_max_pool_labeled(labeled_image: torch.Tensor) -> torch.Tensor:
+    labeled_image = _to_ndim(labeled_image, 4).float()
+    max_pooled = F.max_pool2d(labeled_image.float(), kernel_size=3, stride=1, padding=1)
+    # Boundaries are where the max-pooled result differs from the original labels
+    boundaries = (max_pooled != labeled_image.float()).float()
+    return boundaries > 0
+
+def find_hard_boundaries(labeled_image: torch.Tensor) -> torch.Tensor:
+    all_boundaries = find_boundaries_max_pool_labeled(labeled_image)
+    return((all_boundaries)* (labeled_image > 0)) > 0 
+
+
+def expand_labels_map(labeled_image: torch.Tensor, num_iterations: int = 5) -> torch.Tensor:
+
+    original_dim = labeled_image.dim()
+    labeled_image = _to_ndim(labeled_image, 4)
+    for _ in range(num_iterations):
+        valid_region = (~ find_hard_boundaries(labeled_image))
+        labeled_image[valid_region] = F.max_pool2d(labeled_image.float(), kernel_size=3, stride=1, padding=1)[valid_region]
+    labeled_image = _to_ndim(labeled_image, original_dim)
+
+    return labeled_image

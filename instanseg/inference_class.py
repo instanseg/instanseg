@@ -7,60 +7,7 @@ from pathlib import Path, PosixPath
 from tiffslide import TiffSlide
 import zarr
 import os
-
-
-def _to_ndim(x: torch.Tensor, n: int) -> torch.Tensor:
-    """
-    Ensure that the input tensor has the desired number of dimensions.
-    If the input tensor has fewer dimensions, it will be unsqueezed.
-    If the input tensor has more dimensions, it will be squeezed.
-    If the input tensor has the desired number of dimensions, it will be returned as is.
-    
-    Args:
-        x (torch.Tensor): The input tensor.
-        n (int): The desired number of dimensions.
-        
-    Returns:
-        torch.Tensor: The input tensor with the desired number of dimensions.
-    """
-    if x.dim() == n:
-        return x
-    if x.dim() > n:
-        x = x.squeeze()
-    x = x[(None,) * (n - x.dim())]
-    if x.dim() != n:
-        raise ValueError(f"Input tensor has shape {x.shape}, which is not compatible with the desired dimension {n}.")
-    return x
-
-def _to_tensor_float32(image: Union[np.ndarray, torch.Tensor]) -> torch.Tensor:
-    """
-    Convert the input image to a PyTorch tensor with float32 data type.
-    If the input is a NumPy array, it will be converted to a PyTorch tensor.
-    The tensor will be squeezed to remove any singleton dimensions.
-    The channel dimension will be moved to the first position if it is not already there.
-    
-    Args:
-        image (Union[np.ndarray, torch.Tensor]): The input image, which can be either a NumPy array or a PyTorch tensor.
-        
-    Returns:
-        torch.Tensor: The input image as a PyTorch tensor with float32 data type and the channel dimension in the first position.
-    """
-
-    if isinstance(image, np.ndarray):      
-        if image.dtype == np.uint16:
-            image = image.astype(np.int32)
-        image = torch.from_numpy(image).float()
-    
-    image = image.squeeze()
-
-    assert image.dim() <= 3 and image.dim() >= 2, f"Input image shape {image.shape()} is not supported."
-
-    image = torch.atleast_3d(image)
-    channel_index = np.argmin(image.shape) #Note, this could break for small, highly multiplexed images.
-    if channel_index != 0:
-        image = image.movedim(channel_index, 0)
-
-    return image
+from instanseg.utils.pytorch_utils import _to_tensor_float32, _to_ndim
 
 def _rescale_to_pixel_size(image: torch.Tensor, 
                            requested_pixel_size: float, 

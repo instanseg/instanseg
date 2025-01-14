@@ -1,58 +1,13 @@
 
 from __future__ import annotations
-
-
 import torch
 import torch.nn as nn
-
-def create_gaussian_grid(N, sigma, device = "cuda",channels = 1):
-    # Create a grid of coordinates centered at (0, 0)
-    x = torch.linspace(-N//2, N//2, N, device = device)
-    y = torch.linspace(-N//2, N//2, N, device = device)
-    xx, yy = torch.meshgrid(x, y, indexing="ij")
-    
-    # Compute the Gaussian values
-    gaussian_values = torch.exp(-(xx**2 + yy**2) / (2 * sigma**2)).repeat(channels,1,1)
-    
-    return gaussian_values
-
-
-from torch import nn
 from einops import rearrange
 import torch.nn.functional as F
 
 
-class LocalInstanceNorm(nn.Module):
-    def __init__(self,in_channels = 1):
-        super(LocalInstanceNorm, self).__init__()
-        self.kernel_size = int(64/(in_channels//32))
-        self.norm = nn.InstanceNorm1d(in_channels, affine=True)
-        self.sigma =  int(64/(in_channels//32))#30#torch.nn.Parameter(torch.tensor(float(sigma),device = "cuda"),requires_grad = True)
-        self.gaussian = create_gaussian_grid(self.kernel_size, sigma= self.sigma,device ="cuda",channels = in_channels).flatten().view(1,-1,1) + 1e-5
 
-    def forward(self, x):
-        assert x.dim() == 4, print("Only implemented for batch 4d tensor",x.dim())
-
-        b,c,h,w = x.shape
-        x = F.unfold(x, kernel_size=(self.kernel_size,self.kernel_size), stride=self.kernel_size//2)
-        x = rearrange(x, 'b (c k1 k2) n -> (b n) c (k1 k2)', c = c, k1 = self.kernel_size, k2 = self.kernel_size)
-        #x = self.norm(x)
-
-        x = x - x.mean(dim = 1,keepdim = True)
-        x = x / (x.std(dim = 1,keepdim = True) + 1e-5)
-
-        x = rearrange(x, '(b n) c (k1 k2) -> b (c k1 k2) n', b= b, c = c, k1 = self.kernel_size, k2 = self.kernel_size)
-
-        x = x * self.gaussian
-        counter = F.fold(torch.ones_like(x) * self.gaussian, (h,w),kernel_size=(self.kernel_size,self.kernel_size), stride=self.kernel_size//2)#.view(1,1,10,10,-1)
-        x = F.fold(x, (h,w), kernel_size=(self.kernel_size,self.kernel_size), stride=self.kernel_size//2)
-        
-        result = x / counter
-
-        return result
-
-
-def conv_norm_act(in_channels, out_channels, sz,norm, act = "ReLU"):
+def conv_norm_act(in_channels, out_channels, sz,norm, act = "ReLU", depthwise = False):
 
     if norm == "None" or norm is None:
         norm_layer = nn.Identity()
@@ -60,29 +15,35 @@ def conv_norm_act(in_channels, out_channels, sz,norm, act = "ReLU"):
         norm_layer = nn.BatchNorm2d(out_channels,eps = 1e-5, momentum = 0.05)
     elif norm.lower() == "instance":
         norm_layer = nn.InstanceNorm2d(out_channels,eps = 1e-5, track_running_stats=False, affine = True)
-    elif norm.lower() == "local":
-        norm_layer = LocalInstanceNorm(in_channels = out_channels)
     else:
         raise ValueError("Norm must be None, batch or instance")
     
-
     if act == "None" or act is None:
         act_layer = nn.Identity()
     elif act.lower() == "relu":
         act_layer = nn.ReLU(inplace=True)
+    elif act.lower() == "relu6":
+        act_layer = nn.ReLU6(inplace=True)
     elif act.lower() == "mish":
         act_layer = nn.Mish(inplace=True)
     else:
         raise ValueError("Act must be None, ReLU or Mish")
     
-    return nn.Sequential(
-        nn.Conv2d(in_channels, out_channels, sz, padding=sz//2),
-        norm_layer,
-        act_layer,
-    )  
+    if depthwise:
+        return nn.Sequential(
+            nn.Conv2d(in_channels, out_channels, sz, padding=sz//2, groups = in_channels),
+            norm_layer,
+            act_layer,
+        )
+    else:
+        
+        return nn.Sequential(
+            nn.Conv2d(in_channels, out_channels, sz, padding=sz//2),
+            norm_layer,
+            act_layer,
+        )  
 
 
-import torch.nn.functional as F
 class DecoderBlock(nn.Module):
     def __init__(
             self,
@@ -198,8 +159,6 @@ class InstanSeg_UNet(nn.Module):
 
 
 if __name__ == "__main__":
-
-    import pdb
 
     net = InstanSeg_UNet(
         in_channels=3,
