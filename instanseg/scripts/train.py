@@ -220,7 +220,6 @@ def instanseg_training(segmentation_dataset: Dict = None, **kwargs):
                         cells_and_nuclei=args.cells_and_nuclei, 
                         to_centre = args.to_centre, 
                         window_size = args.window_size, 
-                        tile_size = args.tile_size,
                         dim_coords= args.dim_coords, 
                         multi_centre= args.multi_centre, 
                         feature_engineering_function=args.feature_engineering )  # binary_xloss, lovasz_hinge dice_loss general_dice_loss

@@ -560,7 +560,7 @@ def load_CIL(Segmentation_Dataset: dict, verbose: bool = True) -> dict:
     from instanseg.utils.augmentations import Augmentations
     from instanseg.utils.pytorch_utils import torch_fastremap
 
-    if not image_zip_path.exists():
+    if not image_zip_path.exists(): #https://www.cellimagelibrary.org/images/40217
         # Define the URLs and paths
         image_url = "https://cildata.crbs.ucsd.edu/ccdb//telescience/home/CCDB_DATA_USER.portal/P2043/Experiment_6835/Subject_6837/Tissue_6840/Microscopy_6843/MP6843_img_full.zip"
         label_url = "https://cildata.crbs.ucsd.edu/ccdb//telescience/home/CCDB_DATA_USER.portal/P2043/Experiment_6835/Subject_6837/Tissue_6840/Microscopy_6843/MP6843_seg.zip"
@@ -1167,4 +1167,68 @@ def load_BSST265(Segmentation_Dataset: dict, verbose: bool = True) -> dict:
     Segmentation_Dataset['Train']+=items[:int(len(items)*0.8)]
     Segmentation_Dataset['Validation']+=items[int(len(items)*0.8):int(len(items)*0.9)]
     Segmentation_Dataset['Test']+=items[int(len(items)*0.9):]
+    return Segmentation_Dataset
+
+
+
+
+
+
+def load_CellBinDB(Segmentation_Dataset: dict, verbose: bool = True) -> dict:
+    cellbindb_dir = create_raw_datasets_dir("Nucleus_Segmentation", "CellBinDB")
+
+
+    if not (cellbindb_dir).exists():
+        print('wget -c -nH -np -r -R "index.html*" --cut-dirs 4 ftp://ftp.cngb.org/pub/CNSA/data5/CNP0006370/Other/')
+
+        #raise an error
+        raise Exception("Please download the CellBinDB dataset manually using the command above and place it in the directory")
+        
+        
+
+    dataset_path = sorted(Path(f"{cellbindb_dir}").iterdir())
+
+    # Iterate over the dataset folders and files
+    items = []
+    for tissue_dir in dataset_path:
+        if not tissue_dir.is_dir():
+            continue
+
+        for sample_dir in sorted(tissue_dir.iterdir()):
+            if not sample_dir.is_dir():
+                continue
+
+            img_file = sample_dir / f"{sample_dir.name}-img.tif"
+            instance_mask_file = sample_dir / f"{sample_dir.name}-instancemask.tif"
+
+            if img_file.exists() and instance_mask_file.exists():
+                item = {}
+                image = io.imread(img_file)
+                instance_mask = io.imread(instance_mask_file)
+
+                from instanseg.utils.utils import show_images
+
+                #check if we are in mIF folder
+
+                if sample_dir.parents[0].name == "mIF":
+                    item['cell_masks'] = instance_mask
+                else:
+                    item['nucleus_masks'] = instance_mask
+
+                item['image'] = image
+                item['parent_dataset'] = "CellBinDB"
+                item['licence'] = "CC bY 4.0"
+                item['pixel_size'] = 0.5  # Assuming a default pixel size, update if known
+
+                items.append(item)
+
+    # Shuffle and split the dataset into Train, Validation, and Test
+    np.random.seed(42)
+    np.random.shuffle(items)
+    num_items = len(items)
+
+    Segmentation_Dataset['Train'] += items[:int(num_items * 0.8)]
+    Segmentation_Dataset['Validation'] += items[int(num_items * 0.8):int(num_items * 0.9)]
+    Segmentation_Dataset['Test'] += items[int(num_items * 0.9):]
+
     return Segmentation_Dataset
