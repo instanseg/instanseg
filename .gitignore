@@ -1,5 +1,4 @@
-models/
-!/instanseg/utils/models/
+/instanseg/models/
 instanseg/datasets/
 instanseg/examples/*
 !instanseg/examples/
@@ -9,7 +8,9 @@ instanseg/tensorboard_logs/
 logs/
 instanseg/scripts/experiment.sh
 instanseg/torchscripts/
-instanseg/bioimageio_models/
+instanseg/bioimageio_models/*
+!instanseg/bioimageio_models/
+!instanseg/bioimageio_models/model-index.json
 notebooks/scratch.ipynb
 notebooks/per_sample_scale_range.ijm
 instanseg.egg-info/
@@ -22,7 +23,6 @@ __pycache__/
 *$py.class
 *.log
 .ipynb_checkpoints
-*.json
 **/__pycache__/
 **/.vs/
 *.pyc

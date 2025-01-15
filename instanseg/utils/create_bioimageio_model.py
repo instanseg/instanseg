@@ -141,7 +141,7 @@ def make_archive(source, destination):
     format = base.split('.')[1]
     archive_from = os.path.dirname(source)
     archive_to = os.path.basename(source.strip(os.sep))
-    shutil.make_archive(name, format, archive_from, archive_to)
+    shutil.make_archive(name, format, root_dir=archive_from, base_dir=archive_to)
     shutil.move('%s.%s'%(name,format), destination)
 
 
