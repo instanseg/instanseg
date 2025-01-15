@@ -270,7 +270,7 @@ def export_bioimageio(torchsript: torch.jit._script.RecursiveScriptModule,
     # we only use a subset of the available options here, please refer to the advanced examples and to the
     # function signature of build_model in order to get an overview of the full functionality
 
-    preprocessing = [[{"name": "scale_range", "kwargs": {"min_percentile": 0.1, "max_percentile": 99.9, "eps": 1e-6, "axes": "xy", "mode": "per_sample"}}]]
+    preprocessing = [[{"name": "scale_range", "kwargs": {"min_percentile": 0.1, "max_percentile": 99.9, "eps": 1e-3, "axes": "xy", "mode": "per_sample"}}]]
 
     _ = build_model(
         # the weight file and the type of the weights
