@@ -2,7 +2,7 @@ import os
 import bioimageio.core
 import numpy as np
 import torch
-from aicsimageio import AICSImage
+from bioio import BioImage
 
 from instanseg.utils.augmentations import Augmentations
 from instanseg.utils.utils import _choose_device, show_images
@@ -155,7 +155,7 @@ def make_archive(source, destination):
         format = base.split('.')[1]
         archive_from = os.path.dirname(source)
         archive_to = os.path.basename(source.strip(os.sep))
-        shutil.make_archive(name, format, archive_from, archive_to)
+        shutil.make_archive(name, format, root_dir=archive_from, base_dir=archive_to)
         shutil.move('%s.%s'%(name,format), destination)
 
 
@@ -190,7 +190,7 @@ def export_bioimageio(torchsript: torch.jit._script.RecursiveScriptModule,
     device = _choose_device()
     torchsript.to(device)
 
-    img = AICSImage(test_img_path)
+    img = BioImage(test_img_path)
     if "S" in img.dims.order and img.dims.S > img.dims.C:
         input_data = img.get_image_data("SYX")
     else:
@@ -270,7 +270,7 @@ def export_bioimageio(torchsript: torch.jit._script.RecursiveScriptModule,
     # we only use a subset of the available options here, please refer to the advanced examples and to the
     # function signature of build_model in order to get an overview of the full functionality
 
-    preprocessing = [[{"name": "scale_range", "kwargs": {"min_percentile": 0.1, "max_percentile": 99.9, "eps": 1e-6, "axes": "xy", "mode": "per_sample"}}]]
+    preprocessing = [[{"name": "scale_range", "kwargs": {"min_percentile": 0.1, "max_percentile": 99.9, "eps": 1e-3, "axes": "xy", "mode": "per_sample"}}]]
 
     _ = build_model(
         # the weight file and the type of the weights

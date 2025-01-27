@@ -145,7 +145,10 @@ def remove_module_prefix_from_dict(dictionary):
     """
     modified_dict = {}
     for key, value in dictionary.items():
-        modified_dict[key] = value
+        if key.startswith('module.'):
+            modified_dict[key[7:]] = value
+        else:
+            modified_dict[key] = value
     return modified_dict
 
 

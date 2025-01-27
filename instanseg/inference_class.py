@@ -9,7 +9,7 @@ import zarr
 import os
 
 
-def to_ndim(x: torch.Tensor, n: int) -> torch.Tensor:
+def _to_ndim(x: torch.Tensor, n: int) -> torch.Tensor:
     """
     Ensure that the input tensor has the desired number of dimensions.
     If the input tensor has fewer dimensions, it will be unsqueezed.
@@ -33,6 +33,19 @@ def to_ndim(x: torch.Tensor, n: int) -> torch.Tensor:
     return x
 
 def _to_tensor_float32(image: Union[np.ndarray, torch.Tensor]) -> torch.Tensor:
+    """
+    Convert the input image to a PyTorch tensor with float32 data type.
+    If the input is a NumPy array, it will be converted to a PyTorch tensor.
+    The tensor will be squeezed to remove any singleton dimensions.
+    The channel dimension will be moved to the first position if it is not already there.
+    
+    Args:
+        image (Union[np.ndarray, torch.Tensor]): The input image, which can be either a NumPy array or a PyTorch tensor.
+        
+    Returns:
+        torch.Tensor: The input image as a PyTorch tensor with float32 data type and the channel dimension in the first position.
+    """
+
     if isinstance(image, np.ndarray):      
         if image.dtype == np.uint16:
             image = image.astype(np.int32)
@@ -55,14 +68,14 @@ def _rescale_to_pixel_size(image: torch.Tensor,
     
     original_dim = image.dim()
 
-    image = to_ndim(image, 4)
+    image = _to_ndim(image, 4)
 
     scale_factor = requested_pixel_size / model_pixel_size
 
     if not np.allclose(scale_factor,1, 0.01):
         image = interpolate(image, scale_factor=scale_factor, mode="bilinear")
 
-    return to_ndim(image, original_dim)
+    return _to_ndim(image, original_dim)
     
 
 def _display_colourized(mIF):
@@ -88,7 +101,6 @@ class InstanSeg():
                  model_type: Union[str,nn.Module] = "brightfield_nuclei", 
                  device: Optional[str] = None, 
                  image_reader: str = "tiffslide",
-                 github_token: str = os.environ.get("GITHUB_TOKEN"),
                  verbosity: int = 1 #0,1,2
                  ):
         
@@ -96,7 +108,6 @@ class InstanSeg():
         :param model_type: The type of model to use. If a string is provided, the model will be downloaded. If the model is not public, it will look for a model in your bioimageio folder. If an nn.Module is provided, this model will be used.
         :param device: The device to run the model on. If None, the device will be chosen automatically.
         :param image_reader: The image reader to use. Options are "tiffslide", "skimage.io", "bioio", "AICSImageIO".
-        :param github_token: The GitHub API token to use to authenticate model downloads. May be necessary to avoid rate limits in some circumstances.
         :param verbosity: The verbosity level. 0 is silent, 1 is normal, 2 is verbose.
         """
         from instanseg.utils.utils import download_model, _choose_device
@@ -104,11 +115,10 @@ class InstanSeg():
         self.verbosity = verbosity
         self.verbose = verbosity != 0
 
-        headers = None if github_token is None else {'Authorization': 'token ' + github_token}
         if isinstance(model_type, nn.Module):
             self.instanseg = model_type
         else:
-            self.instanseg = download_model(model_type, verbose = self.verbose, headers=headers)
+            self.instanseg = download_model(model_type, verbose = self.verbose)
         self.inference_device = _choose_device(device, verbose= self.verbose)
         self.instanseg = self.instanseg.to(self.inference_device)
 
@@ -148,16 +158,6 @@ class InstanSeg():
                 image_array = slide.get_image_data().squeeze()
             else:
                 return image_str, img_pixel_size
-
-        elif self.prefered_image_reader == "AICSImageIO":
-            from aicsimageio import AICSImage
-            slide = AICSImage(image_str)
-            img_pixel_size = slide.physical_pixel_sizes.X
-            num_pixels = np.cumprod(slide.shape)[-1]
-            if num_pixels < self.medium_image_threshold:
-                image_array = slide.get_image_data().squeeze()
-            else:
-                return image_str, img_pixel_size
         else:
             raise NotImplementedError(f"Image reader {self.prefered_image_reader} is not implemented.")
         
@@ -182,16 +182,6 @@ class InstanSeg():
             from tiffslide import TiffSlide
             slide = TiffSlide(image_str)
             img_pixel_size = slide.properties['tiffslide.mpp-x']
-            if img_pixel_size is not None and img_pixel_size > 0 and img_pixel_size < 2:
-                return img_pixel_size
-        except Exception as e:
-            print(e)
-            pass
-        from aicsimageio import AICSImage 
-        try:
-            
-            slide = AICSImage(image_str)
-            img_pixel_size = slide.physical_pixel_sizes.X
             if img_pixel_size is not None and img_pixel_size > 0 and img_pixel_size < 2:
                 return img_pixel_size
         except Exception as e:
@@ -358,7 +348,7 @@ class InstanSeg():
 
         if save_geojson:
 
-            labels = to_ndim(labels, 4)
+            labels = _to_ndim(labels, 4)
         
             output_dimension = labels.shape[1]
             from instanseg.utils.utils import labels_to_features
@@ -411,7 +401,7 @@ class InstanSeg():
 
         image = _to_tensor_float32(image)
 
-        image = to_ndim(image, 4)
+        image = _to_ndim(image, 4)
 
         original_shape = image.shape
 
@@ -428,7 +418,7 @@ class InstanSeg():
         assert image.dim() ==3 or image.dim() == 4, f"Input image shape {image.shape} is not supported."
 
         if normalise:
-                image = to_ndim(image, 4)
+                image = _to_ndim(image, 4)
                 image = torch.stack([percentile_normalize(i) for i in image]) #over the batch dimension
 
         if target != "all_outputs" and self.instanseg.cells_and_nuclei:
@@ -504,7 +494,7 @@ class InstanSeg():
                 img_has_been_rescaled = False
         
 
-        image = to_ndim(image, 3)
+        image = _to_ndim(image, 3)
         
         if normalise:
             image = percentile_normalize(image, subsampling_factor=normalisation_subsampling_factor)
@@ -532,17 +522,17 @@ class InstanSeg():
                                               target_segmentation = target_segmentation,
                                               **kwargs).float()
 
-        instances = to_ndim(instances, 4)
-        image = to_ndim(image, 4)
+        instances = _to_ndim(instances, 4)
+        image = _to_ndim(image, 4)
         
         if pixel_size is not None and img_has_been_rescaled and rescale_output:  
             instances = interpolate(instances, size=original_shape[-2:], mode="nearest")
-            instances = to_ndim(instances, 4)
+            instances = _to_ndim(instances, 4)
 
             if return_image_tensor:
                 image = interpolate(image, size=original_shape[-2:], mode="bilinear")
 
-        image = to_ndim(image, original_ndim)
+        image = _to_ndim(image, original_ndim)
 
         if return_image_tensor:
             return instances.cpu(), image.cpu()
@@ -563,7 +553,7 @@ class InstanSeg():
             """
             Evaluate a whole slide input image using the InstanSeg model. This function uses slideio to read an image and then segments it using the instanseg model. The segmentation is done in a tiled manner to avoid memory issues. 
             
-            :param image:: The input image to be evaluated.
+            :param image: The input image to be evaluated.
             :param pixel_size: The pixel size of the image, in microns. If not provided, it will be read from the image metadata.
             :param normalise: Controls whether the image is normalised.
             :param tile_size: The width/height of the tiles that the image will be split into.
@@ -790,8 +780,8 @@ class InstanSeg():
         import scanpy as sc
         import matplotlib.pyplot as plt
 
-        labeled_output = to_ndim(labeled_output, 4)
-        image_tensor = to_ndim(image_tensor, 3)
+        labeled_output = _to_ndim(labeled_output, 4)
+        image_tensor = _to_ndim(image_tensor, 3)
 
         X_features = get_mean_object_features( image_tensor.to("cuda"), labeled_output.to("cuda"),)
 
