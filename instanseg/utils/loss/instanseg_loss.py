@@ -212,7 +212,7 @@ def compute_crops( x: torch.Tensor,
     x = feature_engineering(x, c, sigma, window_size //2 , mesh_grid_flat)
 
 
-    x = pixel_classifier(x)  # C*H*W,1
+    x = torch.sigmoid(pixel_classifier(x))  # C*H*W,1
 
     x = x.view(C, 1, window_size, window_size)
 
