@@ -290,18 +290,26 @@ def has_pixel_classifier_model(model):
 
 
 
-def merge_sparse_predictions(x: torch.Tensor, coords: torch.Tensor, mask_map: torch.Tensor, size : list[int], mask_threshold: float = 0.5, window_size = 128, min_size = 10, overlap_threshold = 0.5, mean_threshold = 0.5):
+def merge_sparse_predictions(x: torch.Tensor, 
+                             coords: torch.Tensor,
+                               mask_map: torch.Tensor, 
+                               size : list[int], 
+                               mask_threshold: float = 0.5, 
+                               window_size = 128,
+                                min_size = 10, 
+                                overlap_threshold = 0.5, 
+                                mean_threshold = 0.5):
 
 
     labels = convert(x, coords, size=(size[1], size[2]), mask_threshold=mask_threshold)[None]
+
+
 
     idx = torch.arange(1, size[0] + 1, device=x.device, dtype =coords.dtype)
     stack_ID = torch.ones((size[0], window_size, window_size), device=x.device, dtype=coords.dtype)
     stack_ID = stack_ID * (idx[:, None, None] - 1)
 
     coords = torch.stack((stack_ID.flatten(), coords[0] * size[2] + coords[1])).to(coords.dtype)
-
-
 
     fg = x.flatten() > mask_threshold
     x = x.flatten()[fg]
@@ -1108,7 +1116,15 @@ class InstanSeg(nn.Module):
             crops = torch.sigmoid(crops) 
       
 
-            label = merge_sparse_predictions(crops, coords, mask_map, size=(C,h, w), mask_threshold=mask_threshold, window_size=window_size, min_size=min_size, overlap_threshold=overlap_threshold, mean_threshold=mean_threshold).int() #about 30% of the time
+            label = merge_sparse_predictions(crops, 
+                                            coords, 
+                                            mask_map, 
+                                            size=(C,h, w),
+                                            mask_threshold=mask_threshold, 
+                                            window_size=window_size,
+                                            min_size=min_size, 
+                                            overlap_threshold=overlap_threshold,
+                                            mean_threshold=mean_threshold).int() #about 30% of the time
 
             labels.append(label.squeeze())
 
@@ -1487,7 +1503,11 @@ class InstanSeg_Torchscript(nn.Module):
                         objects_to_remove]
                     labels[torch.isin(labels, labels_to_remove)] = 0
 
-                    labels_list.append(labels.squeeze().to(original_device))
+                    labels_list.append(labels.squeeze())
+
+                for lab in labels_list:
+                    if lab.is_mps:
+                        lab.to("cpu")
 
                 if len(labels_list) == 1:
                     lab = labels_list[0][None, None]  # 1,1,H,W

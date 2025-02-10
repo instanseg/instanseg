@@ -242,6 +242,7 @@ def instanseg_training(segmentation_dataset: Dict = None, **kwargs):
     args_dict["dropprob"] = float(args.dropprob)
 
     model = build_model_from_dict(args_dict)
+
     # from fvcore.nn import FlopCountAnalysis
     # flops = FlopCountAnalysis(model, torch.randn(1,3,256,256))
     # print("Number of flops:",flops.total()/1e9)

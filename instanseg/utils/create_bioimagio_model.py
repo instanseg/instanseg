@@ -416,7 +416,7 @@ def export_bioimageio(torchsript: torch.jit._script.RecursiveScriptModule,
             id=TensorId("detection_classes"),
             axes=output_axes,
             test_tensor=FileDescr(source=os.path.join(output_name, "test-output_detection_classes.npy"),),
-            data = NominalOrOrdinalDataDescr(type = "uint32",values = ["fancy_class_" + str(i) for i in range(19)]),
+            data = NominalOrOrdinalDataDescr(type = "uint8",values = ["fancy_class_" + str(i) for i in range(19)]),
         )
 
         return output_descr
@@ -438,7 +438,7 @@ def export_bioimageio(torchsript: torch.jit._script.RecursiveScriptModule,
         ]
 
         output_descr = OutputTensorDescr(
-            id=TensorId("detection_classes"),
+            id=TensorId("detection_logits"),
             axes=output_axes,
             test_tensor=FileDescr(source=os.path.join(output_name, "test-output_detection_classes.npy"),),
             data = NominalOrOrdinalDataDescr(type = "float32", values = [0]),
@@ -470,7 +470,7 @@ def export_bioimageio(torchsript: torch.jit._script.RecursiveScriptModule,
     )
 
     my_model_descr = ModelDescr(
-            name="InstanSeg model",
+            name=output_name,
             version =version,
             description="An InstanSeg model trained for instance segmentation",
             authors=[

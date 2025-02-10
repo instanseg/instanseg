@@ -1170,10 +1170,6 @@ def load_BSST265(Segmentation_Dataset: dict, verbose: bool = True) -> dict:
     return Segmentation_Dataset
 
 
-
-
-
-
 def load_CellBinDB(Segmentation_Dataset: dict, verbose: bool = True) -> dict:
     cellbindb_dir = create_raw_datasets_dir("Nucleus_Segmentation", "CellBinDB")
 
@@ -1184,8 +1180,6 @@ def load_CellBinDB(Segmentation_Dataset: dict, verbose: bool = True) -> dict:
         #raise an error
         raise Exception("Please download the CellBinDB dataset manually using the command above and place it in the directory")
         
-        
-
     dataset_path = sorted(Path(f"{cellbindb_dir}").iterdir())
 
     # Iterate over the dataset folders and files
@@ -1230,5 +1224,44 @@ def load_CellBinDB(Segmentation_Dataset: dict, verbose: bool = True) -> dict:
     Segmentation_Dataset['Train'] += items[:int(num_items * 0.8)]
     Segmentation_Dataset['Validation'] += items[int(num_items * 0.8):int(num_items * 0.9)]
     Segmentation_Dataset['Test'] += items[int(num_items * 0.9):]
+
+    return Segmentation_Dataset
+
+
+
+
+def load_neurips(Segmentation_Dataset: dict, verbose: bool = True) -> dict:
+
+    neurips_dir = create_raw_datasets_dir("Cell_Segmentation", "NeurIPS_CellSeg")
+    zip_file_path = neurips_dir / "Neurips.zip"
+    download_url = "https://zenodo.org/api/records/10719375/files-archive"
+
+    if not zip_file_path.exists():
+       # Download the dataset using requests
+        if verbose:
+            print(f"Downloading dataset from {download_url} to {zip_file_path}...")
+        response = requests.get(download_url, stream=True)
+        response.raise_for_status()
+        with open(zip_file_path, 'wb') as f:
+            for chunk in response.iter_content(chunk_size=8192):
+                f.write(chunk)
+        if verbose:
+            print(f"Download completed.")
+
+    # Unzip the dataset
+    if verbose:
+        print(f"Unzipping dataset to {neurips_dir}...")
+    with zipfile.ZipFile(zip_file_path, 'r') as zip_ref:
+        zip_ref.extractall(neurips_dir)
+        #unzip the new files:
+        for file in Path(neurips_dir).iterdir():
+            if file.suffix == ".zip":
+                with zipfile.ZipFile(file, 'r') as zip_ref:
+                    zip_ref.extractall(neurips_dir)
+
+
+    if verbose:
+        print("Unzipping completed.")
+
 
     return Segmentation_Dataset

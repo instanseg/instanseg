@@ -156,6 +156,8 @@ class InstanSeg_UNet(nn.Module):
                 skips.append(x)
 
         return torch.cat([decoder(x,skips) for decoder in self.decoders],dim = 1)
+    
+
 
 
 if __name__ == "__main__":
