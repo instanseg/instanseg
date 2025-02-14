@@ -19,7 +19,7 @@ def _rescale_to_pixel_size(image: torch.Tensor,
 
     scale_factor = requested_pixel_size / model_pixel_size
 
-    if not np.allclose(scale_factor,1, 0.01):
+    if not np.allclose(scale_factor,1, 0.01): #if you change this value, you MUST modify the whole_slide_image function.
         image = interpolate(image, scale_factor=scale_factor, mode="bilinear")
 
     return _to_ndim(image, original_dim)
@@ -542,6 +542,8 @@ class InstanSeg():
                     img_pixel_size = pixel_size
                 else:
                     raise ValueError("The image pixel size {} is not in microns.".format(img_pixel_size))
+                
+
             
             scale_factor = model_pixel_size/img_pixel_size
 
@@ -573,7 +575,12 @@ class InstanSeg():
                 itermediate_pixel_size = initial_pixel_size * downsample_factor
                 final_pixel_size = model_pixel_size
 
+                
+
                 intermediate_to_final = final_pixel_size/itermediate_pixel_size
+
+                if np.allclose(intermediate_to_final,1, 0.01): #if you change this value, you MUST modify the _rescale_to_pixel_size function.
+                    intermediate_to_final = 1
                 
                 # Calculate the size of the region needed at the base level to get the desired output size
                 intermediate_shape = (int(shape[0] * intermediate_to_final), int(shape[1] * intermediate_to_final))
@@ -590,13 +597,10 @@ class InstanSeg():
                                                   normalise = normalise,
                                                   normalisation_subsampling_factor = normalisation_subsampling_factor,
                                                 )
-                
-            
 
-                from torch.nn.functional import interpolate
-                new_tile = interpolate(new_tile, size=shape[-2:], mode="nearest").int()[0]
-
-            # pdb.set_trace()
+                if not np.allclose(intermediate_to_final,1, 0.01):
+                    from torch.nn.functional import interpolate
+                    new_tile = interpolate(new_tile, size=shape[-2:], mode="nearest").int()[0]
 
                 num_iter = new_tile.shape[0]
 
