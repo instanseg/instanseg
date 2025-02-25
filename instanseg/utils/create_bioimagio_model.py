@@ -91,64 +91,6 @@ def readme(model_name: str, model_dict: dict = None):
           #  f.write(str(model_dict["source_dataset"]))
 
 
-def modify_yaml_for_qupath_config(yaml_path, pixel_size: float, dim_in: int = 3, dim_out: int = 2, version: str = None):
-
-    #copy ijm files
-    import shutil
-    shutil.copyfile(os.path.join(os.path.dirname(__file__),"./rdf_scripts/instanseg_preprocess.ijm"), os.path.join(os.path.dirname(yaml_path), "instanseg_preprocess.ijm"))
-    shutil.copyfile(os.path.join(os.path.dirname(__file__),"./rdf_scripts/instanseg_postprocess.ijm"), os.path.join(os.path.dirname(yaml_path), "instanseg_postprocess.ijm"))
-
-    import yaml
-    with open(yaml_path, 'r') as file:
-        data = yaml.safe_load(file)
-
-    # Modify the YAML data as needed
-    data['config']['qupath'] = {
-        'axes': [
-            {'role': 'x', 'step': pixel_size, 'unit': 'um'},
-            {'role': 'y', 'step': pixel_size, 'unit': 'um'}
-        ]}
-
-    data['config']['deepimagej'] = {
-        'allow_tiling': True,
-        'model_keys': None,
-        'prediction': {
-            'preprocess': [
-                {'kwargs': 'instanseg_preprocess.ijm'}
-            ],
-            'postprocess': [
-                {'kwargs': 'instanseg_postprocess.ijm'}
-            ]
-        },
-        'pyramidal_model': False,
-        'test_information': {
-            'inputs': [
-                {
-                    'name': 'test-input.npy',
-                    'pixel_size': {
-                        'x': 1.0,
-                        'y': 1.0,
-                        'z': 1.0
-                    },
-                    'size': f'256 x 256 x 1 x {dim_in}'
-                }
-            ],
-            'memory_peak': None,
-            'outputs': [
-                {
-                    'name': 'test-output.npy',
-                    'size': f'256 x 256 x 1 x {dim_out}',
-                    'type': 'image'
-                }
-            ],
-            'runtime': None
-        }
-    }
-    if version is not None:
-        data["version"] = version
-
-    with open(yaml_path, 'w') as file:
-        yaml.dump(data, file)
 
 import os, shutil
 def make_archive(source, destination):
@@ -181,7 +123,6 @@ def export_bioimageio(torchsript: torch.jit._script.RecursiveScriptModule,
     os.makedirs(output_name, exist_ok=True)
     # save the model weights
     torchsript.save(os.path.join(output_name, "instanseg.pt"))
-
 
 
     try:
