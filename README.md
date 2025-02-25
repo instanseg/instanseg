@@ -94,22 +94,6 @@ from instanseg.utils.utils import show_images
 show_images(image_tensor,display, colorbar=False, titles = ["Normalized Image", "Image with segmentation"])
 ```
 
-### Local Installation
-
-To install InstanSeg locally, follow these steps:
-
-1. Install either Anaconda, Mamba, or [micromamba](https://mamba.readthedocs.io/en/latest/installation/micromamba-installation.html). We use micromamba for speed and simplicity, but you can replace "micromamba" with the distribution you are using.
-
-2. In your terminal or Anaconda prompt on Windows, create a new environment and install dependencies using the provided `env.yml` file:
-    ```bash
-    micromamba create -n instanseg --file env.yml
-    ```
-
-3. Activate your environment:
-    ```bash
-    micromamba activate instanseg
-    ```
-
 ### GPU Version (CUDA) for Windows and Linux
 
 If you intend to use GPU acceleration and CUDA, follow these additional steps:
