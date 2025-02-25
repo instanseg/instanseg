@@ -56,10 +56,6 @@ dataset_dict = {
 }
 
 
-
-# from bioimageio.core.build_spec import build_model
-# from bioimageio.core.resource_tests import test_model
-
 from bioimageio.spec.model.v0_5 import ModelDescr
 
 def readme(model_name: str, model_dict: dict = None):
@@ -67,6 +63,8 @@ def readme(model_name: str, model_dict: dict = None):
     # this should describe how the model was trained, (and on which data)
     # and also what to take into consideration when running the model, especially how to validate the model
     # here, we just create a stub documentation
+
+    print("Creating README file at", os.path.join(model_name, model_name + "_README.md"))
 
     with open(os.path.join(model_name, model_name + "_README.md"), "w") as f:
         f.write("# This is an InstanSeg model. \n")
@@ -408,6 +406,7 @@ def export_bioimageio(torchsript: torch.jit._script.RecursiveScriptModule,
         HttpUrl,
         LicenseId,
         TorchscriptWeightsDescr,
+        RelativeFilePath,
     )
 
     my_model_descr = ModelDescr(
@@ -417,14 +416,14 @@ def export_bioimageio(torchsript: torch.jit._script.RecursiveScriptModule,
             authors=[
                 Author(name="Thibaut Goldsborough", affiliation="School of Informatics, University of Edinburgh", github_user="ThibautGoldsborough")
             ],
+            covers = [os.path.join(output_name, "cover.png")],
             cite=[
                 CiteEntry(text="If you use InstanSeg for nucleus segmentation of brightfield histology images, please cite:", doi=Doi("10.48550/arXiv.2408.15954")),
                 CiteEntry(text="If you use InstanSeg for nucleus and/or cell segmentation in fluorescence images, please cite:", doi=Doi("10.1101/2024.09.04.611150"))
             ],
             license=LicenseId("Apache-2.0"),
-            documentation=HttpUrl(
-                "https://github.com/instanseg/instanseg/blob/main/README.md"
-            ),
+            documentation=RelativeFilePath(os.path.join(output_name, output_name + "_README.md"))
+            ,
             git_repo=HttpUrl(
                 "https://github.com/instanseg/instanseg"
             ), 
@@ -483,9 +482,14 @@ def export_bioimageio(torchsript: torch.jit._script.RecursiveScriptModule,
     #     zip_ref.extractall(destination)
     
     # yaml_path = os.path.join(destination, 'rdf.yaml')
-    # modify_yaml_for_qupath_config(yaml_path, pixel_size=model_pixel_size, dim_in=dim_in, dim_out=dim_out, version=version)
 
-    
+
+    # #copy ijm files
+    # import shutil
+    # shutil.copyfile(os.path.join(os.path.dirname(__file__),"./rdf_scripts/instanseg_preprocess.ijm"), os.path.join(os.path.dirname(yaml_path), "instanseg_preprocess.ijm"))
+    # shutil.copyfile(os.path.join(os.path.dirname(__file__),"./rdf_scripts/instanseg_postprocess.ijm"), os.path.join(os.path.dirname(yaml_path), "instanseg_postprocess.ijm"))
+
+
     # make_archive(destination, input)
 
-    # shutil.rmtree(output_name)
+    # # shutil.rmtree(output_name)
