@@ -9,35 +9,6 @@ import zarr
 import os
 from instanseg.utils.pytorch_utils import _to_tensor_float32, _to_ndim
 
-def _rescale_to_pixel_size(image: torch.Tensor, 
-                           requested_pixel_size: float, 
-                           model_pixel_size: float) -> torch.Tensor:
-    
-    original_dim = image.dim()
-
-    image = _to_ndim(image, 4)
-
-    scale_factor = requested_pixel_size / model_pixel_size
-
-    if not np.allclose(scale_factor,1, 0.01): #if you change this value, you MUST modify the whole_slide_image function.
-        image = interpolate(image, scale_factor=scale_factor, mode="bilinear")
-
-    return _to_ndim(image, original_dim)
-    
-
-def _display_colourized(mIF):
-    from instanseg.utils.utils import _move_channel_axis, generate_colors
-
-    mIF = _to_tensor_float32(mIF)
-    mIF = mIF / (mIF.max() + 1e-6)
-    if mIF.shape[0]!=3:
-        colours = generate_colors(num_colors=mIF.shape[0])
-        colour_render = (mIF.flatten(1).T @ torch.tensor(colours)).reshape(mIF.shape[1],mIF.shape[2],3)
-    else:
-        colour_render = mIF
-    colour_render = torch.clamp_(colour_render, 0, 1)
-    colour_render = _move_channel_axis(colour_render,to_back = True).detach().numpy()*255
-    return colour_render.astype(np.uint8)
 
 
 class InstanSeg():
@@ -253,7 +224,8 @@ class InstanSeg():
      
                     
             else:
-                self.eval_whole_slide_image(image_array, pixel_size, **kwargs)
+                self.eval_whole_slide_image(image_array, pixel_size, save_geojson = save_geojson, **kwargs)
+                output_list.append(None)
 
         if initial_type == "not_list":
             output = output_list[0]
@@ -304,7 +276,8 @@ class InstanSeg():
                 features = labels_to_features(labels[0,0],object_type = "detection")
 
             elif output_dimension == 2:
-                features = labels_to_features(labels[0,0],object_type = "detection",classification="Nuclei") + labels_to_features(labels[0,1],object_type = "detection",classification = "Cells")
+             #   breakpoint()
+                features = labels_to_features(labels[0,0],object_type = "detection",classification="Nuclei")["features"] + labels_to_features(labels[0,1],object_type = "detection",classification = "Cells")["features"]
             geojson = json.dumps(features)
 
             geojson_path = Path(image_path).parent / (new_stem + ".geojson")
@@ -344,7 +317,7 @@ class InstanSeg():
         
         :return: A tensor corresponding to the output targets specified, as well as the input image if requested.
         """
-        from instanseg.utils.utils import percentile_normalize
+        from instanseg.utils.utils import percentile_normalize, _filter_kwargs
 
         image = _to_tensor_float32(image)
 
@@ -378,7 +351,7 @@ class InstanSeg():
             target_segmentation = torch.tensor([1,1])
 
         with torch.amp.autocast('cuda'):
-            instanseg_kwargs = {k: v for k, v in kwargs.items() if k not in ["batch_size", "tile_size", "normalisation_subsampling_factor"]}
+            instanseg_kwargs = _filter_kwargs(self.instanseg, kwargs)
             instances = self.instanseg(image,target_segmentation = target_segmentation, **instanseg_kwargs)
 
         if pixel_size is not None and img_has_been_rescaled and rescale_output:  
@@ -420,7 +393,7 @@ class InstanSeg():
         :return: A tensor corresponding to the output targets specified, as well as the input image if requested.
         """
 
-        from instanseg.utils.utils import percentile_normalize, _move_channel_axis
+        from instanseg.utils.utils import percentile_normalize, _move_channel_axis, _filter_kwargs
 
     
         image = _to_tensor_float32(image)
@@ -442,11 +415,12 @@ class InstanSeg():
         
 
         image = _to_ndim(image, 3)
+
+       # breakpoint()
         
         if normalise:
             image = percentile_normalize(image, subsampling_factor=normalisation_subsampling_factor)
             
-
         output_dimension = 2 if self.instanseg.cells_and_nuclei else 1
 
         if target != "all_outputs" and output_dimension == 2:
@@ -459,6 +433,8 @@ class InstanSeg():
         else:
             target_segmentation = torch.tensor([1,1])
 
+        instanseg_kwargs = _filter_kwargs(self.instanseg, kwargs)
+
         instances = _sliding_window_inference(image,
                                               self.instanseg,
                                               window_size = (tile_size,tile_size),sw_device = self.inference_device,
@@ -467,7 +443,7 @@ class InstanSeg():
                                               output_channels = output_dimension,
                                               show_progress= self.verbose,
                                               target_segmentation = target_segmentation,
-                                              **kwargs).float()
+                                              **instanseg_kwargs).float()
 
         instances = _to_ndim(instances, 4)
         image = _to_ndim(image, 4)
@@ -495,7 +471,8 @@ class InstanSeg():
                                overlap: int = 100,
                                detection_size: int = 20, 
                                batch_size: int = 1,
-                               output_geojson: bool = False,
+                               save_geojson: bool = False,
+                               use_otsu_threshold: bool = False,
                                **kwargs):
             """
             Evaluate a whole slide input image using the InstanSeg model. This function uses slideio to read an image and then segments it using the instanseg model. The segmentation is done in a tiled manner to avoid memory issues. 
@@ -508,13 +485,12 @@ class InstanSeg():
             :param detection_size: The expected maximum size of detection objects.
             :param batch_size: The number of tiles to be run simultaneously.
             :param normalisation_subsampling_factor: The subsampling or downsample factor at which to calculate normalisation parameters.
-            :param target: Controls what type of output is given, usually "all_outputs", "nuclei", or "cells".
-            :param rescale_output: Controls whether the outputs should be rescaled to the same coordinate space as the input (useful if the pixel size is different to that of the InstanSeg model being used).
+            :param use_otsu_threshold: bool = False. Whether to use an otsu threshold on the image thumbnail to find the tissue region.
             :param kwargs: Passed to pytorch.
             :return: Returns a zarr file with the segmentation. The zarr file is saved in the same directory as the image with the same name but with the extension .zarr.
             """
 
-            memory_block_size =  (int(self.medium_image_threshold**0.5), int(self.medium_image_threshold **0.5))
+            memory_block_size = tile_size,tile_size
             inference_tile_size = (tile_size,tile_size)
 
             from itertools import product
@@ -522,6 +498,7 @@ class InstanSeg():
             from pathlib import Path
             from tqdm import tqdm
             from instanseg.utils.tiling import _chops, _remove_edge_labels, _zarr_to_json_export
+            from instanseg.utils.utils import show_images
             
             instanseg = self.instanseg
 
@@ -534,7 +511,6 @@ class InstanSeg():
             new_stem = Path(image).stem + self.prediction_tag
             file_with_zarr_extension = Path(image).parent / (new_stem + ".zarr")
 
-
             if img_pixel_size > 1 or img_pixel_size < 0.1:
                 import warnings
                 warnings.warn("The image pixel size {} is not in microns.".format(img_pixel_size))
@@ -542,9 +518,8 @@ class InstanSeg():
                     img_pixel_size = pixel_size
                 else:
                     raise ValueError("The image pixel size {} is not in microns.".format(img_pixel_size))
-                
-
             
+                
             scale_factor = model_pixel_size/img_pixel_size
 
             dims = slide.dimensions
@@ -554,8 +529,13 @@ class InstanSeg():
             pad = overlap
 
             shape = memory_block_size
-            
             chop_list = _chops(dims, shape, overlap=2*pad2)
+
+            if use_otsu_threshold:
+                mask,_ = _threshold_thumbnail(slide)
+                valid_positions = _find_non_empty_positions(mask, chop_list, shape[0], dims)
+            else:
+                valid_positions = np.ones((len(chop_list[0])* len(chop_list[1])))
 
             chunk_shape = (n_dim,shape[0],shape[1])
             store = zarr.DirectoryStore(file_with_zarr_extension) 
@@ -564,7 +544,11 @@ class InstanSeg():
             running_max = 0
 
             total = len(chop_list[0]) * len(chop_list[1])
+            counter = -1
             for _, ((i, window_i), (j, window_j)) in tqdm(enumerate(product(enumerate(chop_list[0]), enumerate(chop_list[1]))), total=total, colour = "green", desc = "Slide progress: "):
+                counter += 1
+                if valid_positions[counter] == 0:
+                    continue
 
             #  input_data = scene.read_block((int(window_j*scale_factor), int(window_i*scale_factor), int(shape[0]*scale_factor), int(shape[1]*scale_factor)), size = shape)
 
@@ -574,8 +558,6 @@ class InstanSeg():
                 initial_pixel_size = img_pixel_size
                 itermediate_pixel_size = initial_pixel_size * downsample_factor
                 final_pixel_size = model_pixel_size
-
-                
 
                 intermediate_to_final = final_pixel_size/itermediate_pixel_size
 
@@ -589,18 +571,22 @@ class InstanSeg():
             
                 input_tensor = self._to_tensor(input_data)
 
-                new_tile = self.eval_medium_image(input_tensor,
+            
+                new_tile = self.eval_small_image(input_tensor,
                                                   pixel_size = itermediate_pixel_size,
                                                   tile_size = inference_tile_size[0],
                                                   batch_size = batch_size,
                                                   return_image_tensor = False,
                                                   normalise = normalise,
                                                   normalisation_subsampling_factor = normalisation_subsampling_factor,
-                                                )
+                                                    **kwargs)
+                                                
 
                 if not np.allclose(intermediate_to_final,1, 0.01):
                     from torch.nn.functional import interpolate
                     new_tile = interpolate(new_tile, size=shape[-2:], mode="nearest").int()[0]
+                
+                new_tile = _to_ndim(new_tile, 3)
 
                 num_iter = new_tile.shape[0]
 
@@ -681,12 +667,10 @@ class InstanSeg():
                     
                         canvas[n, window_i + pad:window_i + shape[0] - pad, window_j + pad:window_j + shape[1] - pad] = tile1_torch.numpy().astype(np.int32)
 
-            if output_geojson:
+            if save_geojson:
                 print("Exporting to geojson")
                 _zarr_to_json_export(file_with_zarr_extension, detection_size = detection_size, size = shape[0], scale = scale_factor, n_dim = n_dim)
                     
-
-
     
     def display(self,
                 image: torch.tensor,
@@ -760,4 +744,81 @@ class InstanSeg():
         axes[1].axis('off')
         plt.subplots_adjust(wspace=0., hspace=0)
         plt.show()
+
+
+
+def _threshold_thumbnail(slide, level=None, sigma = 3):
+    from skimage.color import rgb2gray
+    from skimage import filters
+    import numpy as np
+
+    if level is None:
+        level = slide.level_count - 1
+
+    img_thumbnail = slide.read_region((0, 0), level, size=(10000, 10000), as_array=True, padding=False)
+    downsample_factor_thumbnail = slide.level_downsamples[level]
+
+    gray_image = rgb2gray(np.array(img_thumbnail))
+    threshold_value = filters.threshold_otsu(gray_image)
+    gray_image = filters.gaussian(gray_image,sigma = sigma)>threshold_value
+    binary_image = ~(gray_image > threshold_value)  # Apply the threshold to create a binary image
+
+    return binary_image, downsample_factor_thumbnail
+
+
+
+def _find_non_empty_positions(mask, chop_list, tile_size, chopped_image_size, emptiness_threshold = 0.1):
+    """
+    Precompute all valid positions within the mask where tiles can be placed.
+    """
+    from itertools import product
+    from instanseg.utils.utils import show_images
+    valid_positions = []
+
+    downsample_factor_mask = chopped_image_size[0] / mask.shape[0]
+    scaled_tile_size = int(round(tile_size / downsample_factor_mask,0))
+
+    for y,x in product((chop_list[0]),(chop_list[1])):
+
+        y = int(round(y / downsample_factor_mask,0))
+        x = int(round(x / downsample_factor_mask,0))
+
+        if mask[y:y + scaled_tile_size, x:x + scaled_tile_size].max() > emptiness_threshold:
+            valid_positions.append(1)
+        else:
+            valid_positions.append(0)
+
+    return valid_positions
+
+
+def _rescale_to_pixel_size(image: torch.Tensor, 
+                           requested_pixel_size: float, 
+                           model_pixel_size: float) -> torch.Tensor:
+    
+    original_dim = image.dim()
+
+    image = _to_ndim(image, 4)
+
+    scale_factor = requested_pixel_size / model_pixel_size
+
+    if not np.allclose(scale_factor,1, 0.01): #if you change this value, you MUST modify the whole_slide_image function.
+        image = interpolate(image, scale_factor=scale_factor, mode="bilinear")
+
+    return _to_ndim(image, original_dim)
+    
+
+def _display_colourized(mIF):
+    from instanseg.utils.utils import _move_channel_axis, generate_colors
+
+    mIF = _to_tensor_float32(mIF)
+    mIF = mIF / (mIF.max() + 1e-6)
+    if mIF.shape[0]!=3:
+        colours = generate_colors(num_colors=mIF.shape[0])
+        colour_render = (mIF.flatten(1).T @ torch.tensor(colours)).reshape(mIF.shape[1],mIF.shape[2],3)
+    else:
+        colour_render = mIF
+    colour_render = torch.clamp_(colour_render, 0, 1)
+    colour_render = _move_channel_axis(colour_render,to_back = True).detach().numpy()*255
+    return colour_render.astype(np.uint8)
+
 

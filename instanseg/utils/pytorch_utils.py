@@ -492,6 +492,7 @@ def _to_ndim(x: torch.Tensor, n: int) -> torch.Tensor:
     Returns:
         torch.Tensor: The input tensor with the desired number of dimensions.
     """
+
     if x.dim() == n:
         return x
     if x.dim() > n:
