@@ -36,7 +36,7 @@ prediction_tag = "_instanseg_prediction"
 
 if __name__ == "__main__":
     from instanseg.utils.utils import show_images
-    from instanseg.instanseg import InstanSeg
+    from instanseg import InstanSeg
 
     parser = parser.parse_args()
 
