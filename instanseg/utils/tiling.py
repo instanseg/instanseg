@@ -187,7 +187,7 @@ def _zarr_to_json_export(path_to_zarr, detection_size = 30, size = 1024, scale =
         outfile.write('\n')
 
     if n_dim == 1:
-        classes = [None]
+        classes = ["Detection"]
     else:
         classes = ["Nucleus","Cell"]
 
@@ -197,14 +197,22 @@ def _zarr_to_json_export(path_to_zarr, detection_size = 30, size = 1024, scale =
             for n in range(n_dim):
                 
                 image = z[n,window_i:window_i+size, window_j:window_j+size]
+
+                # if image.max() > 0:
+                #     from instanseg.utils.utils import show_images
+                #     show_images(image)
               
                 image = _remove_edge_labels(torch.tensor(image)).numpy()
 
                 features = labels_to_features(image.astype(np.int32), object_type='detection', include_labels=True,
                                         classification=classes[n],offset=[window_j*scale,window_i*scale], downsample = scale)
+                
+                features = features["features"]
 
+        #    print(features)
+            
 
-            if features != []:
+            if len(features) > 0:
                 count+=1
                 geojson = json.dumps(features)
 

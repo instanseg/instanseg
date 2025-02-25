@@ -899,3 +899,11 @@ def download_model(model_str: str, version: Optional[str] = None, verbose : bool
             return torch.jit.load(path_to_torchscript_model)
         else:
             raise Exception(f"Model {path_to_torchscript_model} version {version} not found in the release data or locally. Please check the model name and try again.")
+
+def _filter_kwargs(func, kwargs):
+    import inspect
+    # Get the signature of the function
+    sig = inspect.signature(func)
+    # Filter kwargs to only include parameters accepted by the function
+    filtered_kwargs = {k: v for k, v in kwargs.items() if k in sig.parameters}
+    return filtered_kwargs

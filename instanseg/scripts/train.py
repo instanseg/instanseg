@@ -57,7 +57,7 @@ parser.add_argument('-anneal', '--cosineannealing', default=False, type=lambda x
 parser.add_argument('-o_h', '--optimize_hyperparameters', default=False, type=lambda x: (str(x).lower() == 'true'), help = "Whether to optimize hyperparameters every 10 epochs")
 parser.add_argument('-hotstart', '--hotstart_training', default=10, type=int, help = "Number of epochs to train the model with binary_xloss before starting the main training loop (default=10)")
 parser.add_argument('-window', '--window_size', default=128, type=int, help = "Size of the window containing each instance")
-parser.add_argument('-multihead', '--multihead', default= True, type=lambda x: (str(x).lower() == 'true'), help = "Whether to branch the decoder into multiple heads.")
+parser.add_argument('-multihead', '--multihead', default= False, type=lambda x: (str(x).lower() == 'true'), help = "Whether to branch the decoder into multiple heads.")
 parser.add_argument('-dim_coords', '--dim_coords', default=2, type=int, help = "Dimensionality of the coordinate system. Little support for anything but 2")
 parser.add_argument('-norm', '--norm', default="BATCH", type=str, help = "Norm layer to use: None, INSTANCE, INSTANCE_INVARIANT, BATCH")
 parser.add_argument('-mlp_w', '--mlp_width', default=5, type=int, help = "Width of the MLP hidden dim")
@@ -220,7 +220,6 @@ def instanseg_training(segmentation_dataset: Dict = None, **kwargs):
                         cells_and_nuclei=args.cells_and_nuclei, 
                         to_centre = args.to_centre, 
                         window_size = args.window_size, 
-                        tile_size = args.tile_size,
                         dim_coords= args.dim_coords, 
                         multi_centre= args.multi_centre, 
                         feature_engineering_function=args.feature_engineering )  # binary_xloss, lovasz_hinge dice_loss general_dice_loss
@@ -243,6 +242,7 @@ def instanseg_training(segmentation_dataset: Dict = None, **kwargs):
     args_dict["dropprob"] = float(args.dropprob)
 
     model = build_model_from_dict(args_dict)
+
     # from fvcore.nn import FlopCountAnalysis
     # flops = FlopCountAnalysis(model, torch.randn(1,3,256,256))
     # print("Number of flops:",flops.total()/1e9)
