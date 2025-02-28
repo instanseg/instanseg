@@ -19,7 +19,8 @@ parser.add_argument("-ignore_segmented", "--ignore_segmented",default=False, typ
 parser.add_argument("-tile_size", "--tile_size", type=int, default= 512, help="tile size in pixels given to the model, only used for large images.")
 parser.add_argument("-batch_size", "--batch_size", type=int, default= 3, help="batch size, only useful for large images")
 parser.add_argument("-save_geojson", "--save_geojson", type=lambda x: (str(x).lower() == 'true'), default= False, help="Output geojson files of the segmentation")
-
+parser.add_argument("-image_reader", "--image_reader", type=str, default= "tiffslide", help='The image reader to use. Options are "tiffslide", "skimage.io", "bioio", "AICSImageIO""')
+parser.add_argument("-use_otsu", "--use_otsu_threshold", type=lambda x: (str(x).lower() == 'true'), default= True, help="Use an Otsu Threshold on the WSI thumbnail to determine which channels to segment(ignored for images that are not WSIs)")
 def file_matches_requirement(root,file, exclude_str):
     if not os.path.isfile(os.path.join(root,file)):
         return False
@@ -27,8 +28,9 @@ def file_matches_requirement(root,file, exclude_str):
         if e_str in file:
             return False
         if parser.ignore_segmented:
-            if os.path.isfile(os.path.join(root,str(Path(file).stem) + prediction_tag + ".tiff")):
-                return False
+            for extension in [".tiff",".zarr"]:
+                if os.path.exists(os.path.join(root,str(Path(file).stem) + prediction_tag + extension)):
+                    return False
     return True
 
 prediction_tag = "_instanseg_prediction"
@@ -48,7 +50,7 @@ if __name__ == "__main__":
     if parser.model_folder is None:
         raise ValueError("Please provide a model name")
     
-    instanseg = InstanSeg(model_type=parser.model_folder, device= parser.device)
+    instanseg = InstanSeg(model_type=parser.model_folder, device= parser.device, image_reader= parser.image_reader)
     instanseg.prediction_tag = prediction_tag
 
     if not parser.recursive:
@@ -76,7 +78,7 @@ if __name__ == "__main__":
                         save_overlay = True,
                         save_geojson = parser.save_geojson,
                         batch_size = parser.batch_size,
-                        tile_size = parser.tile_size,)
+                        tile_size = parser.tile_size,use_otsu_threshold = parser.use_otsu_threshold)
 
 
 

@@ -72,6 +72,8 @@ def test_epoch(test_model,
             loss = test_loss_fn(output, labels.clone()).mean()
             test_loss.append(loss.detach().cpu().numpy())
 
+            if type(output) == list:
+                output = output[0]
 
 
             if labels.type() != 'torch.cuda.FloatTensor' and labels.type() != 'torch.FloatTensor':

@@ -194,10 +194,15 @@ def show_images(*img_list, clip_pct=None, titles=None, save_str=False, n_cols=3,
                             vmax=np.percentile(img.ravel(), 100 - clip_pct))
         if i in labels:
             img = img.astype(int)
-            img = fastremap.renumber(img)[0]
-            n_instances = len(fastremap.unique(img))
+            img[img>0] = fastremap.renumber(img[img>0])[0]
             glasbey_cmap = cc.cm.glasbey_bw_minc_20_minl_30_r.colors
             glasbey_cmap[0] = [0, 0, 0]  # Set bg to black
+
+            if img.min() < 0:
+                img[img < 0] = len(fastremap.unique(img)) + 1
+                glasbey_cmap[-1] = [128,128,128]
+            
+            n_instances = len(fastremap.unique(img))
             cmap_lab = LinearSegmentedColormap.from_list('my_list', glasbey_cmap, N=n_instances)
             im = ax1.imshow(img, cmap=cmap_lab, interpolation='nearest')
         else:
@@ -899,3 +904,11 @@ def download_model(model_str: str, version: Optional[str] = None, verbose : bool
             return torch.jit.load(path_to_torchscript_model)
         else:
             raise Exception(f"Model {path_to_torchscript_model} version {version} not found in the release data or locally. Please check the model name and try again.")
+
+def _filter_kwargs(func, kwargs):
+    import inspect
+    # Get the signature of the function
+    sig = inspect.signature(func)
+    # Filter kwargs to only include parameters accepted by the function
+    filtered_kwargs = {k: v for k, v in kwargs.items() if k in sig.parameters}
+    return filtered_kwargs
