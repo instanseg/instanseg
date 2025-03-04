@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "instanseg-torch"
-version = "0.0.7"
+version = "0.0.8"
 authors = [
   { name="Thibaut Goldsborough", email="thibaut.golds@gmail.com" },
 ]
@@ -83,8 +83,8 @@ full = [
 ]
 
 [tool.hatch.build]
-include = ["instanseg/**"]
-exclude = ["notebooks/**", "instanseg/examples/*", "assets/**"]
+include = ["instanseg/**","instanseg/bioimageio_models/model-index.json"]
+exclude = ["notebooks/**", "instanseg/examples/*", "assets/**", "instanseg/bioimageio_models/**","!instanseg/bioimageio_models/model-index.json",]
 
 [project.urls]
 Homepage = "https://github.com/instanseg/instanseg"
