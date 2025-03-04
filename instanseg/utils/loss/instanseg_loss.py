@@ -229,7 +229,7 @@ def compute_crops( x: torch.Tensor,
         seeds = torch.zeros_like(x)
         seeds[torch.arange(C, device=x.device), 0, shifted_centroid[:,0], shifted_centroid[:,1]] = 1
 
-        filled = flood_fill((x >= mask_threshold), seeds) > 0
+        filled = flood_fill((torch.sigmoid(x) >= mask_threshold), seeds) > 0
         holes = torch.bitwise_xor(fill_holes(filled), filled)
 
         x[~filled] = 0 #remove fragments

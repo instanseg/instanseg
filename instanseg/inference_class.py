@@ -511,7 +511,9 @@ class InstanSeg():
             new_stem = Path(image).stem + self.prediction_tag
             file_with_zarr_extension = Path(image).parent / (new_stem + ".zarr")
 
-            if img_pixel_size > 1 or img_pixel_size < 0.1:
+            
+
+            if img_pixel_size > 1 or img_pixel_size < 0.1 or img_pixel_size is None:
                 import warnings
                 warnings.warn("The image pixel size {} is not in microns.".format(img_pixel_size))
                 if pixel_size is not None:
