@@ -186,7 +186,11 @@ def _read_images_from_pth(data_path= "../datasets", dataset = "segmentation", da
             path_of_pth = os.path.join(data_path,str(dataset + "_dataset.pth"))
 
         print("Loading dataset from ", os.path.abspath(path_of_pth))
-        complete_dataset = torch.load(path_of_pth)
+
+        try:
+            complete_dataset = torch.load(path_of_pth,weights_only = False)
+        except:
+            complete_dataset = torch.load(path_of_pth)
     
 
     data_dicts = {}
