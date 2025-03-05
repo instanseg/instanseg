@@ -105,7 +105,7 @@ def build_model_from_dict(build_model_dictionary):
     if "dropprob" not in build_model_dictionary.keys():
         build_model_dictionary["dropprob"] = 0.0
 
-    if build_model_dictionary["model_str"] == "InstanSeg_UNet":
+    if build_model_dictionary["model_str"].lower() == "instanseg_unet":
             from instanseg.utils.models.InstanSeg_UNet import InstanSeg_UNet
             print("Generating InstanSeg_UNet")
             multihead = build_model_dictionary["multihead"]
@@ -130,6 +130,11 @@ def build_model_from_dict(build_model_dictionary):
                             out_channels=out_channels,
                             norm  = build_model_dictionary["norm"], 
                             dropout=build_model_dictionary["dropprob"])
+            
+    elif build_model_dictionary["model_str"].lower() == "segformer":
+        from instanseg.utils.models.SegFormer import SegFormer
+        print("Generating SegFormer")
+        model = SegFormer(in_channels=dim_in, out_channels=build_model_dictionary["dim_out"])
             
     else:
         model = build_monai_model(build_model_dictionary["model_str"], build_model_dictionary)
