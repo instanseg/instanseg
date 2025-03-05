@@ -513,7 +513,7 @@ class InstanSeg():
 
             
 
-            if img_pixel_size > 1 or img_pixel_size < 0.1 or img_pixel_size is None:
+            if img_pixel_size is None or img_pixel_size > 1 or img_pixel_size < 0.1:
                 import warnings
                 warnings.warn("The image pixel size {} is not in microns.".format(img_pixel_size))
                 if pixel_size is not None:
