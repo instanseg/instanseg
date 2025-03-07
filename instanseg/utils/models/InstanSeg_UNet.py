@@ -159,7 +159,6 @@ class InstanSeg_UNet(nn.Module):
     
 
 
-
 if __name__ == "__main__":
 
     net = InstanSeg_UNet(

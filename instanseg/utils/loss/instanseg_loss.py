@@ -897,7 +897,6 @@ class InstanSeg(nn.Module):
                         onehot_labels = onehot_labels[instance_labels]
                         centroids = centroids.T
 
-
                     else:
                         if self.to_centre:
 

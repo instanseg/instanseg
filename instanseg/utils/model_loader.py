@@ -135,6 +135,13 @@ def build_model_from_dict(build_model_dictionary):
         from instanseg.utils.models.SegFormer import SegFormer
         print("Generating SegFormer")
         model = SegFormer(in_channels=dim_in, out_channels=build_model_dictionary["dim_out"])
+
+    elif build_model_dictionary["model_str"].lower() == "cellsam":
+        from instanseg.utils.models.CellSam_VISTA import CellSamWrapper
+        print("Generating CellSam")
+        model = CellSamWrapper(auto_resize_inputs=True, network_resize_roi=[1024, 1024],
+                               checkpoint="/lustre/s1708347/sam_vit_b_01ec64.pth", return_features=False,
+                               dim_out=build_model_dictionary["dim_out"])
             
     else:
         model = build_monai_model(build_model_dictionary["model_str"], build_model_dictionary)
