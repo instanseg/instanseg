@@ -236,11 +236,13 @@ def _instanseg_padding(img: torch.Tensor, extra_pad: int = 0, min_dim: int = 16,
     padx = min_dim * torch.ceil(torch.tensor((img.shape[-2] / min_dim))).int() - img.shape[-2] + extra_pad * 2
     pady = min_dim * torch.ceil(torch.tensor((img.shape[-1] / min_dim))).int() - img.shape[-1] + extra_pad * 2
 
+
     if padx > img.shape[-2]:
         padx = padx - extra_pad
     if pady > img.shape[-1]:
         pady = pady - extra_pad
     img = torch.functional.F.pad(img, [0, int(pady), 0, int(padx)], mode='reflect')
+  #  img = torch.functional.F.pad(img, [0, int(pady), 0, int(padx)], mode='constant', value=img.max())
 
     if ensure_square and not is_square:
         pady = pady + bigger_dim - original_shape[-1]

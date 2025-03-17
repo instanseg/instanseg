@@ -96,7 +96,13 @@ def read_model_args_from_csv(path=r"../results/", folder=""):
     return build_model_dictionary
 
 
-def build_model_from_dict(build_model_dictionary):
+def build_model_from_dict(build_model_dictionary, random_seed = None):
+
+    #set seed 
+    if random_seed is not None:
+        import torch
+        torch.manual_seed(random_seed)
+
     if build_model_dictionary["dim_in"] == 0 or build_model_dictionary["dim_in"] is None:
         dim_in = 3  # Channel invariance currently outputs a 3 channel image
     else:

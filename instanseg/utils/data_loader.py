@@ -225,20 +225,35 @@ def get_loaders(train_images_local, train_labels_local, val_images_local, val_la
     from torch.utils.data import DataLoader
     from instanseg.utils.utils import count_instances
 
+
+    if args.rng_seed is not None:
+        import torch
+        torch.manual_seed(args.rng_seed)
+
     augmentation_dict = get_augmentation_dict(args.dim_in, nuclei_channel=None, amount=args.transform_intensity,
                                               pixel_size=args.requested_pixel_size, augmentation_type=args.augmentation_type)
 
-    train_data = Segmentation_Dataset(train_images_local, train_labels_local, metadata=train_meta,
-                                      size=(args.tile_size, args.tile_size), augmentation_dict=augmentation_dict['train'],
+    train_data = Segmentation_Dataset(train_images_local, 
+                                      train_labels_local, 
+                                      metadata=train_meta,
+                                      size=(args.tile_size, args.tile_size), 
+                                      augmentation_dict=augmentation_dict['train'],
                                       debug=False,
-                                      dim_in=args.dim_in, cells_and_nuclei=args.cells_and_nuclei,
-                                      target_segmentation=args.target_segmentation, channel_invariant = args.channel_invariant)
+                                      dim_in=args.dim_in,
+                                      cells_and_nuclei=args.cells_and_nuclei,
+                                      random_seed=args.rng_seed,
+                                      target_segmentation=args.target_segmentation, 
+                                      channel_invariant = args.channel_invariant)
 
-    test_data = Segmentation_Dataset(val_images_local, val_labels_local, size=(args.tile_size, args.tile_size), metadata=val_meta,
+    test_data = Segmentation_Dataset(val_images_local, val_labels_local, 
+                                     size=(args.tile_size, args.tile_size), 
+                                     metadata=val_meta,
                                      dim_in=args.dim_in,
                                      augmentation_dict=augmentation_dict['test'],
+                                     random_seed = args.rng_seed,
                                      cells_and_nuclei=args.cells_and_nuclei,
-                                     target_segmentation=args.target_segmentation,channel_invariant = args.channel_invariant)
+                                     target_segmentation=args.target_segmentation,
+                                     channel_invariant = args.channel_invariant)
 
     test_sampler = RandomSampler(test_data,num_samples=int(
                 args.length_of_epoch * 0.2))

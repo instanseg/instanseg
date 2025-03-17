@@ -151,8 +151,19 @@ def collate_fn(data):
 
 # import fastremap
 class Segmentation_Dataset():
-    def __init__(self, img, label, common_transforms=True, metadata=None, size=(256, 256), augmentation_dict=None,
-                 dim_in=3, debug=False, cells_and_nuclei=False, target_segmentation="N", channel_invariant = False):
+    def __init__(self, img, 
+                label, 
+                common_transforms=True,
+                metadata=None, 
+                size=(256, 256), 
+                augmentation_dict=None,
+                dim_in=3, 
+                debug=False, 
+                cells_and_nuclei=False, 
+                target_segmentation="N", 
+                channel_invariant = False,
+                random_seed = None):
+        
         self.X = img
         self.Y = label
         self.common_transforms = common_transforms
@@ -165,9 +176,14 @@ class Segmentation_Dataset():
 
         assert len(self.X) == len(self.metadata), print("The number of images and metadata must be the same")
         self.size = size
-        self.Augmenter = Augmentations(augmentation_dict=augmentation_dict, debug=debug, shape=self.size,
-                                       dim_in=dim_in, cells_and_nuclei=cells_and_nuclei,
-                                       target_segmentation=target_segmentation, channel_invariant = channel_invariant)
+        self.Augmenter = Augmentations(augmentation_dict=augmentation_dict, 
+                                       debug=debug, 
+                                       shape=self.size,
+                                       dim_in=dim_in, 
+                                       cells_and_nuclei=cells_and_nuclei,
+                                       target_segmentation=target_segmentation, 
+                                       channel_invariant = channel_invariant,
+                                       random_seed = random_seed)
 
     def __len__(self):
         return len(self.X)
@@ -246,11 +262,11 @@ def optimize_hyperparameters(model,postprocessing_fn, data_loader = None, val_im
 
     space = {  # instanseg
         'mask_threshold': hp.uniform('mask_threshold', 0.3, 0.7),
-        'seed_threshold': hp.uniform('seed_threshold', 0.5, 1),
-        'overlap_threshold': hp.uniform('overlap_threshold', 0.1, 0.9),
+        'seed_threshold': hp.uniform('seed_threshold', 0.2, 1),
+        #'overlap_threshold': hp.uniform('overlap_threshold', 0.1, 0.9),
         #'min_size': hp.uniform('min_size', 0, 30),
-        'peak_distance': hp.uniform('peak_distance', 3, 10),
-        'mean_threshold': hp.uniform('mean_threshold', 0.0, 0.3)} #the max could be increased, but may cuase the method not to converge for some reason.
+      #  'peak_distance': hp.uniform('peak_distance', 3, 10),
+        'mean_threshold': hp.uniform('mean_threshold', 0.0, 0.5)} #the max could be increased, but may cuase the method not to converge for some reason.
     
     _model = model # copy.deepcopy(model)
     _model.eval()
@@ -313,8 +329,13 @@ def optimize_hyperparameters(model,postprocessing_fn, data_loader = None, val_im
 
         print("Optimizing hyperparameters")
         # Optimize
-        best = fmin(fn=objective, space=space, algo=tpe.suggest,
-                    max_evals=max_evals, trials=bayes_trials, show_progressbar = show_progressbar)
+        best = fmin(fn=objective, 
+                    space=space, 
+                    algo=tpe.suggest,
+                    max_evals=max_evals, 
+                    trials=bayes_trials, 
+                    rstate=np.random.default_rng(0),
+                    show_progressbar = show_progressbar)
     
     if verbose:
         print(best)

@@ -734,9 +734,9 @@ class InstanSeg(nn.Module):
                 edt = (instance_wise_edt(y.float(), edt_type= 'edt') - 0.5 ) * 15 #This is to mimick the range of CELoss
                 loss = distance_loss((x), (edt[None]))
 
-                # weights = torch.where(edt < 0, 0.01, 1.0)  # Assign lower weight to targets below 0
-                # # Apply the weights to the raw loss
-                # loss = loss * weights
+            #    weights = torch.where(edt < 0, 0.01, 1.0)  # Assign lower weight to targets below 0
+                # Apply the weights to the raw loss
+               # loss = loss * weights
 
                 if mask is not None:
                     mask = mask.float()
@@ -961,21 +961,21 @@ class InstanSeg(nn.Module):
     #@timer
     def postprocessing(self, prediction: Union[torch.Tensor, np.ndarray],
                         mask_threshold: float = 0.53,
-                        peak_distance: int = 5,
+                        peak_distance: int = 4,
                         seed_threshold: float = 0.8,
-                        overlap_threshold: float = 0.3,
+                        overlap_threshold: float = 0.5,
                         mean_threshold: float = 0.1,
                         window_size: int = 128,
                         min_size = 10,
-                       device=None,
-                       classifier=None,
-                       cleanup_fragments: bool = False,
-                       max_seeds: int = 2000,
-                       return_intermediate_objects: bool = False,
-                       precomputed_crops: torch.Tensor = None,
-                       precomputed_seeds: torch.Tensor = None,
-                       img=None):
-        
+                        device=None,
+                        classifier=None,
+                        cleanup_fragments: bool = False,
+                        max_seeds: int = 2000,
+                        return_intermediate_objects: bool = False,
+                        precomputed_crops: torch.Tensor = None,
+                        precomputed_seeds: torch.Tensor = None,
+                        img=None):
+            
 
         if device is None:
             device = self.device
@@ -1028,7 +1028,7 @@ class InstanSeg(nn.Module):
                     fields = prediction_i[0:self.dim_coords]
 
                 sigma = prediction_i[self.dim_coords:self.dim_coords + self.n_sigma]
-            #    mask_map = torch.sigmoid(prediction_i[self.dim_coords + self.n_sigma])
+                #mask_map = torch.sigmoid(prediction_i[self.dim_coords + self.n_sigma])
 
                 mask_map = ((prediction_i[self.dim_coords + self.n_sigma]) / 15) + 0.5
 

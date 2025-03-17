@@ -190,7 +190,8 @@ def instanseg_training(segmentation_dataset: Dict = None, **kwargs):
 
     if args.use_deterministic:
         print('Setting use_deterministic_algorithms=True')
-        torch.use_deterministic_algorithms(True)
+        torch.use_deterministic_algorithms(True,warn_only = True)
+        os.environ['CUBLAS_WORKSPACE_CONFIG'] = ':4096:8'
 
 
     args.layers = eval(args.layers)
@@ -242,7 +243,7 @@ def instanseg_training(segmentation_dataset: Dict = None, **kwargs):
         args_dict["dim_in"] = int(dim_in)
     args_dict["dropprob"] = float(args.dropprob)
 
-    model = build_model_from_dict(args_dict)
+    model = build_model_from_dict(args_dict, random_seed=args.rng_seed)
 
     try:
         from fvcore.nn import FlopCountAnalysis
