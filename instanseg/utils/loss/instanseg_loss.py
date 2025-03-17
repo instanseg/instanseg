@@ -461,6 +461,34 @@ class ConvProbabilityNet(nn.Module):
         return output
     
 
+class SimpleCNN(nn.Module):
+    def __init__(self, input_channels, output_size=1):
+        super(SimpleCNN, self).__init__()
+        # First convolutional layer
+        self.conv1 = nn.Conv2d(in_channels=input_channels, out_channels=16, kernel_size=3, padding=1)
+        # Second convolutional layer
+        self.conv2 = nn.Conv2d(in_channels=16, out_channels=32, kernel_size=3, padding=1)
+        # Adaptive average pooling to ensure fixed-size output
+        self.adaptive_pool = nn.AdaptiveAvgPool2d((1, 1))
+        # Fully connected layer
+        self.fc1 = nn.Linear(in_features=32, out_features=output_size)
+
+    def forward(self, x):
+        # Apply first convolution, then ReLU activation, and pooling
+        x = F.relu(self.conv1(x))
+        x = F.max_pool2d(x, kernel_size=2)
+        # Apply second convolution, then ReLU activation, and pooling
+        x = F.relu(self.conv2(x))
+        x = F.max_pool2d(x, kernel_size=2)
+        # Apply adaptive pooling to get a fixed-size output
+        x = self.adaptive_pool(x)
+        # Remove extra dimensions
+        x = x.view(x.size(0), -1)
+        # Apply the fully connected layer
+        x = self.fc1(x)
+        return x
+    
+
 class MedianFilter(nn.Module):
     def __init__(self, kernel_size: Tuple[int, int]):
         from kornia.filters import MedianBlur
@@ -631,7 +659,11 @@ class InstanSeg(nn.Module):
                  multi_centre: bool = False,
                  window_size = 256, 
                  feature_engineering_function = "0",
+                 bg_weight = None,
+                 only_positive_labels = True,
                  dim_coords = 2):
+        
+        print(bg_weight,only_positive_labels, "BG WEIGHT AND ONLY POSITIVE LABELS")
         
         super().__init__()
         self.n_sigma = n_sigma
@@ -649,9 +681,10 @@ class InstanSeg(nn.Module):
         self.to_centre = to_centre
         self.multi_centre = multi_centre
         self.window_size = window_size
-        self.only_positive_labels = True
+        self.only_positive_labels = only_positive_labels
         self.num_instance_cap = 50
         self.sort_by_eccentricity = False
+        self.bg_weight = bg_weight
 
         self.feature_engineering, self.feature_engineering_width = feature_engineering_generator(feature_engineering_function)
         self.feature_engineering_function = feature_engineering_function
@@ -727,16 +760,22 @@ class InstanSeg(nn.Module):
                 
             self.seed_loss = seed_loss
 
-        elif seed_loss_fn in ["l1_distance"]:
+        elif seed_loss_fn in ["l1_distance", "l2_distance"]:
             from instanseg.utils.pytorch_utils import instance_wise_edt
-            distance_loss = torch.nn.L1Loss(reduction='none')
+
+            if seed_loss_fn == "l1_distance":
+                distance_loss = torch.nn.L1Loss(reduction='none')
+            elif seed_loss_fn == "l2_distance":
+                distance_loss = torch.nn.MSELoss(reduction='none')
+            
             def seed_loss(x,y, mask = None):
                 edt = (instance_wise_edt(y.float(), edt_type= 'edt') - 0.5 ) * 15 #This is to mimick the range of CELoss
                 loss = distance_loss((x), (edt[None]))
 
-            #    weights = torch.where(edt < 0, 0.01, 1.0)  # Assign lower weight to targets below 0
-                # Apply the weights to the raw loss
-               # loss = loss * weights
+                if self.bg_weight is not None:
+                    print("Using bg weight")
+                    weights = torch.where(edt < 0,self.bg_weight, 1.0)  # Assign lower weight to targets below 0
+                    loss = loss * weights
 
                 if mask is not None:
                     mask = mask.float()
@@ -767,10 +806,8 @@ class InstanSeg(nn.Module):
                 model.pixel_classifier = ConvProbabilityNet( MLP_input_dim, width = MLP_width)
             self.pixel_classifier = model.pixel_classifier.to(self.device)
 
-          #  import torchvision
-         #   model.object_classifier = torchvision.models.mobilenet_v3_small(num_classes = 1)
-         #   model.object_classifier.features[0][0] = nn.Conv2d(MLP_input_dim, 16, kernel_size=(3, 3), stride=(1, 1), bias=False)
-         #   self.object_classifier = model.object_classifier.to(self.device)
+            model.object_classifier = SimpleCNN(MLP_input_dim, output_size = 1)
+            self.object_classifier = model.object_classifier.to(self.device)
 
             return model
         
@@ -821,7 +858,6 @@ class InstanSeg(nn.Module):
 
                 if (instance < 0).all(): #-1 means not annotated
                     continue
-       
 
                 elif instance.min() < 0: #label is sparse
                     mask = instance >=0
@@ -1077,6 +1113,7 @@ class InstanSeg(nn.Module):
                                            feature_engineering = self.feature_engineering,
                                            object_classifier=self.object_classifier,
                                            window_size = window_size)
+                    
                     
                     t_p = (preds > 0).squeeze(1)
                     fields_at_centroids = fields_at_centroids[:,t_p]

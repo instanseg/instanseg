@@ -49,6 +49,8 @@ parser.add_argument("-tf", "--transform_intensity", type=float, default=0.5, hel
 parser.add_argument("-dim_in", "--dim_in", type=int, default=3,help="Number of channels that the (backbone) model expects. This is also the number of channels a channel invariant model would output.")
 parser.add_argument("-dummy", "--dummy", default=False, type=lambda x: (str(x).lower() == 'true'),help="Use the training set as a validation set, this will trigger a warning message. use only for debugging")
 parser.add_argument('-to_centre', '--to_centre', default=False, type=lambda x: (str(x).lower() == 'true'), help = "Whether to use the instance centroid or the learnt instance centroid in InstanSeg")
+parser.add_argument('-bg_weight', '--bg_weight', default=None, type= float, help = "Weight to assign to the background class in the loss function")
+parser.add_argument('-opl', '--only_positive_labels', default=True, type=lambda x: (str(x).lower() == 'true'), help = "Sample local maxima from the whole image, adds an object classifier")
 parser.add_argument('-multi_centre', '--multi_centre', default=True, type=lambda x: (str(x).lower() == 'true'), help = "Allow multi centres per instance, uses local maxima algorithm")
 parser.add_argument('-open_license', '--open_license', default=False, type=lambda x: (str(x).lower() == 'true'), help = "Whether to filter out images that do not have an open license during training")
 parser.add_argument('-modality', '--image_modality', default="all", type=str, help = "Filter out images that do not have this modality: Brightfield, Fluorescence, all")
@@ -224,7 +226,9 @@ def instanseg_training(segmentation_dataset: Dict = None, **kwargs):
                         window_size = args.window_size, 
                         dim_coords= args.dim_coords, 
                         multi_centre= args.multi_centre, 
-                        feature_engineering_function=args.feature_engineering )  # binary_xloss, lovasz_hinge dice_loss general_dice_loss
+                        feature_engineering_function=args.feature_engineering,
+                        bg_weight = args.bg_weight,
+                        only_positive_labels= args.only_positive_labels)  # binary_xloss, lovasz_hinge dice_loss general_dice_loss
 
         def loss_fn(*args, **kwargs):
             return method.forward(*args, **kwargs)
