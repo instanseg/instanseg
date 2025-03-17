@@ -773,7 +773,6 @@ class InstanSeg(nn.Module):
                 loss = distance_loss((x), (edt[None]))
 
                 if self.bg_weight is not None:
-                    print("Using bg weight")
                     weights = torch.where(edt < 0,self.bg_weight, 1.0)  # Assign lower weight to targets below 0
                     loss = loss * weights
 
