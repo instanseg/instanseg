@@ -3,8 +3,13 @@ import numpy as np
 import warnings
 
 def _keep_images(item, args):
-    if args.source_dataset != "all" and item[
-        'parent_dataset'] not in args.source_dataset:  # remove items that are not of the desired dataset
+
+    if not type(args.source_dataset) == list:
+        args.source_dataset = [args.source_dataset]
+
+    args.source_dataset = [i.lower() for i in args.source_dataset]
+    if args.source_dataset != ["all"] and item[
+        'parent_dataset'].lower() not in args.source_dataset:  # remove items that are not of the desired dataset
         return False
     elif 'duplicate' in item.keys() and item['duplicate']:  # remove items that are duplicates
         return False
@@ -195,25 +200,34 @@ def _read_images_from_pth(data_path= "../datasets", dataset = "segmentation", da
     
 
     data_dicts = {}
-    
-    for set in sets:
-        data_dicts[set] = []
-        images_local = [get_image(item['image']) for item in complete_dataset[set] if _keep_images(item, args)][:data_slice]
- 
-        labels_local = [_format_labels(item,target_segmentation = args.target_segmentation) for item in complete_dataset[set] if _keep_images(item, args)][:data_slice]
-        metadata = [{k: v for k, v in item.items() if k not in ('image', 'cell_masks','nucleus_masks', 'class_masks')} for item in complete_dataset[set] if _keep_images(item, args)][:data_slice]
 
-        data_dicts[set].extend([images_local,labels_local,metadata])
+
+    for _set in sets:
+        print("Datasets available in ", _set)
+        unique_values, counts = np.unique([item['parent_dataset'] for item in complete_dataset[_set]], return_counts=True)
+        print(set(zip(unique_values, counts)))
+
+        data_dicts[_set] = []
+        images_local = [get_image(item['image']) for item in complete_dataset[_set] if _keep_images(item, args)][:data_slice]
+ 
+        labels_local = [_format_labels(item,target_segmentation = args.target_segmentation) for item in complete_dataset[_set] if _keep_images(item, args)][:data_slice]
+        metadata = [{k: v for k, v in item.items() if k not in ('image', 'cell_masks','nucleus_masks', 'class_masks')} for item in complete_dataset[_set] if _keep_images(item, args)][:data_slice]
+
+        data_dicts[_set].extend([images_local,labels_local,metadata])
+
+        print("After filtering using:")
+        unique_values, counts = np.unique([item['parent_dataset'] for item in data_dicts[_set][2]], return_counts=True)
+        print(set(zip(unique_values, counts)))
 
     if dummy:
         warnings.warn("Using same train and validation sets !")
         data_dicts["Validation"] = data_dicts["Train"]
 
     return_list = []
-    for set in sets:
-        return_list.extend(data_dicts[set])
+    for _set in sets:
+        return_list.extend(data_dicts[_set])
 
-        assert len(data_dicts[set][0]) > 0, "No images in the dataset meet the requirements. (Hint: Check that the source argument is correct)"
+        assert len(data_dicts[_set][0]) > 0, "No images in the dataset meet the requirements. (Hint: Check that the source argument is correct)"
 
     return return_list
 
