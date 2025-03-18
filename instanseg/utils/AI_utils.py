@@ -262,7 +262,7 @@ def optimize_hyperparameters(model,postprocessing_fn, data_loader = None, val_im
 
     space = {  # instanseg
         'mask_threshold': hp.uniform('mask_threshold', 0.3, 0.7),
-        'seed_threshold': hp.uniform('seed_threshold', 0.2, 1),
+        'seed_threshold': hp.uniform('seed_threshold', 0.7, 1),
         #'overlap_threshold': hp.uniform('overlap_threshold', 0.1, 0.9),
         #'min_size': hp.uniform('min_size', 0, 30),
       #  'peak_distance': hp.uniform('peak_distance', 3, 10),

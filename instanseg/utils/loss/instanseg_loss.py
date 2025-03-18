@@ -251,6 +251,7 @@ def get_crop_probs( x: torch.Tensor,
 
     mesh_grid_flat,window_slices = centre_crop(centroids_idx, window_size, h, w)
     x = feature_engineering(x, c, sigma, window_size //2 , mesh_grid_flat).reshape(C, -1, window_size, window_size)
+
     x = object_classifier(x)  # C,1
 
 
@@ -396,7 +397,6 @@ def generate_coordinate_map(mode: str = "linear", spatial_dim: int = 2, height: 
 
 
     return xxyy
-
 
 
 class ProbabilityNet(nn.Module):
@@ -663,7 +663,6 @@ class InstanSeg(nn.Module):
                  only_positive_labels = True,
                  dim_coords = 2):
         
-        print(bg_weight,only_positive_labels, "BG WEIGHT AND ONLY POSITIVE LABELS")
         
         super().__init__()
         self.n_sigma = n_sigma
@@ -794,6 +793,11 @@ class InstanSeg(nn.Module):
                 self.pixel_classifier = model.pixel_classifier
             except:
                 self.pixel_classifier = model.model.pixel_classifier  # This happens when there is an adaptornet
+            
+            try:
+                self.object_classifier = model.object_classifier
+            except:
+                pass
             return model
         else:
             if MLP_input_dim is None:
@@ -805,8 +809,10 @@ class InstanSeg(nn.Module):
                 model.pixel_classifier = ConvProbabilityNet( MLP_input_dim, width = MLP_width)
             self.pixel_classifier = model.pixel_classifier.to(self.device)
 
-            model.object_classifier = SimpleCNN(MLP_input_dim, output_size = 1)
-            self.object_classifier = model.object_classifier.to(self.device)
+            if not self.only_positive_labels:
+
+                model.object_classifier = SimpleCNN(MLP_input_dim, output_size = 1)
+                self.object_classifier = model.object_classifier.to(self.device)
 
             return model
         
@@ -1104,6 +1110,7 @@ class InstanSeg(nn.Module):
                     labels.append(label)
                     continue
 
+
                 if not self.only_positive_labels:
                     preds = get_crop_probs(fields, 
                                            fields_at_centroids.T, 
@@ -1113,6 +1120,7 @@ class InstanSeg(nn.Module):
                                            object_classifier=self.object_classifier,
                                            window_size = window_size)
                     
+
                     
                     t_p = (preds > 0).squeeze(1)
                     fields_at_centroids = fields_at_centroids[:,t_p]

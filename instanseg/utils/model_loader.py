@@ -92,6 +92,10 @@ def read_model_args_from_csv(path=r"../results/", folder=""):
         build_model_dictionary["multihead"] = False
     if "channel_invariant" in build_model_dictionary.keys():
         build_model_dictionary["channel_invariant"] = bool(eval(build_model_dictionary["channel_invariant"]))
+    if "only_positive_labels" in build_model_dictionary.keys():
+        build_model_dictionary["only_positive_labels"] = bool(eval(build_model_dictionary["only_positive_labels"]))
+    else:
+        build_model_dictionary["only_positive_labels"] = True
 
     return build_model_dictionary
 
@@ -173,6 +177,8 @@ def remove_module_prefix_from_dict(dictionary):
 def has_pixel_classifier_state_dict(state_dict):
     return bool(sum(['pixel_classifier' in key for key in state_dict.keys()]))
 
+def has_object_classifier_state_dict(state_dict):
+    return bool(sum(['object_classifier' in key for key in state_dict.keys()]))
 
 def has_adaptor_net_state_dict(state_dict):
     return bool(sum(['AdaptorNet' in key for key in state_dict.keys()]))
@@ -208,8 +214,9 @@ def load_model_weights(model, device, folder, path=r"../models/", dict = None):
     if has_pixel_classifier_state_dict(model_dict['model_state_dict']) and not has_pixel_classifier_model(model):
         from instanseg.utils.loss.instanseg_loss import InstanSeg
 
-        method = InstanSeg(n_sigma=int(dict["n_sigma"]), feature_engineering_function= dict["feature_engineering"],dim_coords = dict["dim_coords"],device =device)
+        method = InstanSeg(n_sigma=int(dict["n_sigma"]), feature_engineering_function= dict["feature_engineering"],dim_coords = dict["dim_coords"],only_positive_labels= dict["only_positive_labels"],device =device)
         model = method.initialize_pixel_classifier(model, MLP_width=int(dict["mlp_width"]))
+    
 
     from instanseg.utils.models.ChannelInvariantNet import AdaptorNetWrapper, has_AdaptorNet
     if has_adaptor_net_state_dict(model_dict['model_state_dict']) and not has_AdaptorNet(model):
@@ -218,6 +225,7 @@ def load_model_weights(model, device, folder, path=r"../models/", dict = None):
 
     #from instanseg.utils.AI_utils import set_running_stats
     #set_running_stats(model,device = "cuda")
+
 
     model.load_state_dict(model_dict['model_state_dict'], strict=True)
     model.to(device)
