@@ -163,8 +163,9 @@ def get_image(img_object):
 
                 print((str(Path(img_path).parents[1]) + ".zip"))
 
-                shutil.unpack_archive(str(Path(img_path).parents[1]) + ".zip", Path(img_path).parents[1])
+                shutil.unpack_archive(str(Path(img_path).parents[1]) + ".zip", Path(img_path).parents[2])
             
+            #breakpoint()
             img = tifffile.imread(img_path)
             return img
     else:

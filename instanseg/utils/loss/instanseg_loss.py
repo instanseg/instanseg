@@ -884,6 +884,9 @@ class InstanSeg(nn.Module):
                     loss += w_seed * seed_loss
                     continue
 
+                if instance.min() > 0:
+                    continue
+
                 instance_ids = instance.unique()
                 instance_ids = instance_ids[instance_ids != 0]
 
