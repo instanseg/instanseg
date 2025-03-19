@@ -87,8 +87,17 @@ def get_marker_location(meta):
     return meta
     
 class Augmentations(object):
-    def __init__(self, augmentation_dict={}, shape=(256, 256), dim_in=3,
-                 nuclei_channel=None, debug=False, modality=None, cells_and_nuclei=False, target_segmentation="N",channel_invariant = False):
+    def __init__(self, augmentation_dict={},
+                 shape=(256, 256), 
+                 dim_in=3,
+                 nuclei_channel=None, 
+                 debug=False, 
+                 modality=None, 
+                 cells_and_nuclei=False, 
+                 target_segmentation="N",
+                 channel_invariant = False,
+                 random_seed=None):
+        
         self.debug = debug
         self.shape = shape
         self.augmentation_dict = augmentation_dict
@@ -98,6 +107,12 @@ class Augmentations(object):
         self.dim_in = dim_in  # Note, this is the number of input channels to the model, not the number of channels in the raw image. (Can be 'None' for channel invariant models)
         self.nuclei_channel = nuclei_channel  # The channel that contains the nuclei. (Can be 'None' for brightfield images or if in image metadata)
         self.channel_invariant = channel_invariant
+
+        if random_seed is not None:
+            torch.manual_seed(random_seed)
+            np.random.seed(random_seed)
+
+
     def to_tensor(self, image, labels=None, normalize=False, amount=None, metadata=None):
 
 
@@ -704,7 +719,7 @@ class Augmentations(object):
                                                    value=image.max() if modality == "Brightfield" else resized_data.min())
 
             if labels is not None:
-                resized_labels = torch.nn.functional.pad(resized_labels, (pad, pad, pad, pad), mode='constant', value = min(resized_labels.min(),0)).to(
+                resized_labels = torch.nn.functional.pad(resized_labels, (pad, pad, pad, pad), mode='constant', value = min(abs(resized_labels.min()),0)).to(
                     labels.dtype)
                 
               
@@ -862,6 +877,8 @@ class Augmentations(object):
         if image.var() > 1e2:
             image = torch.clip(image, min=-1, max=5)
             warnings.warn("Warning, variance of image is very high, check augmentations")
+
+      
 
         return image, labels
 

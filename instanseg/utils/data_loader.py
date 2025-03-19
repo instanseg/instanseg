@@ -3,8 +3,13 @@ import numpy as np
 import warnings
 
 def _keep_images(item, args):
-    if args.source_dataset != "all" and item[
-        'parent_dataset'] not in args.source_dataset:  # remove items that are not of the desired dataset
+
+    if not type(args.source_dataset) == list:
+        args.source_dataset = [args.source_dataset]
+
+    args.source_dataset = [i.lower() for i in args.source_dataset]
+    if args.source_dataset != ["all"] and item[
+        'parent_dataset'].lower() not in args.source_dataset:  # remove items that are not of the desired dataset
         return False
     elif 'duplicate' in item.keys() and item['duplicate']:  # remove items that are duplicates
         return False
@@ -163,8 +168,9 @@ def get_image(img_object):
 
                 print((str(Path(img_path).parents[1]) + ".zip"))
 
-                shutil.unpack_archive(str(Path(img_path).parents[1]) + ".zip", Path(img_path).parents[1])
+                shutil.unpack_archive(str(Path(img_path).parents[1]) + ".zip", Path(img_path).parents[2])
             
+            #breakpoint()
             img = tifffile.imread(img_path)
             return img
     else:
@@ -186,29 +192,42 @@ def _read_images_from_pth(data_path= "../datasets", dataset = "segmentation", da
             path_of_pth = os.path.join(data_path,str(dataset + "_dataset.pth"))
 
         print("Loading dataset from ", os.path.abspath(path_of_pth))
-        complete_dataset = torch.load(path_of_pth)
+
+        try:
+            complete_dataset = torch.load(path_of_pth,weights_only = False)
+        except:
+            complete_dataset = torch.load(path_of_pth)
     
 
     data_dicts = {}
-    
-    for set in sets:
-        data_dicts[set] = []
-        images_local = [get_image(item['image']) for item in complete_dataset[set] if _keep_images(item, args)][:data_slice]
- 
-        labels_local = [_format_labels(item,target_segmentation = args.target_segmentation) for item in complete_dataset[set] if _keep_images(item, args)][:data_slice]
-        metadata = [{k: v for k, v in item.items() if k not in ('image', 'cell_masks','nucleus_masks', 'class_masks')} for item in complete_dataset[set] if _keep_images(item, args)][:data_slice]
 
-        data_dicts[set].extend([images_local,labels_local,metadata])
+
+    for _set in sets:
+        print("Datasets available in ", _set)
+        unique_values, counts = np.unique([item['parent_dataset'] for item in complete_dataset[_set]], return_counts=True)
+        print(set(zip(unique_values, counts)))
+
+        data_dicts[_set] = []
+        images_local = [get_image(item['image']) for item in complete_dataset[_set] if _keep_images(item, args)][:data_slice]
+ 
+        labels_local = [_format_labels(item,target_segmentation = args.target_segmentation) for item in complete_dataset[_set] if _keep_images(item, args)][:data_slice]
+        metadata = [{k: v for k, v in item.items() if k not in ('image', 'cell_masks','nucleus_masks', 'class_masks')} for item in complete_dataset[_set] if _keep_images(item, args)][:data_slice]
+
+        data_dicts[_set].extend([images_local,labels_local,metadata])
+
+        print("After filtering using:")
+        unique_values, counts = np.unique([item['parent_dataset'] for item in data_dicts[_set][2]], return_counts=True)
+        print(set(zip(unique_values, counts)))
 
     if dummy:
         warnings.warn("Using same train and validation sets !")
         data_dicts["Validation"] = data_dicts["Train"]
 
     return_list = []
-    for set in sets:
-        return_list.extend(data_dicts[set])
+    for _set in sets:
+        return_list.extend(data_dicts[_set])
 
-        assert len(data_dicts[set][0]) > 0, "No images in the dataset meet the requirements. (Hint: Check that the source argument is correct)"
+        assert len(data_dicts[_set][0]) > 0, "No images in the dataset meet the requirements. (Hint: Check that the source argument is correct)"
 
     return return_list
 
@@ -221,20 +240,35 @@ def get_loaders(train_images_local, train_labels_local, val_images_local, val_la
     from torch.utils.data import DataLoader
     from instanseg.utils.utils import count_instances
 
+
+    if args.rng_seed is not None:
+        import torch
+        torch.manual_seed(args.rng_seed)
+
     augmentation_dict = get_augmentation_dict(args.dim_in, nuclei_channel=None, amount=args.transform_intensity,
                                               pixel_size=args.requested_pixel_size, augmentation_type=args.augmentation_type)
 
-    train_data = Segmentation_Dataset(train_images_local, train_labels_local, metadata=train_meta,
-                                      size=(args.tile_size, args.tile_size), augmentation_dict=augmentation_dict['train'],
+    train_data = Segmentation_Dataset(train_images_local, 
+                                      train_labels_local, 
+                                      metadata=train_meta,
+                                      size=(args.tile_size, args.tile_size), 
+                                      augmentation_dict=augmentation_dict['train'],
                                       debug=False,
-                                      dim_in=args.dim_in, cells_and_nuclei=args.cells_and_nuclei,
-                                      target_segmentation=args.target_segmentation, channel_invariant = args.channel_invariant)
+                                      dim_in=args.dim_in,
+                                      cells_and_nuclei=args.cells_and_nuclei,
+                                      random_seed=args.rng_seed,
+                                      target_segmentation=args.target_segmentation, 
+                                      channel_invariant = args.channel_invariant)
 
-    test_data = Segmentation_Dataset(val_images_local, val_labels_local, size=(args.tile_size, args.tile_size), metadata=val_meta,
+    test_data = Segmentation_Dataset(val_images_local, val_labels_local, 
+                                     size=(args.tile_size, args.tile_size), 
+                                     metadata=val_meta,
                                      dim_in=args.dim_in,
                                      augmentation_dict=augmentation_dict['test'],
+                                     random_seed = args.rng_seed,
                                      cells_and_nuclei=args.cells_and_nuclei,
-                                     target_segmentation=args.target_segmentation,channel_invariant = args.channel_invariant)
+                                     target_segmentation=args.target_segmentation,
+                                     channel_invariant = args.channel_invariant)
 
     test_sampler = RandomSampler(test_data,num_samples=int(
                 args.length_of_epoch * 0.2))
