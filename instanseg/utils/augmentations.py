@@ -800,8 +800,13 @@ class Augmentations(object):
                 c_nuclei = self.nuclei_channel
 
             if "pixel_size" in meta.keys():
-                pixel_size = meta["pixel_size"]
+                pixel_size = (meta["pixel_size"])
             else:
+                pixel_size = None
+            
+            if not isinstance((pixel_size),float):
+                import warnings
+                warnings.warn(f"Pixel size {pixel_size} is not a float {type(pixel_size)}, check metadata")
                 pixel_size = None
 
         if meta is not None and "channel_names" in meta.keys():
