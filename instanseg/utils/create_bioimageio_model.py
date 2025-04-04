@@ -241,7 +241,7 @@ def export_bioimageio(torchsript: torch.jit._script.RecursiveScriptModule,
     if model_dict["channel_invariant"]:
         input_axes = [BatchAxis(), IndexInputAxis( description = "Channel axis for channel invariant models", size=ParameterizedSize(min=1, step=1))]
     else:
-        input_axes = [BatchAxis(), ChannelAxis(id = AxisId("channel"),channel_names=[Identifier(i) for i in ["C1","C2","C3"]])]
+        input_axes = [BatchAxis(), ChannelAxis(id = AxisId("channel"),channel_names=[Identifier(i) for i in [f"C{jj}" for jj in range(dim_in)]])]
 
     if input_crop.ndim == 5: 
         input_axes += [
