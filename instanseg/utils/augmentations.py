@@ -325,6 +325,7 @@ class Augmentations(object):
         
         import kornia
 
+       # orig = image.clone()
         #get stats
         min = torch.min(image)
         max = torch.max(image)
@@ -333,17 +334,19 @@ class Augmentations(object):
         image = image / (max - min + 0.001)
 
         image  = torch.nn.Sequential(
+                kornia.augmentation.RandomLinearIllumination(gain = (0.1,0.4),p = 1),
+                kornia.augmentation.RandomPlasmaContrast(p=0.5),
+                kornia.augmentation.RandomSaltAndPepperNoise(),
                 kornia.augmentation.RandomMedianBlur(p = 0.2),
                 kornia.augmentation.RandomGaussianBlur((3, 3), (0.1, 2.0), p=0.2),
                 kornia.augmentation.RandomBoxBlur((3, 3), p=0.2),
-                kornia.augmentation.RandomSharpness(sharpness=0.5, p=0.2,),
-                kornia.augmentation.RandomInvert(max_val=1.0, p=0.1),
-                kornia.augmentation.RandomContrast(contrast=(0.5, 1.5),p = 0.2),
-                kornia.augmentation.RandomGamma(gamma=(0.5, 1.5), gain=(0.5, 1.5), same_on_batch=False, p=0.2), 
+                kornia.augmentation.RandomSharpness(sharpness=1, p=0.5,),
+              #  kornia.augmentation.RandomInvert(max_val=1.0, p=0.1),
+                kornia.augmentation.RandomContrast(contrast=(1, 1.5),p = 0.5),
+                kornia.augmentation.RandomGamma(gamma=(0.5, .5), gain=(0.5, 1.5), p=0.5), 
             )(image).squeeze(0)
         
         image = image * (max - min + 0.001) + min
-
 
         return image, labels
 

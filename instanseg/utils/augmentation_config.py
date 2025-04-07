@@ -57,7 +57,7 @@ def get_augmentation_dict(dim_in,nuclei_channel,amount,pixel_size=0.5, augmentat
         }
 
 
-    if augmentation_type == "kornia_intensity":
+    elif augmentation_type == "kornia_intensity":
 
 
         augmentation_dict = {
@@ -68,7 +68,7 @@ def get_augmentation_dict(dim_in,nuclei_channel,amount,pixel_size=0.5, augmentat
                     ("torch_rescale", [1,pixel_size, 0]),#in microns per pixel
                     ("flips", [1]),#Probability
                     ("rotate", [1]),#Probability
-                    ("kornia_base_augmentations", [0.7]),
+                    ("kornia_base_augmentations", [1]),
                 ]),
                 "Fluorescence": collections.OrderedDict([
                     ("to_tensor", [1]),
