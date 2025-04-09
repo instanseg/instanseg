@@ -18,8 +18,8 @@ classifiers = [
 ]
 
 dependencies = [
-    "bioio~=1.1.0",
-    "bioio-ome-tiff~=1.0.1",
+    "bioio~=1.5.1",
+    "bioio-ome-tiff>=1.0.1",
     "colorcet>=3.0.1",
     "einops>=0.7.0",
     "fastremap>=1.14.0",
