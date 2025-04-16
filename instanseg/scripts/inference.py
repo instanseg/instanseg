@@ -21,6 +21,37 @@ parser.add_argument("-batch_size", "--batch_size", type=int, default= 3, help="b
 parser.add_argument("-save_geojson", "--save_geojson", type=lambda x: (str(x).lower() == 'true'), default= False, help="Output geojson files of the segmentation")
 parser.add_argument("-image_reader", "--image_reader", type=str, default= "tiffslide", help='The image reader to use. Options are "tiffslide", "skimage.io", "bioio", "AICSImageIO""')
 parser.add_argument("-use_otsu", "--use_otsu_threshold", type=lambda x: (str(x).lower() == 'true'), default= True, help="Use an Otsu Threshold on the WSI thumbnail to determine which channels to segment(ignored for images that are not WSIs)")
+
+parser.add_argument("-kwargs", "--kwargs", nargs="*", type=str, default={}, help="Additional keyword arguments in the form key=value", dest="kwargs_raw")
+
+def smart_cast(value):
+    """Try to convert string to int, float, bool, or leave as string."""
+    value_lower = value.lower()
+    if value[0] == "[" and value[-1] == "]":
+        value = value.replace("[","").replace("]","").split(",")
+        value = [smart_cast(v) for v in value]
+        return value
+    if value_lower == "true":
+        return True
+    elif value_lower == "false":
+        return False
+    try:
+        if "." in value:
+            return float(value)
+        return int(value)
+    except ValueError:
+        return value
+
+def parse_key_value(arg_list):
+    kwargs = {}
+    for arg in arg_list:
+        if "=" not in arg:
+            raise argparse.ArgumentTypeError(f"Invalid format for argument '{arg}'. Use key=value.")
+        key, value = arg.split("=", 1)
+        kwargs[key] = smart_cast(value)
+    return kwargs
+
+
 def file_matches_requirement(root,file, exclude_str):
     if not os.path.isfile(os.path.join(root,file)):
         return False
@@ -41,6 +72,11 @@ if __name__ == "__main__":
     from instanseg import InstanSeg
 
     parser = parser.parse_args()
+
+# Convert the list of key=value strings into a dictionary
+    kwargs = parse_key_value(parser.kwargs_raw)
+    del parser.kwargs_raw
+
 
     if parser.image_path is None or not os.path.exists(parser.image_path):
         from instanseg.utils.utils import drag_and_drop_file
@@ -72,13 +108,17 @@ if __name__ == "__main__":
 
         print("Processing: ", file)
 
+        #breakpoint()
+
         _ = instanseg.eval(image=file,
                         pixel_size = parser.pixel_size,
                         save_output = True,
                         save_overlay = True,
                         save_geojson = parser.save_geojson,
                         batch_size = parser.batch_size,
-                        tile_size = parser.tile_size,use_otsu_threshold = parser.use_otsu_threshold)
+                        tile_size = parser.tile_size,use_otsu_threshold = parser.use_otsu_threshold,
+                        **kwargs,
+                        )
 
 
 

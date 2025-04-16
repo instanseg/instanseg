@@ -680,7 +680,7 @@ class InstanSeg(nn.Module):
         self.to_centre = to_centre
         self.multi_centre = multi_centre
         self.window_size = window_size
-        self.only_positive_labels = only_positive_labels
+        self.use_object_classifier = not only_positive_labels
         self.num_instance_cap = 50
         self.sort_by_eccentricity = False
         self.bg_weight = bg_weight
@@ -696,7 +696,6 @@ class InstanSeg(nn.Module):
         if binary_loss_fn_str == "lovasz_hinge":
             from instanseg.utils.loss.lovasz_losses import lovasz_hinge
             def binary_loss_fn(pred, gt, **kwargs):
-               # pred = torch.sigmoid_(pred)
                 return lovasz_hinge((pred.squeeze(1)), gt,per_image = True)
 
         elif binary_loss_fn_str == "binary_xloss":
@@ -809,7 +808,7 @@ class InstanSeg(nn.Module):
                 model.pixel_classifier = ConvProbabilityNet( MLP_input_dim, width = MLP_width)
             self.pixel_classifier = model.pixel_classifier.to(self.device)
 
-            if not self.only_positive_labels:
+            if self.use_object_classifier:
 
                 model.object_classifier = SimpleCNN(MLP_input_dim, output_size = 1)
                 self.object_classifier = model.object_classifier.to(self.device)
@@ -870,7 +869,7 @@ class InstanSeg(nn.Module):
                 else:
                     mask = None
 
-                if not self.only_positive_labels:
+                if self.use_object_classifier:
                    if (instance == 0).all():
                        continue
                    mask = instance > 0
@@ -908,7 +907,7 @@ class InstanSeg(nn.Module):
 
                     if self.multi_centre:
                 
-                        if not self.only_positive_labels:
+                        if self.use_object_classifier:
 
                             seed_map_tmp = torch.sigmoid(seed_map)
 
@@ -970,7 +969,7 @@ class InstanSeg(nn.Module):
                                                  pixel_classifier=self.pixel_classifier,
                                                  window_size = window_size)
                     
-                    if not self.only_positive_labels:
+                    if self.use_object_classifier:
                         if centres_neg.shape[0] > 0:
 
                             centres = torch.cat((centres,centres_neg),dim=0)
@@ -1114,7 +1113,7 @@ class InstanSeg(nn.Module):
                     continue
 
 
-                if not self.only_positive_labels:
+                if self.use_object_classifier:
                     preds = get_crop_probs(fields, 
                                            fields_at_centroids.T, 
                                            sigma, 
@@ -1217,7 +1216,7 @@ class InstanSeg(nn.Module):
             self.cells_and_nuclei = False
 
             for t in transforms:
-                with torch.cuda.amp.autocast():
+                with torch.amp.autocast("cuda"):
                     augmented_image = t.augment_image(img)
                     augmented_image, pad = _instanseg_padding(augmented_image, extra_pad= 0, min_dim = 32)
                     prediction = model(augmented_image)[:,i * dim_out:(i+1) * dim_out]

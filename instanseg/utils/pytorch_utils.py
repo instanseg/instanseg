@@ -315,7 +315,6 @@ def iou_heatmap(x: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
     return map
 
 
-
 def centroids_from_lab(lab: torch.Tensor):
     mesh_grid = torch.stack(torch.meshgrid(torch.arange(lab.shape[-2], device = lab.device), torch.arange(lab.shape[-1],device = lab.device), indexing="ij")).float()
 
@@ -394,43 +393,6 @@ def get_masked_patches(lab: torch.Tensor, image: torch.Tensor, patch_size: int =
 
     return image_patches,mask_patches  # N,C,patch_size,patch_size
 
-def feature_extractor():
-    import torch
-    from torchvision.models.resnet import ResNet
-    from torchvision.models.resnet import ResNet18_Weights
-    import torch.nn as nn
-    from typing import Type, Union, List, Optional, Any
-    from torchvision.models.resnet import BasicBlock, Bottleneck, WeightsEnum
-
-    class ResNetNoInitialDownsize(ResNet):
-        def __init__(self, *args, **kwargs):
-            super().__init__(*args, **kwargs)
-            self.conv1 = nn.Conv2d(3, 64, kernel_size=7, stride=1, padding=3, bias=False)
-
-    def _resnet_custom(
-            resnet_constructor,
-            block: Type[Union[BasicBlock, Bottleneck]],
-            layers: List[int],
-            weights: Optional[WeightsEnum],
-            progress: bool,
-            **kwargs: Any,
-    ) -> ResNet:
-        # if weights is not None:
-        #     _ovewrite_named_param(kwargs, "num_classes", len(weights.meta["categories"]))
-
-        model = resnet_constructor(block, layers, **kwargs)
-
-        if weights is not None:
-            model.load_state_dict(weights.get_state_dict(progress=progress))
-
-        return model
-
-    weights = ResNet18_Weights.verify(ResNet18_Weights.IMAGENET1K_V1)
-    # weights = None
-    model = _resnet_custom(ResNetNoInitialDownsize, BasicBlock, [2, 2, 2, 2], weights, progress=True)
-
-    return model
-
 
 
 def eccentricity_batch(mask_tensor):
@@ -501,6 +463,30 @@ def _to_ndim(x: torch.Tensor, n: int) -> torch.Tensor:
     if x.dim() != n:
         raise ValueError(f"Input tensor has shape {x.shape}, which is not compatible with the desired dimension {n}.")
     return x
+
+def _to_ndim_numpy(x: np.ndarray, n: int) -> np.ndarray:
+    """
+    Ensure that the input NumPy array has the desired number of dimensions.
+    If the input array has fewer dimensions, it will be unsqueezed.
+    If the input array has more dimensions, it will be squeezed.
+    If the input array has the desired number of dimensions, it will be returned as is.
+    
+    Args:
+        x (np.ndarray): The input NumPy array.
+        n (int): The desired number of dimensions.
+        
+    Returns:
+        np.ndarray: The input NumPy array with the desired number of dimensions.
+    """
+    if x.ndim == n:
+        return x
+    if x.ndim > n:
+        x = x.squeeze()
+    x = x[(None,) * (n - x.ndim)]
+    if x.ndim != n:
+        raise ValueError(f"Input tensor has shape {x.shape}, which is not compatible with the desired dimension {n}.")
+    return x
+
 
 def _to_tensor_float32(image: Union[np.ndarray, torch.Tensor]) -> torch.Tensor:
     """

@@ -241,9 +241,15 @@ def check_mean_grad(_model):
     losses = np.array([param.grad.norm().item() for name, param in _model.named_parameters() if param.grad is not None])
     return losses.mean()
 
-
-
-def optimize_hyperparameters(model,postprocessing_fn, data_loader = None, val_images = None, val_labels = None,max_evals = 50, verbose = False, threshold = [0.5, 0.7, 0.9], show_progressbar = True, device = None):
+def optimize_hyperparameters(model,postprocessing_fn,
+                              data_loader = None, 
+                              val_images = None, 
+                              val_labels = None,
+                              max_evals = 50, 
+                              verbose = False, 
+                              threshold = [0.5, 0.7, 0.9], 
+                              show_progressbar = True, 
+                              device = None):
 
 
     from instanseg.utils.metrics import _robust_average_precision

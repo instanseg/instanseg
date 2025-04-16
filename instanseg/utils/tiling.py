@@ -80,7 +80,7 @@ def _tiles_from_chops(image: torch.Tensor, shape: tuple, tuple_index: tuple) -> 
 def _stitch(tiles: list, shape: tuple, chop_list: list, final_shape: tuple, offset : int):
     """This function takes a list of tiles, a shape, and a tuple of window indices (e.g., outputed by the function _chops)
     and returns a stitched image"""
-    from instanseg.utils.pytorch_utils import torch_fastremap, match_labels
+    from instanseg.utils.pytorch_utils import torch_fastremap, match_labels, _to_ndim
 
     canvas = torch.zeros(final_shape, dtype=torch.int32, device = tiles[0].device)
 
@@ -90,7 +90,11 @@ def _stitch(tiles: list, shape: tuple, chop_list: list, final_shape: tuple, offs
         for j, window_j in enumerate(chop_list[1]):
 
             edge_window = False
-            new_tile = tiles[i * len(chop_list[1]) + j][None]
+            new_tile = tiles[i * len(chop_list[1]) + j]
+
+            new_tile = _to_ndim(new_tile, 3)
+
+
             ignore_list = []
             if i == 0:
                 ignore_list.append("top")
@@ -192,25 +196,50 @@ def _zarr_to_json_export(path_to_zarr, detection_size = 30, size = 1024, scale =
         classes = ["Nucleus","Cell"]
 
 
+  #  breakpoint()
+
+    previously_seen = {}
+    for i in range(n_dim):
+        previously_seen[i] = []
+
+
     for i, window_i in tqdm(enumerate(chop_list[0]), total = len(chop_list[0])):
         for j, window_j in enumerate(chop_list[1]):
+            features = []
             for n in range(n_dim):
                 
                 image = z[n,window_i:window_i+size, window_j:window_j+size]
 
-                # if image.max() > 0:
-                #     from instanseg.utils.utils import show_images
-                #     show_images(image)
+                ignore_list = []
+                if i == 0:
+                    ignore_list.append("top")
+                if j == 0:
+                    ignore_list.append("left")
+                if i == len(chop_list[0])-1:
+                    ignore_list.append("bottom")
+                if j == len(chop_list[1])-1:
+                    ignore_list.append("right")
               
-                image = _remove_edge_labels(torch.tensor(image)).numpy()
+                image = _remove_edge_labels(torch.tensor(image),ignore = ignore_list).numpy()
 
-                features = labels_to_features(image.astype(np.int32), object_type='detection', include_labels=True,
-                                        classification=classes[n],offset=[window_j*scale,window_i*scale], downsample = scale)
+                unique_labels = np.unique(image[image > 0])
+                duplicates = np.isin(unique_labels, previously_seen[n])
+                mask = np.isin(image, unique_labels[duplicates])
+                image[mask] = 0
+                previously_seen[n].extend(np.unique(image[image > 0]))
+
+
+
+                features_tmp = labels_to_features(image.astype(np.int32), 
+                                            object_type='detection', 
+                                            include_labels=True, 
+                                            classification=classes[n],
+                                            offset=[round(window_j*scale),round(window_i*scale)], 
+                                            downsample = scale)
                 
-                features = features["features"]
+                features.extend(features_tmp["features"])
 
-        #    print(features)
-            
+  
 
             if len(features) > 0:
                 count+=1
@@ -282,7 +311,7 @@ def _sliding_window_inference(input_tensor,
                              output_channels=1, 
                              show_progress = True, 
                              batch_size = 1,
-                             **kwargs):
+                             instanseg_kwargs = None):
     
     h,w = input_tensor.shape[-2:]
     window_size = (min(window_size[0], h), min(window_size[1], w))
@@ -292,18 +321,18 @@ def _sliding_window_inference(input_tensor,
  
     tuple_index = _chops(input_tensor.shape, shape=window_size, overlap=2 * (overlap + max_cell_size))
     tile_list = _tiles_from_chops(input_tensor, shape=window_size, tuple_index=tuple_index)
- 
+
  
     assert len(tile_list) > 0, "No tiles generated"
     # print("Number of tiles: ", len(tile_list))
-    # print("Shape of tiles: ", tile_list[0].shape)
+  #  print("Shape of tiles: ", tile_list[0].shape)
     # print("window size: ", window_size)
     # print("input tensor shape: ", input_tensor.shape)
  
     with torch.no_grad():
         with torch.amp.autocast("cuda"):
             batch_list = [torch.stack(tile_list[batch_size * i:batch_size * (i+1)]) for i in range(int(np.ceil(len(tile_list)/batch_size)))]
-            label_list = torch.cat([predictor(tile.to(sw_device),**kwargs).to(device) for tile in tqdm(batch_list, disable= not show_progress,leave = False, colour = "blue")])
+            label_list = torch.cat([predictor(tile.to(sw_device),**instanseg_kwargs).to(device) for tile in tqdm(batch_list, disable= not show_progress,leave = False, colour = "blue")])
  
    
     lab = torch.cat([_stitch([lab[i] for lab in label_list],

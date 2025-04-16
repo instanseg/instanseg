@@ -4,10 +4,8 @@ import warnings
 
 def _keep_images(item, args):
 
-    if not type(args.source_dataset) == list:
-        args.source_dataset = [args.source_dataset]
+    args.source_dataset = str(args.source_dataset).lower().replace("[","").replace("]","").replace("'","").split(",")
 
-    args.source_dataset = [i.lower() for i in args.source_dataset]
     if args.source_dataset != ["all"] and item[
         'parent_dataset'].lower() not in args.source_dataset:  # remove items that are not of the desired dataset
         return False
@@ -104,47 +102,6 @@ def export_dataset_dict_as_folder(dataset,destination = "benchmarking_data"):
         pd.DataFrame(df).to_csv(os.path.join(expanded_datasets, df_name, f"{df_name}_metadata.csv"))
 
 
-
-
-def _read_images_from_path(data_path, dataset, data_slice, dummy, args, sets = ["Train","Validation"]):
-    # from pathlib import Path
-
-    # for set in sets:
-    #     if set = "Validation":
-    
-
-    # if master_set == "Validation":
-    #     df = pd.read_csv(Path(parser_args.data_path) / "dataset_info.csv")
-    #     result_dict = df.set_index("ID")["TRAIN/TEST?"].apply(lambda x: x == "Validation Set").to_dict()
-    #     benchmark_path = Path(parser_args.data_path) / "Datasets" / parser_args.inference_folder / "Training"
-    #     images_files = sorted([file for file in list(benchmark_path.glob("*.tif")) if
-    #                         "mask" not in file.stem and result_dict[file.stem.replace("img_", "")]])
-    #     labels_files = sorted([file for file in list(benchmark_path.glob("*.tif")) if
-    #                         "mask" in file.stem and result_dict[
-    #                             file.stem.replace("img_", "").replace("_masks", "")]])
-
-    # elif master_set == "Test":
-    #     benchmark_path = Path(parser_args.data_path) / "Datasets" / parser_args.inference_folder / "Testing"
-    #     images_files = sorted([file for file in list(benchmark_path.glob("*.tif")) if "mask" not in file.stem])
-    #     labels_files = sorted([file for file in list(benchmark_path.glob("*.tif")) if "mask" in file.stem])
-
-    # val_images = [io.imread(file) for file in images_files]
-    # val_labels = [io.imread(file) for file in labels_files]
-
-    # val_data = [Augmenter.duplicate_grayscale_channels(*Augmenter.to_tensor(img, label)) for img, label in
-    #             zip(val_images, val_labels)]
-
-    # val_images = [item[0] for item in val_data]
-    # val_labels = [item[1] for item in val_data]
-
-    # a = [file.stem.replace("img_", "") for file in list(benchmark_path.glob("*.tif"))]
-    # # pdb.set_trace()
-    # assert len(val_images) >= 1, "No images found in the folder"
-
-    raise NotImplementedError("This function is not implemented yet")
-
-
-
 def get_image(img_object):
     import tifffile
     import os
@@ -177,6 +134,67 @@ def get_image(img_object):
         return img_object
 
 
+
+def _read_images_from_path(data_path= "../datasets", 
+                          dataset = "segmentation", 
+                          data_slice = None, 
+                          dummy = False, 
+                          args = None, 
+                          sets = ["Train","Validation"], 
+                          ):
+    
+    from pathlib import Path
+    import os
+    import skimage.io
+
+    datasets_available = sorted(os.listdir(data_path))
+    print("Datasets available ", datasets_available)
+
+    source_dataset = args.source_dataset
+
+    assert len(sets) !=2, "Only one set can be loaded at a time"
+    data_dicts = {}
+
+    source_dataset = str(args.source_dataset).lower().replace("[","").replace("]","").replace("'","").split(",")
+
+
+    for folder in datasets_available:
+        if folder.lower() in source_dataset:
+            dataset_path = Path(data_path) / folder
+            for _set in sets:
+
+                if _set not in data_dicts.keys():
+                    data_dicts[_set] = [[],[],[]]
+
+                for image_str in sorted(os.listdir(dataset_path / f"{_set}")):
+                    if "mask" in image_str:
+                        continue
+                    image = skimage.io.imread(dataset_path / f"{_set}/{image_str}")
+                    
+
+                    mask_str = image_str.replace(".tiff","_mask.tiff")
+
+                    mask = skimage.io.imread(dataset_path / f"{_set}/{mask_str}")
+
+
+                    meta = {"parent_dataset": folder, "modality": "Brightfield", "pixel_size": None, "name": image_str}
+
+                    data_dicts[_set][0].append(image)
+                    data_dicts[_set][1].append(mask)
+                    data_dicts[_set][2].append(meta)
+                  #  breakpoint()
+
+
+    return_list = []
+    for _set in sets:
+        return_list.extend(data_dicts[_set])
+
+        assert len(data_dicts[_set][0]) > 0, "No images in the dataset meet the requirements. (Hint: Check that the source argument is correct)"
+    
+    return return_list
+   # breakpoint()
+
+
 def _read_images_from_pth(data_path= "../datasets", dataset = "segmentation", data_slice = None, dummy = False, args = None, sets = ["Train","Validation"], complete_dataset = None):
     from pathlib import Path
     import torch
@@ -200,7 +218,6 @@ def _read_images_from_pth(data_path= "../datasets", dataset = "segmentation", da
     
 
     data_dicts = {}
-
 
     for _set in sets:
         print("Datasets available in ", _set)

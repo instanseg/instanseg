@@ -66,6 +66,7 @@ parser.add_argument('-norm', '--norm', default="BATCH", type=str, help = "Norm l
 parser.add_argument('-mlp_w', '--mlp_width', default=5, type=int, help = "Width of the MLP hidden dim")
 parser.add_argument('-augmentation_type', '--augmentation_type', default="minimal", type=str, help = "'minimal' or 'heavy' or 'brightfield_only'")
 parser.add_argument('-adaptor_net', '--adaptor_net_str', default="1", type=str, help = "Adaptor net to use")
+parser.add_argument('-freeze', '--freeze_main_model', default=False, type=lambda x: (str(x).lower() == 'true'), help = "Whether to freeze the main model")
 parser.add_argument('-f_e', '--feature_engineering', default="0", type=str, help = "Feature engineering function to use")
 parser.add_argument("-f","--f", default = None, type = str, help = "ignore, this is for jypyter notebook compatibility")
 parser.add_argument('-rng_seed', '--rng_seed', default=None, type=int, help = "Optional seed for the random number generator")
@@ -279,6 +280,7 @@ def instanseg_training(segmentation_dataset: Dict = None, **kwargs):
             args.model_folder = ""
 
         model, model_dict = load_model_weights(model, path=args.model_path, folder=args.model_folder, device=device, dict = args_dict)
+        
 
         if not args.channel_invariant:
             optimizer = get_optimizer(model.parameters(),args)
@@ -293,7 +295,13 @@ def instanseg_training(segmentation_dataset: Dict = None, **kwargs):
         from instanseg.utils.models.ChannelInvariantNet import AdaptorNetWrapper, has_AdaptorNet
         if not has_AdaptorNet(model):
             model = AdaptorNetWrapper(model,adaptor_net_str=args.adaptor_net_str, norm = args.norm)
-        optimizer = get_optimizer(model.parameters(), args)
+
+        if args.freeze_main_model == True:
+            params = model.model.AdaptorNet.parameters()
+        else:
+            params = model.parameters()
+
+        optimizer = get_optimizer(params, args)
 
     if args.cosineannealing:
         scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=100, eta_min=0.00001)
