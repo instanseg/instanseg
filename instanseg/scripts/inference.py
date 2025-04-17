@@ -66,9 +66,7 @@ def file_matches_requirement(root,file, exclude_str):
 
 prediction_tag = "_instanseg_prediction"
 
-
-if __name__ == "__main__":
-    from instanseg.utils.utils import show_images
+def main():
     from instanseg import InstanSeg
 
     parser = parser.parse_args()
@@ -121,7 +119,8 @@ if __name__ == "__main__":
                         )
 
 
-
+if __name__ == "__main__":
+    main()
 
 
 

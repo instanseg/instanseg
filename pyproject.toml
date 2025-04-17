@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "instanseg-torch"
-version = "0.0.8"
+version = "0.0.9"
 authors = [
   { name="Thibaut Goldsborough", email="thibaut.golds@gmail.com" },
 ]
@@ -36,6 +36,8 @@ dependencies = [
     "tqdm>=4.66.1"
 ]
 
+[project.scripts]
+inference = "instanseg.scripts.inference:main"
 
 [project.optional-dependencies]
 doc = [
