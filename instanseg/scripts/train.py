@@ -33,6 +33,7 @@ parser.add_argument("-bs", "--batch_size", type=int, default=3)
 parser.add_argument("-e", "--num_epochs", type=int, default=500)
 parser.add_argument('-len_epoch', '--length_of_epoch', default=1000, type=int, help = "Number of samples per epoch")
 parser.add_argument("-lr", "--lr", type=float, default=0.001, help = "Learning rate")
+parser.add_argument("-optim", "--optimizer", type=str, default="adam", help = "Optimizer to use, adam, sgd or adamw")
 parser.add_argument("-m", "--model_str", type=str, default="InstanSeg_UNet", help = "Model backbone to use")
 parser.add_argument("-s", "--save", type=bool, default=True, help = "Whether to save model outputs every time a new best F1 score is achieved")
 parser.add_argument("-l_fn", "--loss_function", type=str, default='instanseg_loss', help = "Method to use for segmentation, only instanseg_loss is supported")
@@ -48,6 +49,8 @@ parser.add_argument("-tf", "--transform_intensity", type=float, default=0.5, hel
 parser.add_argument("-dim_in", "--dim_in", type=int, default=3,help="Number of channels that the (backbone) model expects. This is also the number of channels a channel invariant model would output.")
 parser.add_argument("-dummy", "--dummy", default=False, type=lambda x: (str(x).lower() == 'true'),help="Use the training set as a validation set, this will trigger a warning message. use only for debugging")
 parser.add_argument('-to_centre', '--to_centre', default=False, type=lambda x: (str(x).lower() == 'true'), help = "Whether to use the instance centroid or the learnt instance centroid in InstanSeg")
+parser.add_argument('-bg_weight', '--bg_weight', default=None, type= float, help = "Weight to assign to the background class in the loss function")
+parser.add_argument('-opl', '--only_positive_labels', default=True, type=lambda x: (str(x).lower() == 'true'), help = "Sample local maxima from the whole image, adds an object classifier")
 parser.add_argument('-multi_centre', '--multi_centre', default=True, type=lambda x: (str(x).lower() == 'true'), help = "Allow multi centres per instance, uses local maxima algorithm")
 parser.add_argument('-open_license', '--open_license', default=False, type=lambda x: (str(x).lower() == 'true'), help = "Whether to filter out images that do not have an open license during training")
 parser.add_argument('-modality', '--image_modality', default="all", type=str, help = "Filter out images that do not have this modality: Brightfield, Fluorescence, all")
@@ -63,6 +66,7 @@ parser.add_argument('-norm', '--norm', default="BATCH", type=str, help = "Norm l
 parser.add_argument('-mlp_w', '--mlp_width', default=5, type=int, help = "Width of the MLP hidden dim")
 parser.add_argument('-augmentation_type', '--augmentation_type', default="minimal", type=str, help = "'minimal' or 'heavy' or 'brightfield_only'")
 parser.add_argument('-adaptor_net', '--adaptor_net_str', default="1", type=str, help = "Adaptor net to use")
+parser.add_argument('-freeze', '--freeze_main_model', default=False, type=lambda x: (str(x).lower() == 'true'), help = "Whether to freeze the main model")
 parser.add_argument('-f_e', '--feature_engineering', default="0", type=str, help = "Feature engineering function to use")
 parser.add_argument("-f","--f", default = None, type = str, help = "ignore, this is for jypyter notebook compatibility")
 parser.add_argument('-rng_seed', '--rng_seed', default=None, type=int, help = "Optional seed for the random number generator")
@@ -189,7 +193,8 @@ def instanseg_training(segmentation_dataset: Dict = None, **kwargs):
 
     if args.use_deterministic:
         print('Setting use_deterministic_algorithms=True')
-        torch.use_deterministic_algorithms(True)
+        torch.use_deterministic_algorithms(True,warn_only = True)
+        os.environ['CUBLAS_WORKSPACE_CONFIG'] = ':4096:8'
 
 
     args.layers = eval(args.layers)
@@ -222,7 +227,9 @@ def instanseg_training(segmentation_dataset: Dict = None, **kwargs):
                         window_size = args.window_size, 
                         dim_coords= args.dim_coords, 
                         multi_centre= args.multi_centre, 
-                        feature_engineering_function=args.feature_engineering )  # binary_xloss, lovasz_hinge dice_loss general_dice_loss
+                        feature_engineering_function=args.feature_engineering,
+                        bg_weight = args.bg_weight,
+                        only_positive_labels= args.only_positive_labels)  # binary_xloss, lovasz_hinge dice_loss general_dice_loss
 
         def loss_fn(*args, **kwargs):
             return method.forward(*args, **kwargs)
@@ -241,13 +248,26 @@ def instanseg_training(segmentation_dataset: Dict = None, **kwargs):
         args_dict["dim_in"] = int(dim_in)
     args_dict["dropprob"] = float(args.dropprob)
 
-    model = build_model_from_dict(args_dict)
+    model = build_model_from_dict(args_dict, random_seed=args.rng_seed)
 
-    # from fvcore.nn import FlopCountAnalysis
-    # flops = FlopCountAnalysis(model, torch.randn(1,3,256,256))
-    # print("Number of flops:",flops.total()/1e9)
-    # from fvcore.nn import flop_count_str
-    # print(flop_count_str(flops))
+    try:
+        from fvcore.nn import FlopCountAnalysis
+        flops = FlopCountAnalysis(model, torch.randn(1,3,256,256))
+        print("Number of flops:",flops.total()/1e9)
+        #from fvcore.nn import flop_count_str
+       # print(flop_count_str(flops))
+    except:
+        pass
+
+    def get_optimizer(parameters, args):
+        if args.optimizer.lower() == "adam":
+            return optim.Adam(parameters, lr=args.lr, weight_decay=args.weight_decay)
+        elif args.optimizer.lower() == "sgd":
+            return optim.SGD(parameters, lr=args.lr, weight_decay=args.weight_decay)
+        elif args.optimizer.lower() == "adamw":
+            return optim.AdamW(parameters, lr=args.lr, weight_decay=args.weight_decay)
+        else:
+            raise NotImplementedError("Optimizer not recognized", args.optimizer)
 
     if args.loss_function in ["instanseg_loss"]:
         from instanseg.utils.loss.instanseg_loss import has_pixel_classifier_model
@@ -260,22 +280,28 @@ def instanseg_training(segmentation_dataset: Dict = None, **kwargs):
             args.model_folder = ""
 
         model, model_dict = load_model_weights(model, path=args.model_path, folder=args.model_folder, device=device, dict = args_dict)
+        
 
         if not args.channel_invariant:
-            optimizer = optim.Adam(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
+            optimizer = get_optimizer(model.parameters(),args)
             optimizer.load_state_dict(model_dict['optimizer_state_dict'])
-            optimizer.param_groups[0]['lr'] = args.lr  # you may want to remove this line in the future
 
         print("Resuming training from epoch", model_dict['epoch'])
 
     else:
-        optimizer = optim.Adam(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
+        optimizer =get_optimizer(model.parameters(),args)
 
     if args.channel_invariant:
         from instanseg.utils.models.ChannelInvariantNet import AdaptorNetWrapper, has_AdaptorNet
         if not has_AdaptorNet(model):
             model = AdaptorNetWrapper(model,adaptor_net_str=args.adaptor_net_str, norm = args.norm)
-        optimizer = optim.Adam(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
+
+        if args.freeze_main_model == True:
+            params = model.model.AdaptorNet.parameters()
+        else:
+            params = model.parameters()
+
+        optimizer = get_optimizer(params, args)
 
     if args.cosineannealing:
         scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=100, eta_min=0.00001)

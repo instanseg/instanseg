@@ -241,7 +241,7 @@ def export_bioimageio(torchsript: torch.jit._script.RecursiveScriptModule,
     if model_dict["channel_invariant"]:
         input_axes = [BatchAxis(), IndexInputAxis( description = "Channel axis for channel invariant models", size=ParameterizedSize(min=1, step=1))]
     else:
-        input_axes = [BatchAxis(), ChannelAxis(id = AxisId("channel"),channel_names=[Identifier(i) for i in ["C1","C2","C3"]])]
+        input_axes = [BatchAxis(), ChannelAxis(id = AxisId("channel"),channel_names=[Identifier(i) for i in [f"C{jj}" for jj in range(dim_in)]])]
 
     if input_crop.ndim == 5: 
         input_axes += [
@@ -451,41 +451,14 @@ def export_bioimageio(torchsript: torch.jit._script.RecursiveScriptModule,
     summary = test_model(my_model_descr)
     summary.display()
 
-    # #Cleanup 
-
-    # files_to_remove = [
-    #     "cover.png",
-    #     "test-output.npy",
-    #     "test-input.npy",
-    #     "instanseg.pt",
-    #     output_name + "_README.md",
-    #     "sample_output_0.tif",
-    #     "sample_input_0.tif"
-    # ]
-
-    # for file in files_to_remove:
-    #     if os.path.exists(file):
-    #         os.remove(file)
-
-    # #unzip the folder
-
-    # import zipfile
-    # import shutil
-
-    # input = os.path.join(output_path, output_name + ".zip")
-    # destination = os.path.join(output_path, output_name)
-    # with zipfile.ZipFile(input, 'r') as zip_ref:
-    #     zip_ref.extractall(destination)
-    
-    # yaml_path = os.path.join(destination, 'rdf.yaml')
-
-
-    # #copy ijm files
+    import zipfile
     import shutil
-    # shutil.copyfile(os.path.join(os.path.dirname(__file__),"./rdf_scripts/instanseg_preprocess.ijm"), os.path.join(os.path.dirname(yaml_path), "instanseg_preprocess.ijm"))
-    # shutil.copyfile(os.path.join(os.path.dirname(__file__),"./rdf_scripts/instanseg_postprocess.ijm"), os.path.join(os.path.dirname(yaml_path), "instanseg_postprocess.ijm"))
 
-
-    # make_archive(destination, input)
+    input = os.path.join(output_path, output_name + ".zip")
+    destination = os.path.join(output_path, output_name)
+    with zipfile.ZipFile(input, 'r') as zip_ref:
+        zip_ref.extractall(destination)
+    
+    import shutil
 
     shutil.rmtree(output_name)

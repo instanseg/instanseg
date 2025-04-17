@@ -12,8 +12,7 @@ from typing import Union
 from pathlib import Path
 import rasterio.features
 from rasterio.transform import Affine
-from matplotlib.colors import LinearSegmentedColormap
-import colorcet as cc
+from skimage.color import label2rgb
 import matplotlib as mpl
 import os
 import numpy as np
@@ -66,7 +65,7 @@ def labels_to_features(lab: np.ndarray,
 
     # Create transform from downsample if needed
     if transform is None:
-        transform = Affine.scale(downsample)
+        transform = Affine.scale(1.0)
 
     # Trace geometries
     for i, obj in enumerate(rasterio.features.shapes(lab, mask=mask,
@@ -85,7 +84,7 @@ def labels_to_features(lab: np.ndarray,
         if offset is not None:
             coordinates = obj[0]['coordinates']
             coordinates = [
-                [(int(x[0] + offset[0]), int(x[1] + offset[1])) for x in coordinates[0]]]
+                [(round(x[0] * downsample) + offset[0], round(x[1] * downsample) + offset[1]) for x in coordinates[0]]]
             obj[0]['coordinates'] = coordinates
 
         po = geojson.Feature(geometry = obj[0], properties=props)
@@ -145,7 +144,42 @@ def apply_cmap(x,
 
 
 
+def label_to_color_image(label_img, **kwargs):
+    """
+    Convert a labelled image to a color image using the Glasbey colormap.
+    Label 0 -> black, label -1 -> white, other labels -> Glasbey colors.
+    
+    Parameters:
+        label_img (np.ndarray): 2D array of shape (H, W) with integer labels.
+        
+    Returns:
+        np.ndarray: RGB image of shape (H, W, 3), dtype=np.uint8
+    """
+    if label_img.ndim != 2:
+        raise ValueError("Input image must be a 2D array.")
 
+    # Ensure it's int type
+    label_img = label_img.astype(int)
+
+    # Find unique labels excluding -1 and 0
+    labels = np.unique(label_img)
+    labels = labels[(labels != 0) & (labels != -1)]
+    
+    # Create a dummy image with only the positive labels to use with label2rgb
+    label_img_tmp = np.copy(label_img)
+    label_img_tmp[label_img_tmp <= 0] = 0
+
+    # Apply Glasbey colormap using label2rgb
+    color_img = label2rgb(label_img_tmp, bg_label=0, **kwargs)
+    color_img = (color_img * 255).astype(np.uint8)
+
+    # Map 0 to black
+    color_img[label_img == 0] = [0, 0, 0]
+
+    # Map -1 to white
+    color_img[label_img == -1] = [255, 255, 255]
+
+    return color_img
 
 
 def show_images(*img_list, clip_pct=None, titles=None, save_str=False, n_cols=3, axes=False, cmap="viridis",
@@ -193,22 +227,14 @@ def show_images(*img_list, clip_pct=None, titles=None, save_str=False, n_cols=3,
             im = ax1.imshow(img, vmin=np.percentile(img.ravel(), clip_pct),
                             vmax=np.percentile(img.ravel(), 100 - clip_pct))
         if i in labels:
-            img = img.astype(int)
-            img[img>0] = fastremap.renumber(img[img>0])[0]
-            glasbey_cmap = cc.cm.glasbey_bw_minc_20_minl_30_r.colors
-            glasbey_cmap[0] = [0, 0, 0]  # Set bg to black
-
-            if img.min() < 0:
-                img[img < 0] = len(fastremap.unique(img)) + 1
-                glasbey_cmap[-1] = [128,128,128]
-            
-            n_instances = len(fastremap.unique(img))
-            cmap_lab = LinearSegmentedColormap.from_list('my_list', glasbey_cmap, N=n_instances)
-            im = ax1.imshow(img, cmap=cmap_lab, interpolation='nearest')
+            import colorcet as cc 
+            colors = cc.cm.glasbey_bw_minc_20_minl_30_r.colors
+            img = label_to_color_image(img, colors=colors)
+            im = ax1.imshow(img, interpolation='nearest')
         else:
             im = ax1.imshow(img, cmap=cmap, **args)
-        if colorbar:
-            plt.colorbar(im, ax=ax1, fraction=0.046, pad=0.04)
+            if colorbar and img.shape[-1] != 3:
+                plt.colorbar(im, ax=ax1, fraction=0.046, pad=0.04)
         if i < len(titles):
             ax1.set_title(titles[i])
     if not save_str:
@@ -906,9 +932,17 @@ def download_model(model_str: str, version: Optional[str] = None, verbose : bool
             raise Exception(f"Model {path_to_torchscript_model} version {version} not found in the release data or locally. Please check the model name and try again.")
 
 def _filter_kwargs(func, kwargs):
-    import inspect
-    # Get the signature of the function
-    sig = inspect.signature(func)
-    # Filter kwargs to only include parameters accepted by the function
-    filtered_kwargs = {k: v for k, v in kwargs.items() if k in sig.parameters}
+    #this is a messy way of getting function kwargs
+
+    graph_str  = str(func.graph).split("):\n")[0]
+    lines = graph_str.split("\n")
+    arg_lines = [line.strip() for line in lines if "%" in line and ":" in line]
+    arg_names = [line.split(":")[0].strip().replace("%", "").replace(".1","")  for line in arg_lines]
+    arg_names = [name for name in arg_names if name not in ['graph(self', 'x', 'args']]
+    filtered_kwargs = {k: v for k, v in kwargs.items() if k in arg_names}
+
     return filtered_kwargs
+
+
+
+

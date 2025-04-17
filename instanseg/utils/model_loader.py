@@ -92,11 +92,21 @@ def read_model_args_from_csv(path=r"../results/", folder=""):
         build_model_dictionary["multihead"] = False
     if "channel_invariant" in build_model_dictionary.keys():
         build_model_dictionary["channel_invariant"] = bool(eval(build_model_dictionary["channel_invariant"]))
+    if "only_positive_labels" in build_model_dictionary.keys():
+        build_model_dictionary["only_positive_labels"] = bool(eval(build_model_dictionary["only_positive_labels"]))
+    else:
+        build_model_dictionary["only_positive_labels"] = True
 
     return build_model_dictionary
 
 
-def build_model_from_dict(build_model_dictionary):
+def build_model_from_dict(build_model_dictionary, random_seed = None):
+
+    #set seed 
+    if random_seed is not None:
+        import torch
+        torch.manual_seed(random_seed)
+
     if build_model_dictionary["dim_in"] == 0 or build_model_dictionary["dim_in"] is None:
         dim_in = 3  # Channel invariance currently outputs a 3 channel image
     else:
@@ -105,7 +115,7 @@ def build_model_from_dict(build_model_dictionary):
     if "dropprob" not in build_model_dictionary.keys():
         build_model_dictionary["dropprob"] = 0.0
 
-    if build_model_dictionary["model_str"] == "InstanSeg_UNet":
+    if build_model_dictionary["model_str"].lower() == "instanseg_unet":
             from instanseg.utils.models.InstanSeg_UNet import InstanSeg_UNet
             print("Generating InstanSeg_UNet")
             multihead = build_model_dictionary["multihead"]
@@ -131,6 +141,18 @@ def build_model_from_dict(build_model_dictionary):
                             norm  = build_model_dictionary["norm"], 
                             dropout=build_model_dictionary["dropprob"])
             
+    elif build_model_dictionary["model_str"].lower() == "segformer":
+        from instanseg.utils.models.SegFormer import SegFormer
+        print("Generating SegFormer")
+        model = SegFormer(in_channels=dim_in, out_channels=build_model_dictionary["dim_out"])
+
+    elif build_model_dictionary["model_str"].lower() == "cellsam":
+        from instanseg.utils.models.CellSam_VISTA import CellSamWrapper
+        print("Generating CellSam")
+        model = CellSamWrapper(auto_resize_inputs=True, network_resize_roi=[1024, 1024],
+                               checkpoint="/lustre/s1708347/sam_vit_b_01ec64.pth", return_features=False,
+                               dim_out=build_model_dictionary["dim_out"])
+            
     else:
         model = build_monai_model(build_model_dictionary["model_str"], build_model_dictionary)
 
@@ -155,6 +177,8 @@ def remove_module_prefix_from_dict(dictionary):
 def has_pixel_classifier_state_dict(state_dict):
     return bool(sum(['pixel_classifier' in key for key in state_dict.keys()]))
 
+def has_object_classifier_state_dict(state_dict):
+    return bool(sum(['object_classifier' in key for key in state_dict.keys()]))
 
 def has_adaptor_net_state_dict(state_dict):
     return bool(sum(['AdaptorNet' in key for key in state_dict.keys()]))
@@ -190,8 +214,9 @@ def load_model_weights(model, device, folder, path=r"../models/", dict = None):
     if has_pixel_classifier_state_dict(model_dict['model_state_dict']) and not has_pixel_classifier_model(model):
         from instanseg.utils.loss.instanseg_loss import InstanSeg
 
-        method = InstanSeg(n_sigma=int(dict["n_sigma"]), feature_engineering_function= dict["feature_engineering"],dim_coords = dict["dim_coords"],device =device)
+        method = InstanSeg(n_sigma=int(dict["n_sigma"]), feature_engineering_function= dict["feature_engineering"],dim_coords = dict["dim_coords"],only_positive_labels= dict["only_positive_labels"],device =device)
         model = method.initialize_pixel_classifier(model, MLP_width=int(dict["mlp_width"]))
+    
 
     from instanseg.utils.models.ChannelInvariantNet import AdaptorNetWrapper, has_AdaptorNet
     if has_adaptor_net_state_dict(model_dict['model_state_dict']) and not has_AdaptorNet(model):
@@ -200,6 +225,7 @@ def load_model_weights(model, device, folder, path=r"../models/", dict = None):
 
     #from instanseg.utils.AI_utils import set_running_stats
     #set_running_stats(model,device = "cuda")
+
 
     model.load_state_dict(model_dict['model_state_dict'], strict=True)
     model.to(device)

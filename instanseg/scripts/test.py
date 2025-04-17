@@ -187,7 +187,8 @@ if __name__ == "__main__":
                            n_sigma=model_dict["n_sigma"],
                            cells_and_nuclei=model_dict["cells_and_nuclei"], to_centre=model_dict["to_centre"],
                            window_size=parser_args.window_size, dim_coords=model_dict["dim_coords"],
-                           feature_engineering_function=model_dict["feature_engineering"])
+                           feature_engineering_function=model_dict["feature_engineering"],
+                           only_positive_labels= model_dict["only_positive_labels"])
 
         if parser_args.target_segmentation is None:
             parser_args.cells_and_nuclei = model_dict["cells_and_nuclei"]

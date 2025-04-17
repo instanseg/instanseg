@@ -251,6 +251,7 @@ def get_crop_probs( x: torch.Tensor,
 
     mesh_grid_flat,window_slices = centre_crop(centroids_idx, window_size, h, w)
     x = feature_engineering(x, c, sigma, window_size //2 , mesh_grid_flat).reshape(C, -1, window_size, window_size)
+
     x = object_classifier(x)  # C,1
 
 
@@ -398,7 +399,6 @@ def generate_coordinate_map(mode: str = "linear", spatial_dim: int = 2, height: 
     return xxyy
 
 
-
 class ProbabilityNet(nn.Module):
     def __init__(self, embedding_dim=4, width = 5):
         super().__init__()
@@ -459,6 +459,34 @@ class ConvProbabilityNet(nn.Module):
         output = self.layer3(torch.cat((x,one,two),dim=1))
 
         return output
+    
+
+class SimpleCNN(nn.Module):
+    def __init__(self, input_channels, output_size=1):
+        super(SimpleCNN, self).__init__()
+        # First convolutional layer
+        self.conv1 = nn.Conv2d(in_channels=input_channels, out_channels=16, kernel_size=3, padding=1)
+        # Second convolutional layer
+        self.conv2 = nn.Conv2d(in_channels=16, out_channels=32, kernel_size=3, padding=1)
+        # Adaptive average pooling to ensure fixed-size output
+        self.adaptive_pool = nn.AdaptiveAvgPool2d((1, 1))
+        # Fully connected layer
+        self.fc1 = nn.Linear(in_features=32, out_features=output_size)
+
+    def forward(self, x):
+        # Apply first convolution, then ReLU activation, and pooling
+        x = F.relu(self.conv1(x))
+        x = F.max_pool2d(x, kernel_size=2)
+        # Apply second convolution, then ReLU activation, and pooling
+        x = F.relu(self.conv2(x))
+        x = F.max_pool2d(x, kernel_size=2)
+        # Apply adaptive pooling to get a fixed-size output
+        x = self.adaptive_pool(x)
+        # Remove extra dimensions
+        x = x.view(x.size(0), -1)
+        # Apply the fully connected layer
+        x = self.fc1(x)
+        return x
     
 
 class MedianFilter(nn.Module):
@@ -631,7 +659,10 @@ class InstanSeg(nn.Module):
                  multi_centre: bool = False,
                  window_size = 256, 
                  feature_engineering_function = "0",
+                 bg_weight = None,
+                 only_positive_labels = True,
                  dim_coords = 2):
+        
         
         super().__init__()
         self.n_sigma = n_sigma
@@ -649,9 +680,10 @@ class InstanSeg(nn.Module):
         self.to_centre = to_centre
         self.multi_centre = multi_centre
         self.window_size = window_size
-        self.only_positive_labels = True
+        self.use_object_classifier = not only_positive_labels
         self.num_instance_cap = 50
         self.sort_by_eccentricity = False
+        self.bg_weight = bg_weight
 
         self.feature_engineering, self.feature_engineering_width = feature_engineering_generator(feature_engineering_function)
         self.feature_engineering_function = feature_engineering_function
@@ -664,7 +696,6 @@ class InstanSeg(nn.Module):
         if binary_loss_fn_str == "lovasz_hinge":
             from instanseg.utils.loss.lovasz_losses import lovasz_hinge
             def binary_loss_fn(pred, gt, **kwargs):
-               # pred = torch.sigmoid_(pred)
                 return lovasz_hinge((pred.squeeze(1)), gt,per_image = True)
 
         elif binary_loss_fn_str == "binary_xloss":
@@ -727,16 +758,21 @@ class InstanSeg(nn.Module):
                 
             self.seed_loss = seed_loss
 
-        elif seed_loss_fn in ["l1_distance"]:
+        elif seed_loss_fn in ["l1_distance", "l2_distance"]:
             from instanseg.utils.pytorch_utils import instance_wise_edt
-            distance_loss = torch.nn.L1Loss(reduction='none')
+
+            if seed_loss_fn == "l1_distance":
+                distance_loss = torch.nn.L1Loss(reduction='none')
+            elif seed_loss_fn == "l2_distance":
+                distance_loss = torch.nn.MSELoss(reduction='none')
+            
             def seed_loss(x,y, mask = None):
                 edt = (instance_wise_edt(y.float(), edt_type= 'edt') - 0.5 ) * 15 #This is to mimick the range of CELoss
                 loss = distance_loss((x), (edt[None]))
 
-                # weights = torch.where(edt < 0, 0.01, 1.0)  # Assign lower weight to targets below 0
-                # # Apply the weights to the raw loss
-                # loss = loss * weights
+                if self.bg_weight is not None:
+                    weights = torch.where(edt < 0,self.bg_weight, 1.0)  # Assign lower weight to targets below 0
+                    loss = loss * weights
 
                 if mask is not None:
                     mask = mask.float()
@@ -756,6 +792,11 @@ class InstanSeg(nn.Module):
                 self.pixel_classifier = model.pixel_classifier
             except:
                 self.pixel_classifier = model.model.pixel_classifier  # This happens when there is an adaptornet
+            
+            try:
+                self.object_classifier = model.object_classifier
+            except:
+                pass
             return model
         else:
             if MLP_input_dim is None:
@@ -767,10 +808,10 @@ class InstanSeg(nn.Module):
                 model.pixel_classifier = ConvProbabilityNet( MLP_input_dim, width = MLP_width)
             self.pixel_classifier = model.pixel_classifier.to(self.device)
 
-          #  import torchvision
-         #   model.object_classifier = torchvision.models.mobilenet_v3_small(num_classes = 1)
-         #   model.object_classifier.features[0][0] = nn.Conv2d(MLP_input_dim, 16, kernel_size=(3, 3), stride=(1, 1), bias=False)
-         #   self.object_classifier = model.object_classifier.to(self.device)
+            if self.use_object_classifier:
+
+                model.object_classifier = SimpleCNN(MLP_input_dim, output_size = 1)
+                self.object_classifier = model.object_classifier.to(self.device)
 
             return model
         
@@ -821,7 +862,6 @@ class InstanSeg(nn.Module):
 
                 if (instance < 0).all(): #-1 means not annotated
                     continue
-       
 
                 elif instance.min() < 0: #label is sparse
                     mask = instance >=0
@@ -829,7 +869,7 @@ class InstanSeg(nn.Module):
                 else:
                     mask = None
 
-                if not self.only_positive_labels:
+                if self.use_object_classifier:
                    if (instance == 0).all():
                        continue
                    mask = instance > 0
@@ -841,6 +881,9 @@ class InstanSeg(nn.Module):
 
                 if w_inst == 0:
                     loss += w_seed * seed_loss
+                    continue
+
+                if instance.min() > 0:
                     continue
 
                 instance_ids = instance.unique()
@@ -864,7 +907,7 @@ class InstanSeg(nn.Module):
 
                     if self.multi_centre:
                 
-                        if not self.only_positive_labels:
+                        if self.use_object_classifier:
 
                             seed_map_tmp = torch.sigmoid(seed_map)
 
@@ -897,7 +940,6 @@ class InstanSeg(nn.Module):
                         onehot_labels = onehot_labels[instance_labels]
                         centroids = centroids.T
 
-
                     else:
                         if self.to_centre:
 
@@ -927,7 +969,7 @@ class InstanSeg(nn.Module):
                                                  pixel_classifier=self.pixel_classifier,
                                                  window_size = window_size)
                     
-                    if not self.only_positive_labels:
+                    if self.use_object_classifier:
                         if centres_neg.shape[0] > 0:
 
                             centres = torch.cat((centres,centres_neg),dim=0)
@@ -962,21 +1004,21 @@ class InstanSeg(nn.Module):
     #@timer
     def postprocessing(self, prediction: Union[torch.Tensor, np.ndarray],
                         mask_threshold: float = 0.53,
-                        peak_distance: int = 5,
+                        peak_distance: int = 4,
                         seed_threshold: float = 0.8,
-                        overlap_threshold: float = 0.3,
+                        overlap_threshold: float = 0.5,
                         mean_threshold: float = 0.1,
                         window_size: int = 128,
                         min_size = 10,
-                       device=None,
-                       classifier=None,
-                       cleanup_fragments: bool = False,
-                       max_seeds: int = 2000,
-                       return_intermediate_objects: bool = False,
-                       precomputed_crops: torch.Tensor = None,
-                       precomputed_seeds: torch.Tensor = None,
-                       img=None):
-        
+                        device=None,
+                        classifier=None,
+                        cleanup_fragments: bool = False,
+                        max_seeds: int = 2000,
+                        return_intermediate_objects: bool = False,
+                        precomputed_crops: torch.Tensor = None,
+                        precomputed_seeds: torch.Tensor = None,
+                        img=None):
+            
 
         if device is None:
             device = self.device
@@ -1029,7 +1071,7 @@ class InstanSeg(nn.Module):
                     fields = prediction_i[0:self.dim_coords]
 
                 sigma = prediction_i[self.dim_coords:self.dim_coords + self.n_sigma]
-            #    mask_map = torch.sigmoid(prediction_i[self.dim_coords + self.n_sigma])
+                #mask_map = torch.sigmoid(prediction_i[self.dim_coords + self.n_sigma])
 
                 mask_map = ((prediction_i[self.dim_coords + self.n_sigma]) / 15) + 0.5
 
@@ -1070,7 +1112,8 @@ class InstanSeg(nn.Module):
                     labels.append(label)
                     continue
 
-                if not self.only_positive_labels:
+
+                if self.use_object_classifier:
                     preds = get_crop_probs(fields, 
                                            fields_at_centroids.T, 
                                            sigma, 
@@ -1078,6 +1121,8 @@ class InstanSeg(nn.Module):
                                            feature_engineering = self.feature_engineering,
                                            object_classifier=self.object_classifier,
                                            window_size = window_size)
+                    
+
                     
                     t_p = (preds > 0).squeeze(1)
                     fields_at_centroids = fields_at_centroids[:,t_p]
@@ -1171,7 +1216,7 @@ class InstanSeg(nn.Module):
             self.cells_and_nuclei = False
 
             for t in transforms:
-                with torch.cuda.amp.autocast():
+                with torch.amp.autocast("cuda"):
                     augmented_image = t.augment_image(img)
                     augmented_image, pad = _instanseg_padding(augmented_image, extra_pad= 0, min_dim = 32)
                     prediction = model(augmented_image)[:,i * dim_out:(i+1) * dim_out]

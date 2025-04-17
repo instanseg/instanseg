@@ -3,8 +3,11 @@ import numpy as np
 import warnings
 
 def _keep_images(item, args):
-    if args.source_dataset != "all" and item[
-        'parent_dataset'] not in args.source_dataset:  # remove items that are not of the desired dataset
+
+    args.source_dataset = str(args.source_dataset).lower().replace("[","").replace("]","").replace("'","").split(",")
+
+    if args.source_dataset != ["all"] and item[
+        'parent_dataset'].lower() not in args.source_dataset:  # remove items that are not of the desired dataset
         return False
     elif 'duplicate' in item.keys() and item['duplicate']:  # remove items that are duplicates
         return False
@@ -99,47 +102,6 @@ def export_dataset_dict_as_folder(dataset,destination = "benchmarking_data"):
         pd.DataFrame(df).to_csv(os.path.join(expanded_datasets, df_name, f"{df_name}_metadata.csv"))
 
 
-
-
-def _read_images_from_path(data_path, dataset, data_slice, dummy, args, sets = ["Train","Validation"]):
-    # from pathlib import Path
-
-    # for set in sets:
-    #     if set = "Validation":
-    
-
-    # if master_set == "Validation":
-    #     df = pd.read_csv(Path(parser_args.data_path) / "dataset_info.csv")
-    #     result_dict = df.set_index("ID")["TRAIN/TEST?"].apply(lambda x: x == "Validation Set").to_dict()
-    #     benchmark_path = Path(parser_args.data_path) / "Datasets" / parser_args.inference_folder / "Training"
-    #     images_files = sorted([file for file in list(benchmark_path.glob("*.tif")) if
-    #                         "mask" not in file.stem and result_dict[file.stem.replace("img_", "")]])
-    #     labels_files = sorted([file for file in list(benchmark_path.glob("*.tif")) if
-    #                         "mask" in file.stem and result_dict[
-    #                             file.stem.replace("img_", "").replace("_masks", "")]])
-
-    # elif master_set == "Test":
-    #     benchmark_path = Path(parser_args.data_path) / "Datasets" / parser_args.inference_folder / "Testing"
-    #     images_files = sorted([file for file in list(benchmark_path.glob("*.tif")) if "mask" not in file.stem])
-    #     labels_files = sorted([file for file in list(benchmark_path.glob("*.tif")) if "mask" in file.stem])
-
-    # val_images = [io.imread(file) for file in images_files]
-    # val_labels = [io.imread(file) for file in labels_files]
-
-    # val_data = [Augmenter.duplicate_grayscale_channels(*Augmenter.to_tensor(img, label)) for img, label in
-    #             zip(val_images, val_labels)]
-
-    # val_images = [item[0] for item in val_data]
-    # val_labels = [item[1] for item in val_data]
-
-    # a = [file.stem.replace("img_", "") for file in list(benchmark_path.glob("*.tif"))]
-    # # pdb.set_trace()
-    # assert len(val_images) >= 1, "No images found in the folder"
-
-    raise NotImplementedError("This function is not implemented yet")
-
-
-
 def get_image(img_object):
     import tifffile
     import os
@@ -163,12 +125,74 @@ def get_image(img_object):
 
                 print((str(Path(img_path).parents[1]) + ".zip"))
 
-                shutil.unpack_archive(str(Path(img_path).parents[1]) + ".zip", Path(img_path).parents[1])
+                shutil.unpack_archive(str(Path(img_path).parents[1]) + ".zip", Path(img_path).parents[2])
             
+            #breakpoint()
             img = tifffile.imread(img_path)
             return img
     else:
         return img_object
+
+
+
+def _read_images_from_path(data_path= "../datasets", 
+                          dataset = "segmentation", 
+                          data_slice = None, 
+                          dummy = False, 
+                          args = None, 
+                          sets = ["Train","Validation"], 
+                          ):
+    
+    from pathlib import Path
+    import os
+    import skimage.io
+
+    datasets_available = sorted(os.listdir(data_path))
+    print("Datasets available ", datasets_available)
+
+    source_dataset = args.source_dataset
+
+    assert len(sets) !=2, "Only one set can be loaded at a time"
+    data_dicts = {}
+
+    source_dataset = str(args.source_dataset).lower().replace("[","").replace("]","").replace("'","").split(",")
+
+
+    for folder in datasets_available:
+        if folder.lower() in source_dataset:
+            dataset_path = Path(data_path) / folder
+            for _set in sets:
+
+                if _set not in data_dicts.keys():
+                    data_dicts[_set] = [[],[],[]]
+
+                for image_str in sorted(os.listdir(dataset_path / f"{_set}")):
+                    if "mask" in image_str:
+                        continue
+                    image = skimage.io.imread(dataset_path / f"{_set}/{image_str}")
+                    
+
+                    mask_str = image_str.replace(".tiff","_mask.tiff")
+
+                    mask = skimage.io.imread(dataset_path / f"{_set}/{mask_str}")
+
+
+                    meta = {"parent_dataset": folder, "modality": "Brightfield", "pixel_size": None, "name": image_str}
+
+                    data_dicts[_set][0].append(image)
+                    data_dicts[_set][1].append(mask)
+                    data_dicts[_set][2].append(meta)
+                  #  breakpoint()
+
+
+    return_list = []
+    for _set in sets:
+        return_list.extend(data_dicts[_set])
+
+        assert len(data_dicts[_set][0]) > 0, "No images in the dataset meet the requirements. (Hint: Check that the source argument is correct)"
+    
+    return return_list
+   # breakpoint()
 
 
 def _read_images_from_pth(data_path= "../datasets", dataset = "segmentation", data_slice = None, dummy = False, args = None, sets = ["Train","Validation"], complete_dataset = None):
@@ -186,29 +210,41 @@ def _read_images_from_pth(data_path= "../datasets", dataset = "segmentation", da
             path_of_pth = os.path.join(data_path,str(dataset + "_dataset.pth"))
 
         print("Loading dataset from ", os.path.abspath(path_of_pth))
-        complete_dataset = torch.load(path_of_pth)
+
+        try:
+            complete_dataset = torch.load(path_of_pth,weights_only = False)
+        except:
+            complete_dataset = torch.load(path_of_pth)
     
 
     data_dicts = {}
-    
-    for set in sets:
-        data_dicts[set] = []
-        images_local = [get_image(item['image']) for item in complete_dataset[set] if _keep_images(item, args)][:data_slice]
- 
-        labels_local = [_format_labels(item,target_segmentation = args.target_segmentation) for item in complete_dataset[set] if _keep_images(item, args)][:data_slice]
-        metadata = [{k: v for k, v in item.items() if k not in ('image', 'cell_masks','nucleus_masks', 'class_masks')} for item in complete_dataset[set] if _keep_images(item, args)][:data_slice]
 
-        data_dicts[set].extend([images_local,labels_local,metadata])
+    for _set in sets:
+        print("Datasets available in ", _set)
+        unique_values, counts = np.unique([item['parent_dataset'] for item in complete_dataset[_set]], return_counts=True)
+        print(set(zip(unique_values, counts)))
+
+        data_dicts[_set] = []
+        images_local = [get_image(item['image']) for item in complete_dataset[_set] if _keep_images(item, args)][:data_slice]
+ 
+        labels_local = [_format_labels(item,target_segmentation = args.target_segmentation) for item in complete_dataset[_set] if _keep_images(item, args)][:data_slice]
+        metadata = [{k: v for k, v in item.items() if k not in ('image', 'cell_masks','nucleus_masks', 'class_masks')} for item in complete_dataset[_set] if _keep_images(item, args)][:data_slice]
+
+        data_dicts[_set].extend([images_local,labels_local,metadata])
+
+        print("After filtering using:")
+        unique_values, counts = np.unique([item['parent_dataset'] for item in data_dicts[_set][2]], return_counts=True)
+        print(set(zip(unique_values, counts)))
 
     if dummy:
         warnings.warn("Using same train and validation sets !")
         data_dicts["Validation"] = data_dicts["Train"]
 
     return_list = []
-    for set in sets:
-        return_list.extend(data_dicts[set])
+    for _set in sets:
+        return_list.extend(data_dicts[_set])
 
-        assert len(data_dicts[set][0]) > 0, "No images in the dataset meet the requirements. (Hint: Check that the source argument is correct)"
+        assert len(data_dicts[_set][0]) > 0, "No images in the dataset meet the requirements. (Hint: Check that the source argument is correct)"
 
     return return_list
 
@@ -221,20 +257,35 @@ def get_loaders(train_images_local, train_labels_local, val_images_local, val_la
     from torch.utils.data import DataLoader
     from instanseg.utils.utils import count_instances
 
+
+    if args.rng_seed is not None:
+        import torch
+        torch.manual_seed(args.rng_seed)
+
     augmentation_dict = get_augmentation_dict(args.dim_in, nuclei_channel=None, amount=args.transform_intensity,
                                               pixel_size=args.requested_pixel_size, augmentation_type=args.augmentation_type)
 
-    train_data = Segmentation_Dataset(train_images_local, train_labels_local, metadata=train_meta,
-                                      size=(args.tile_size, args.tile_size), augmentation_dict=augmentation_dict['train'],
+    train_data = Segmentation_Dataset(train_images_local, 
+                                      train_labels_local, 
+                                      metadata=train_meta,
+                                      size=(args.tile_size, args.tile_size), 
+                                      augmentation_dict=augmentation_dict['train'],
                                       debug=False,
-                                      dim_in=args.dim_in, cells_and_nuclei=args.cells_and_nuclei,
-                                      target_segmentation=args.target_segmentation, channel_invariant = args.channel_invariant)
+                                      dim_in=args.dim_in,
+                                      cells_and_nuclei=args.cells_and_nuclei,
+                                      random_seed=args.rng_seed,
+                                      target_segmentation=args.target_segmentation, 
+                                      channel_invariant = args.channel_invariant)
 
-    test_data = Segmentation_Dataset(val_images_local, val_labels_local, size=(args.tile_size, args.tile_size), metadata=val_meta,
+    test_data = Segmentation_Dataset(val_images_local, val_labels_local, 
+                                     size=(args.tile_size, args.tile_size), 
+                                     metadata=val_meta,
                                      dim_in=args.dim_in,
                                      augmentation_dict=augmentation_dict['test'],
+                                     random_seed = args.rng_seed,
                                      cells_and_nuclei=args.cells_and_nuclei,
-                                     target_segmentation=args.target_segmentation,channel_invariant = args.channel_invariant)
+                                     target_segmentation=args.target_segmentation,
+                                     channel_invariant = args.channel_invariant)
 
     test_sampler = RandomSampler(test_data,num_samples=int(
                 args.length_of_epoch * 0.2))
