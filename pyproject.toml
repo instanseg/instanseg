@@ -84,7 +84,7 @@ full = [
 
 [tool.hatch.build]
 include = ["instanseg/**","instanseg/bioimageio_models/model-index.json"]
-exclude = ["notebooks/**", "instanseg/examples/*", "assets/**", "instanseg/bioimageio_models/**","!instanseg/bioimageio_models/model-index.json",]
+exclude = ["scratch_notebooks/**","notebooks/**", "instanseg/examples/*", "assets/**", "instanseg/bioimageio_models/**","!instanseg/bioimageio_models/model-index.json",]
 
 [project.urls]
 Homepage = "https://github.com/instanseg/instanseg"

@@ -233,8 +233,8 @@ def show_images(*img_list, clip_pct=None, titles=None, save_str=False, n_cols=3,
             im = ax1.imshow(img, interpolation='nearest')
         else:
             im = ax1.imshow(img, cmap=cmap, **args)
-        if colorbar:
-            plt.colorbar(im, ax=ax1, fraction=0.046, pad=0.04)
+            if colorbar and img.shape[-1] != 3:
+                plt.colorbar(im, ax=ax1, fraction=0.046, pad=0.04)
         if i < len(titles):
             ax1.set_title(titles[i])
     if not save_str:
