@@ -152,6 +152,11 @@ def build_model_from_dict(build_model_dictionary, random_seed = None):
         model = CellSamWrapper(auto_resize_inputs=True, network_resize_roi=[1024, 1024],
                                checkpoint="/lustre/s1708347/sam_vit_b_01ec64.pth", return_features=False,
                                dim_out=build_model_dictionary["dim_out"])
+        
+    elif build_model_dictionary["model_str"].lower() == "cellposesam":
+        from instanseg.utils.models.CellposeSam import CellposeSam
+        print("Generating CellposeSam")
+        model = CellposeSam(nout=build_model_dictionary["dim_out"])
             
     else:
         model = build_monai_model(build_model_dictionary["model_str"], build_model_dictionary)
