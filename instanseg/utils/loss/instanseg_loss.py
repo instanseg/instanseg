@@ -1390,8 +1390,12 @@ class InstanSeg_Torchscript(nn.Module):
         x, pad = _instanseg_padding(x, extra_pad=0)
 
         with torch.no_grad():
+
+          #  original_shape = x.shape[2:]
+         #   x = torch.nn.functional.interpolate(x, size=(256, 256), mode='bilinear', align_corners=True)
             x_full = self.fcn(x)
-    
+          #  x_full = torch.nn.functional.interpolate(x_full, size=original_shape, mode='bilinear', align_corners=True)
+
             dim_out = x_full.shape[1]
 
             if self.cells_and_nuclei:
