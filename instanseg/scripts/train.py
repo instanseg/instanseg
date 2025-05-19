@@ -129,7 +129,7 @@ def main(model, loss_fn, train_loader, test_loader, num_epochs=1000, epoch_name=
             f1_list.append(f1_score)
             dict_to_print["f1_score"] = f1_score
 
-        if args.cosineannealing:
+        if scheduler is not None:
             dict_to_print["lr:"] = optimizer.param_groups[0]["lr"]
             scheduler.step()
 
@@ -305,6 +305,28 @@ def instanseg_training(segmentation_dataset: Dict = None, **kwargs):
 
     if args.cosineannealing:
         scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=100, eta_min=0.00001)
+    
+    elif args.model_str.lower() == "cellposesam":
+        from torch.optim.lr_scheduler import LambdaLR
+
+        def lr_schedule(epoch, warmup_epochs=10, max_epochs=args.num_epochs):
+            if epoch < warmup_epochs:
+                # Linear warmup from 0 to max_lr
+                return (epoch + 1) / warmup_epochs
+            elif epoch < max_epochs - 150:
+                # Max LR after warmup
+                return 1.0
+            elif epoch < max_epochs - 50:
+                # First decay stage (reduce by factor of 10)
+                return 0.1
+            else:
+                # Second decay stage (reduce by another factor of 10)
+                return 0.01
+
+        # Scheduler with the custom learning rate function
+        scheduler = LambdaLR(optimizer, lr_lambda=lambda epoch: lr_schedule(epoch))
+    else:
+        scheduler = None
 
 
     if "[" in args.source_dataset:

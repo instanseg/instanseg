@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 from cellpose.vit_sam import Transformer
 from cellpose import models
+import os
 
 class CellposeSam(nn.Module):
     def __init__(self, nout=5, gpu=True):
@@ -17,6 +18,12 @@ class CellposeSam(nn.Module):
         
     def load_pretrained_weights(self):
         try:
+            path = "~/.cellpose/models/cpsam"
+            expanded_path = os.path.expanduser(path)
+            print(expanded_path)
+             # Load the pretrained Cellpose model weights
+            cellpose_model = models.CellposeModel(gpu=self.gpu, pretrained_model = expanded_path)
+
             # Load the pretrained Cellpose model weights
             cellpose_model = models.CellposeModel(gpu=self.gpu)
             cellpose_state_dict = cellpose_model.net.state_dict()
