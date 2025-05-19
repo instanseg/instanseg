@@ -4,7 +4,7 @@ import warnings
 
 def _keep_images(item, args):
 
-    args.source_dataset = str(args.source_dataset).lower().replace("[","").replace("]","").replace("'","").split(",")
+    #args.source_dataset = str(args.source_dataset).lower().replace("[","").replace("]","").replace("'","").split(",")
 
     if args.source_dataset != ["all"] and item[
         'parent_dataset'].lower() not in args.source_dataset:  # remove items that are not of the desired dataset
@@ -47,16 +47,16 @@ def _format_labels(item,target_segmentation):
                 labels = np.stack((item["nucleus_masks"], item["cell_masks"]))
             elif "nucleus_masks" in item.keys() and "cell_masks" not in item.keys():
                 labels = item['nucleus_masks']
-                labels = np.stack((labels, np.zeros_like(labels) - 1))
+                labels = np.stack((labels, np.zeros_like(labels).astype(np.int32) - 1))
             elif "nucleus_masks" not in item.keys() and "cell_masks" in item.keys():
                 labels = item['cell_masks']
-                labels = np.stack((np.zeros_like(labels) - 1, labels))
+                labels = np.stack((np.zeros_like(labels).astype(np.int32) - 1, labels))
             else:
                 raise NotImplementedError("No labels found")
     else:
         raise NotImplementedError("Target segmentation not recognized", target_segmentation)
-    
- 
+
+
     return labels
  
 
@@ -298,7 +298,6 @@ def get_loaders(train_images_local, train_labels_local, val_images_local, val_la
                 args.length_of_epoch * 0.2))  # This is relates to the standard 80/20 split
         else:
             train_sampler = RandomSampler(train_data)
-
 
     else:
 

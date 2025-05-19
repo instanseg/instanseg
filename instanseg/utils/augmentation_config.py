@@ -115,6 +115,14 @@ def get_augmentation_dict(dim_in,nuclei_channel,amount,pixel_size=0.5, augmentat
                     ("RandGaussianNoise", [0.2, amount]),#Probability/Amount
                     ("perspective", [0, amount]),#Probability/Amount
                 ]),
+                "phase-contrast": collections.OrderedDict([
+                    ("to_tensor", [1]), #Probability
+                    ("normalize", [1]), #Probability
+                    ("torch_rescale", [1,pixel_size, 0]),#in microns per pixel
+                    ("flips", [1]),#Probability
+                    ("rotate", [1]),#Probability
+                    ("kornia_base_augmentations", [1]),
+                ]),
                 "Fluorescence": collections.OrderedDict([
                     ("to_tensor", [1]),
                     ("normalize", [1]), #Probability
@@ -138,6 +146,12 @@ def get_augmentation_dict(dim_in,nuclei_channel,amount,pixel_size=0.5, augmentat
             },
             "test": {
                 "Brightfield": collections.OrderedDict([
+                    ("to_tensor", [1]),
+                    ("normalize", [1]), #Probability
+                    ("torch_rescale", [1,pixel_size, 0]),#in microns per pixel
+                    ("flips", [1])
+                ]),
+                 "phase-contrast": collections.OrderedDict([
                     ("to_tensor", [1]),
                     ("normalize", [1]), #Probability
                     ("torch_rescale", [1,pixel_size, 0]),#in microns per pixel

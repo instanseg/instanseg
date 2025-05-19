@@ -308,7 +308,9 @@ def instanseg_training(segmentation_dataset: Dict = None, **kwargs):
 
 
     if "[" in args.source_dataset:
-        args.source_dataset = args.source_dataset.replace("[", "").replace("]", "").replace("'", "").split(",")
+ 
+        args.source_dataset = [i.lower() for i in args.source_dataset.replace("[","").replace("]","").replace("'","").split(",")]
+        print(type(args.source_dataset), args.source_dataset)
     else:
         args.source_dataset = args.source_dataset
 

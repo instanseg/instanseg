@@ -804,6 +804,8 @@ class Augmentations(object):
             if meta is not None and "image_modality" in meta.keys():
                 if meta["image_modality"] in ["Brightfield", "Chromogenic"]:
                     observed_modality = "Brightfield"
+                    if image.shape[0] != 3:
+                        observed_modality = "phase-contrast"
                 else:
                     observed_modality = meta["image_modality"]
             else:
