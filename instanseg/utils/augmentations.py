@@ -87,12 +87,12 @@ def generate_random_label_area(min=30, max=30):
 
 def resize_with_log_scale(lab, mean_diameter=30, min_scale=0.25, max_scale=4):
     # Get the original cell diameter
-    original_diameter = np.sqrt(measure_average_instance_area(lab) / np.pi)  # Assuming circular cells
+    original_diameter = 2 * np.sqrt(measure_average_instance_area(lab) / np.pi)  # Assuming circular cells
     
     # Generate a logarithmically distributed scale factor
-    log_min = np.log(min_scale)
-    log_max = np.log(max_scale)
-    scale_factor = np.exp(random.uniform(log_min, log_max))
+    log_min = np.log2(min_scale)
+    log_max = np.log2(max_scale)
+    scale_factor = 2 ** (random.uniform(log_min, log_max))
     
     # Calculate the target diameter and corresponding resize scale
     target_diameter = mean_diameter * scale_factor
@@ -947,6 +947,7 @@ class Augmentations(object):
                                                           metadata=metadata)  # This will only catch single channel images fed to a multi channel network and duplicate the channel if required.
 
         if image.var() > 1e2:
+            import warnings
             image = torch.clip(image, min=-1, max=5)
             warnings.warn("Warning, variance of image is very high, check augmentations")
 
