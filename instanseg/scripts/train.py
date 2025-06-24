@@ -48,12 +48,7 @@ parser.add_argument("-drop", "--dropprob", type=float, default=0., help = "Dropo
 parser.add_argument("-tf", "--transform_intensity", type=float, default=0.5, help = "Intensity transformation factor")
 parser.add_argument("-dim_in", "--dim_in", type=int, default=3,help="Number of channels that the (backbone) model expects. This is also the number of channels a channel invariant model would output.")
 parser.add_argument("-dummy", "--dummy", default=False, type=lambda x: (str(x).lower() == 'true'),help="Use the training set as a validation set, this will trigger a warning message. use only for debugging")
-parser.add_argument('-to_centre', '--to_centre', default=False, type=lambda x: (str(x).lower() == 'true'), help = "Whether to use the instance centroid or the learnt instance centroid in InstanSeg")
 parser.add_argument('-bg_weight', '--bg_weight', default=None, type= float, help = "Weight to assign to the background class in the loss function")
-parser.add_argument('-opl', '--only_positive_labels', default=True, type=lambda x: (str(x).lower() == 'true'), help = "Sample local maxima from the whole image, adds an object classifier")
-parser.add_argument('-multi_centre', '--multi_centre', default=True, type=lambda x: (str(x).lower() == 'true'), help = "Allow multi centres per instance, uses local maxima algorithm")
-parser.add_argument('-open_license', '--open_license', default=False, type=lambda x: (str(x).lower() == 'true'), help = "Whether to filter out images that do not have an open license during training")
-parser.add_argument('-modality', '--image_modality', default="all", type=str, help = "Filter out images that do not have this modality: Brightfield, Fluorescence, all")
 parser.add_argument('-binary_loss_fn', '--binary_loss_fn', default="lovasz_hinge", type=str, help = "Loss function to use for instance segmentation: lovasz_hinge or dice_loss are supported. lovasz_hinge is a lot slower to start converging")
 parser.add_argument('-seed_loss_fn', '--seed_loss_fn', default="l1_distance", type=str, help = "Loss function to use for seed selection, only binary_xloss and l1_distance are supported. Binary_xloss is much faster, but l1_distance is usually more accurate")
 parser.add_argument('-anneal', '--cosineannealing', default=False, type=lambda x: (str(x).lower() == 'true'), help = "Whether to use cosine annealing for the learning rate")
@@ -62,6 +57,7 @@ parser.add_argument('-hotstart', '--hotstart_training', default=10, type=int, he
 parser.add_argument('-window', '--window_size', default=128, type=int, help = "Size of the window containing each instance")
 parser.add_argument('-multihead', '--multihead', default= False, type=lambda x: (str(x).lower() == 'true'), help = "Whether to branch the decoder into multiple heads.")
 parser.add_argument('-dim_coords', '--dim_coords', default=2, type=int, help = "Dimensionality of the coordinate system. Little support for anything but 2")
+parser.add_argument('-dim_seeds', '--dim_seeds', default=1, type=int, help = "Number of seed maps to produce. Little support for anything but 1")
 parser.add_argument('-norm', '--norm', default="BATCH", type=str, help = "Norm layer to use: None, INSTANCE, INSTANCE_INVARIANT, BATCH")
 parser.add_argument('-mlp_w', '--mlp_width', default=5, type=int, help = "Width of the MLP hidden dim")
 parser.add_argument('-augmentation_type', '--augmentation_type', default="minimal", type=str, help = "'minimal' or 'heavy' or 'brightfield_only'")
@@ -201,7 +197,6 @@ def instanseg_training(segmentation_dataset: Dict = None, **kwargs):
     args_dict = vars(args)
     num_epochs = args.num_epochs
     n_sigma = args.n_sigma
-    on_cluster = args.on_cluster
     dim_in = args.dim_in
 
     if args.norm == "None":
@@ -223,13 +218,11 @@ def instanseg_training(segmentation_dataset: Dict = None, **kwargs):
                         device = device,
                         n_sigma=n_sigma,
                         cells_and_nuclei=args.cells_and_nuclei, 
-                        to_centre = args.to_centre, 
                         window_size = args.window_size, 
-                        dim_coords= args.dim_coords, 
-                        multi_centre= args.multi_centre, 
+                        dim_coords= args.dim_coords,
+                        dim_seeds = args.dim_seeds, 
                         feature_engineering_function=args.feature_engineering,
-                        bg_weight = args.bg_weight,
-                        only_positive_labels= args.only_positive_labels)  # binary_xloss, lovasz_hinge dice_loss general_dice_loss
+                        bg_weight = args.bg_weight)  # binary_xloss, lovasz_hinge dice_loss general_dice_loss
 
         def loss_fn(*args, **kwargs):
             return method.forward(*args, **kwargs)
@@ -249,6 +242,7 @@ def instanseg_training(segmentation_dataset: Dict = None, **kwargs):
     args_dict["dropprob"] = float(args.dropprob)
 
     model = build_model_from_dict(args_dict, random_seed=args.rng_seed)
+
 
     try:
         from fvcore.nn import FlopCountAnalysis
