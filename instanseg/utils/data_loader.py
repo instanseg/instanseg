@@ -249,7 +249,6 @@ def _read_images_from_pth(data_path= "../datasets", dataset = "segmentation", da
     return return_list
 
 
-
 def get_loaders(train_images_local, train_labels_local, val_images_local, val_labels_local, train_meta, val_meta, args):
     from torch.utils.data.sampler import RandomSampler, WeightedRandomSampler
     from instanseg.utils.augmentation_config import get_augmentation_dict
@@ -262,8 +261,12 @@ def get_loaders(train_images_local, train_labels_local, val_images_local, val_la
         import torch
         torch.manual_seed(args.rng_seed)
 
-    augmentation_dict = get_augmentation_dict(args.dim_in, nuclei_channel=None, amount=args.transform_intensity,
-                                              pixel_size=args.requested_pixel_size, augmentation_type=args.augmentation_type)
+    augmentation_dict = get_augmentation_dict(args.dim_in, 
+                                              nuclei_channel=None, 
+                                              amount=args.transform_intensity,
+                                              pixel_size=args.requested_pixel_size,
+                                              mean_diameter=args.mean_object_diameter, 
+                                              augmentation_type=args.augmentation_type)
 
     train_data = Segmentation_Dataset(train_images_local, 
                                       train_labels_local, 
