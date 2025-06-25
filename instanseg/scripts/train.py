@@ -68,6 +68,8 @@ parser.add_argument("-f","--f", default = None, type = str, help = "ignore, this
 parser.add_argument('-rng_seed', '--rng_seed', default=None, type=int, help = "Optional seed for the random number generator")
 parser.add_argument('-use_deterministic', '--use_deterministic', default=False, type=lambda x: (str(x).lower() == 'true'), help = "Whether to use deterministic algorithms (default=False)")
 parser.add_argument('-tile', '--tile_size', default=256, type=int, help = "Tile sizes for the input images")
+parser.add_argument('-diam', '--mean_object_diameter', default=None, type=int, help = "Target diameter of the instances. Only use if pixel size is not available.")
+
 
 def main(model, loss_fn, train_loader, test_loader, num_epochs=1000, epoch_name='output_epoch'):
     from instanseg.utils.AI_utils import optimize_hyperparameters, train_epoch, test_epoch

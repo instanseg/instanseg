@@ -96,6 +96,10 @@ def read_model_args_from_csv(path=r"../results/", folder=""):
         build_model_dictionary["only_positive_labels"] = bool(eval(build_model_dictionary["only_positive_labels"]))
     else:
         build_model_dictionary["only_positive_labels"] = True
+    if "dim_seeds" in build_model_dictionary.keys():
+        build_model_dictionary["dim_seeds"] = int(build_model_dictionary["dim_seeds"])
+    else:
+        build_model_dictionary["dim_seeds"] = 1
 
     return build_model_dictionary
 
@@ -171,9 +175,6 @@ def remove_module_prefix_from_dict(dictionary):
 
 def has_pixel_classifier_state_dict(state_dict):
     return bool(sum(['pixel_classifier' in key for key in state_dict.keys()]))
-
-def has_object_classifier_state_dict(state_dict):
-    return bool(sum(['object_classifier' in key for key in state_dict.keys()]))
 
 def has_adaptor_net_state_dict(state_dict):
     return bool(sum(['AdaptorNet' in key for key in state_dict.keys()]))

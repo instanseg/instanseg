@@ -1,6 +1,6 @@
 import collections
 
-def get_augmentation_dict(dim_in,nuclei_channel,amount,pixel_size=0.5, augmentation_type="minimal"):
+def get_augmentation_dict(dim_in,nuclei_channel,amount,pixel_size=0.5, augmentation_type="minimal", mean_diameter = None):
 
     """
     This function returns the augmentation dictionary for the training and test sets.
@@ -19,7 +19,9 @@ def get_augmentation_dict(dim_in,nuclei_channel,amount,pixel_size=0.5, augmentat
 
     channel_invariance = (dim_in is None or dim_in <= 0)
 
-    median_diameter = None #(30,0.25,4)
+    if median_diameter is not None:
+         median_diameter = (median_diameter,0.25,4)
+
 
     if augmentation_type == "minimal":
 

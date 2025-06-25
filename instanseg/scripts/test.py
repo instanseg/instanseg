@@ -10,6 +10,7 @@ import numpy as np
 
 parser = argparse.ArgumentParser()
 parser.add_argument("-d_p", "--data_path", type=str, default=r"../datasets")
+parser.add_argument("-i_f", "--inference_folder", type=str, default=r"../datasets")
 parser.add_argument("-o_f", "--output_folder", type=str, default="Results")
 parser.add_argument("-m_p", "--model_path", type=str, default=r"../models")
 parser.add_argument("-m_f", "--model_folder", type=str)
@@ -183,12 +184,14 @@ if __name__ == "__main__":
     if parser_args.loss_function.lower() == "instanseg_loss":
         from instanseg.utils.loss.instanseg_loss import InstanSeg
 
-        method = InstanSeg(binary_loss_fn_str=model_dict["binary_loss_fn"], seed_loss_fn=model_dict["seed_loss_fn"],
+        method = InstanSeg(binary_loss_fn_str=model_dict["binary_loss_fn"], 
+                           seed_loss_fn=model_dict["seed_loss_fn"],
                            n_sigma=model_dict["n_sigma"],
-                           cells_and_nuclei=model_dict["cells_and_nuclei"], to_centre=model_dict["to_centre"],
-                           window_size=parser_args.window_size, dim_coords=model_dict["dim_coords"],
-                           feature_engineering_function=model_dict["feature_engineering"],
-                           only_positive_labels= model_dict["only_positive_labels"])
+                           cells_and_nuclei=model_dict["cells_and_nuclei"],
+                           window_size=parser_args.window_size, 
+                           dim_coords=model_dict["dim_coords"],
+                           dim_seeds= model_dict["dim_seeds"],
+                           feature_engineering_function=model_dict["feature_engineering"])
 
         if parser_args.target_segmentation is None:
             parser_args.cells_and_nuclei = model_dict["cells_and_nuclei"]
@@ -231,9 +234,13 @@ if __name__ == "__main__":
                                                                  dataset=parser_args.dataset)
 
     else:
+      
         from instanseg.utils.data_loader import _read_images_from_path
+        
 
-        val_images, val_labels = _read_images_from_path(sets=[parser_args.test_set])
+        val_images, val_labels, val_meta = _read_images_from_path(data_path = parser_args.inference_folder, 
+                                                        sets=[parser_args.test_set],
+                                                        args=parser_args)
 
     datasets_str = np.unique([item['parent_dataset'] for item in val_meta])
     print("Datasets used:", datasets_str)
@@ -334,6 +341,24 @@ if __name__ == "__main__":
                                                           params=params,
                                                           instanseg=instanseg,
                                                           tta=parser_args.tta)
+    
+    # if parser_args.test_set == "Test":
+    #     for i,pred in enumerate(pred_masks):
+    #         meta = val_meta[i]
+    #         source_dataset = meta['parent_dataset']
+
+    #         path = f'/home/thibaut_goldsborough/Documents/Projects/Segmentation_benchmarks/BEN/{source_dataset}/{source_dataset}/test/'
+    #         name = meta['name'].split('.')[0]
+
+    #         if not parser_args.tta:
+    #             outpath = (path + name + '_INSTANSEG_PREDICTION.tiff')
+    #         else:
+    #             outpath = (path + name + '_INSTANSEG_TTA_PREDICTION.tiff')
+
+    #         import tifffile
+    #         print("Saving to", outpath)
+    #         tifffile.imsave(outpath, pred)
+
 
     pd.DataFrame(time_dict['combined']).to_csv(output_path / "timing_dict.csv", header=True)
 
