@@ -210,7 +210,7 @@ def load_model_weights(model, device, folder, path=r"../models/", dict = None):
     if has_pixel_classifier_state_dict(model_dict['model_state_dict']) and not has_pixel_classifier_model(model):
         from instanseg.utils.loss.instanseg_loss import InstanSeg
 
-        method = InstanSeg(n_sigma=int(dict["n_sigma"]), feature_engineering_function= dict["feature_engineering"],dim_coords = dict["dim_coords"],only_positive_labels= dict["only_positive_labels"],device =device)
+        method = InstanSeg(n_sigma=int(dict["n_sigma"]), feature_engineering_function= dict["feature_engineering"],dim_coords = dict["dim_coords"],dim_seeds = dict["dim_seeds"],device =device)
         model = method.initialize_pixel_classifier(model, MLP_width=int(dict["mlp_width"]))
     
 
