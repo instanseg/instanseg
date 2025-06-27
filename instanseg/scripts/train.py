@@ -364,7 +364,8 @@ def instanseg_training(segmentation_dataset: Dict = None, **kwargs):
     if args.hotstart_training > 0:
         hot_epochs = args.hotstart_training
         print("Hotstart for "+str(hot_epochs)+" epochs with binary_xloss and dice_loss")
-        method.update_seed_loss("binary_xloss")
+        if args.seed_loss_fn != "distance_and_binary_loss":
+            method.update_seed_loss("binary_xloss")
         method.update_binary_loss("dice_loss")
         model, train_losses, test_losses, f1_list, f1_list_cells = main(model, loss_fn, train_loader, test_loader, num_epochs=hot_epochs, epoch_name='hotstart_epoch')
 

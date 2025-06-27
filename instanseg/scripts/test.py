@@ -10,7 +10,7 @@ import numpy as np
 
 parser = argparse.ArgumentParser()
 parser.add_argument("-d_p", "--data_path", type=str, default=r"../datasets")
-parser.add_argument("-i_f", "--inference_folder", type=str, default=r"../datasets")
+parser.add_argument("-i_f", "--inference_folder", type=str, default= None )#r"../datasets")
 parser.add_argument("-o_f", "--output_folder", type=str, default="Results")
 parser.add_argument("-m_p", "--model_path", type=str, default=r"../models")
 parser.add_argument("-m_f", "--model_folder", type=str)
