@@ -262,6 +262,9 @@ def instanseg_training(segmentation_dataset: Dict = None, **kwargs):
             return optim.SGD(parameters, lr=args.lr, weight_decay=args.weight_decay)
         elif args.optimizer.lower() == "adamw":
             return optim.AdamW(parameters, lr=args.lr, weight_decay=args.weight_decay)
+        elif args.optimizer.lower() == "adopt":
+            from adopt import ADOPT
+            return ADOPT(parameters, lr=args.lr, weight_decay=args.weight_decay)
         else:
             raise NotImplementedError("Optimizer not recognized", args.optimizer)
 
