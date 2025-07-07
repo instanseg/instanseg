@@ -31,12 +31,10 @@ class SAM_UNet(nn.Module):
             [EncoderBlock(layers[i], layers[i+1], norm=norm, act=act) for i in range(len(layers)-1)]
         )
 
-        
-
+    
 
         bsize = 128 if len(layers) == 2 else 64 
 
-        print(f"Using Cellpose SAM with bsize: {bsize} and layers: {layers}")
         model = CellposeSam(nout= layers[-1], bsize = bsize).to("cuda")
         model.model.encoder.patch_embed.proj = torch.nn.Conv2d(layers[-1], 1024, kernel_size=(8, 8), stride=(8, 8))
 
@@ -60,10 +58,6 @@ class SAM_UNet(nn.Module):
             if n < len(self.encoder) - 1:
                 skips.append(x)
 
-        print(f"Shape of bottleneck feature map: {x.shape}")
-            
         x = self.vit_model(x)  # <-- Pass bottleneck feature map through ViT
-
-        print(f"Shape after ViT: {x.shape}")
 
         return torch.cat([decoder(x, skips) for decoder in self.decoders], dim=1)
