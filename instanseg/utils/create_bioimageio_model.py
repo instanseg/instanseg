@@ -427,7 +427,8 @@ def export_bioimageio(torchsript: torch.jit._script.RecursiveScriptModule,
                 "https://github.com/instanseg/instanseg"
             ), 
             inputs=[input_descr], 
-            outputs=outputs, 
+            outputs=outputs,
+            tags=["whole-slide-imaging", "2d", "pytorch", "unet", "instance-segmentation", "nuclei", "cells", "cell-membrane", "fluorescence-light-microscopy", "transmission-light-microscopy"], 
             weights=WeightsDescr(
             torchscript=TorchscriptWeightsDescr(
                 source=os.path.join(output_name, "instanseg.pt"),
