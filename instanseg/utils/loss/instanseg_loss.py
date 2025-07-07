@@ -1143,6 +1143,7 @@ class InstanSeg_Torchscript(nn.Module):
                  pixel_size : float = 0, 
                  n_sigma: int = 2, 
                  dim_coords:int = 2, 
+                 dim_seeds: int = 1,
                  backbone_dim_in: int = 3,  
                  feature_engineering_function:str  = "0",
                  params = None):
@@ -1163,6 +1164,7 @@ class InstanSeg_Torchscript(nn.Module):
         self.cells_and_nuclei = cells_and_nuclei
         self.pixel_size = pixel_size
         self.dim_coords = dim_coords
+        self.dim_seeds = dim_seeds
         self.n_sigma = n_sigma
         self.feature_engineering, self.feature_engineering_width = feature_engineering_generator(feature_engineering_function)
         self.params = params or {}
@@ -1267,6 +1269,16 @@ class InstanSeg_Torchscript(nn.Module):
 
                     #mask_map = torch.sigmoid(x[self.dim_coords + self.n_sigma]) #legacy
                     mask_map = ((x[self.dim_coords + self.n_sigma]) / 15) + 0.5 # inverse transform applied to edt during training.
+
+                    if self.dim_seeds == 1:
+                        mask_map = ((x[-1]) / 15) + 0.5
+                        binary_map = mask_map
+                    else:
+                        binary_map = torch.sigmoid(x[-1])
+                        mask_map = (x[-2] / 15).clone() + 0.5
+
+                        mask_map[~(binary_map > 0.5)] = 0  # Set seed_map to 0 where binary_map is False
+
 
                     if precomputed_seeds is None or precomputed_seeds.shape[0] == 0:
                         centroids_idx = torch_peak_local_max(mask_map, neighbourhood_size=peak_distance,

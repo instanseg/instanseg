@@ -125,7 +125,7 @@ def build_model_from_dict(build_model_dictionary, random_seed = None):
             multihead = build_model_dictionary["multihead"]
 
             if build_model_dictionary["cells_and_nuclei"]:
-                n_seeds = (build_model_dictionary["dim_out"] - build_model_dictionary["dim_coords"] - build_model_dictionary["n_sigma"]) //2
+                n_seeds = build_model_dictionary["dim_seeds"]
                 if not multihead:
                     from itertools import chain
                     out_channels = [[build_model_dictionary["dim_coords"], build_model_dictionary["n_sigma"],n_seeds] for i in range(2)]
@@ -134,7 +134,7 @@ def build_model_from_dict(build_model_dictionary, random_seed = None):
                 else:
                     out_channels = [[build_model_dictionary["dim_coords"], build_model_dictionary["n_sigma"],n_seeds] for i in range(2)]
             else:
-                n_seeds = (build_model_dictionary["dim_out"] - build_model_dictionary["dim_coords"] - build_model_dictionary["n_sigma"])
+                n_seeds = build_model_dictionary["dim_seeds"]
                 if not multihead:
                     out_channels = [[build_model_dictionary["dim_coords"], build_model_dictionary["n_sigma"],n_seeds]]
                 else:
@@ -151,6 +151,12 @@ def build_model_from_dict(build_model_dictionary, random_seed = None):
         from instanseg.utils.models.CellposeSam import CellposeSam
         print("Generating CellposeSam")
         model = CellposeSam(nout=build_model_dictionary["dim_out"])
+    elif build_model_dictionary["model_str"].lower() == "sam_unet":
+        from instanseg.utils.models.CellposeSam import SAM_UNet
+        print("Generating SAM_UNet")
+        model = SAM_UNet(in_channels=dim_in, out_channels=build_model_dictionary["dim_out"],
+                         layers=np.array(build_model_dictionary["layers"])[::-1],
+                         norm=build_model_dictionary["norm"], dropout=build_model_dictionary["dropprob"])
             
     else:
         model = build_monai_model(build_model_dictionary["model_str"], build_model_dictionary)
