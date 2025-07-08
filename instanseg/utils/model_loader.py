@@ -154,7 +154,11 @@ def build_model_from_dict(build_model_dictionary, random_seed = None):
     elif build_model_dictionary["model_str"].lower() == "sam_unet":
         from instanseg.utils.models.CellposeSam import SAM_UNet
         print("Generating SAM_UNet")
-        model = SAM_UNet(in_channels=dim_in, out_channels=build_model_dictionary["dim_out"],
+        if build_model_dictionary["cells_and_nuclei"]:
+            out_channels = [[build_model_dictionary["dim_coords"], build_model_dictionary["n_sigma"],build_model_dictionary["dim_seeds"]] for i in range(2)]
+        else:
+            out_channels = [[build_model_dictionary["dim_coords"], build_model_dictionary["n_sigma"],build_model_dictionary["dim_seeds"]]]
+        model = SAM_UNet(in_channels=dim_in, out_channels=out_channels,
                          layers=np.array(build_model_dictionary["layers"])[::-1],
                          norm=build_model_dictionary["norm"], dropout=build_model_dictionary["dropprob"])
             
