@@ -31,7 +31,7 @@ dependencies = [
     "scikit-image>=0.22.0",
     "slideio>=2.6.2",
     "tifffile>=2023.12.9",
-    "tiffslide>=2.4.0",
+    "tiffslide>=2.5.1",
     "torch>=2.1.1",
     "tqdm>=4.66.1"
 ]
