@@ -106,6 +106,7 @@ def export_bioimageio(torchsript: torch.jit._script.RecursiveScriptModule,
                       output_name = None,
                       output_channel_names = None,
                       output_types = ["instance_segmentation"],
+                      test: bool = True,
                       version: str = None):
     
     set_export_paths()
@@ -369,15 +370,15 @@ def export_bioimageio(torchsript: torch.jit._script.RecursiveScriptModule,
                             size = DataDependentSize()),
             IndexOutputAxis(id = "logits",
                             description = "Logits for classes",
-                            size = 19,),
+                            size = 8,),
             
         ]
 
         output_descr = OutputTensorDescr(
             id=TensorId("detection_logits"),
             axes=output_axes,
-            test_tensor=FileDescr(source=os.path.join(output_name, "test-output_detection_classes.npy"),),
-            data = NominalOrOrdinalDataDescr(type = "float32", values = [0]),
+            test_tensor=FileDescr(source=os.path.join(output_name, "test-output_detection_logits.npy"),),
+            #data = NominalOrOrdinalDataDescr(type = "float32", values = [0]),
         )
 
         return output_descr
@@ -448,8 +449,9 @@ def export_bioimageio(torchsript: torch.jit._script.RecursiveScriptModule,
 
     from bioimageio.core import test_model
 
-    summary = test_model(my_model_descr)
-    summary.display()
+    if test:
+        summary = test_model(my_model_descr)
+        summary.display()
 
     import zipfile
     import shutil

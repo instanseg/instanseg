@@ -771,6 +771,7 @@ class InstanSeg():
                                                       n_neighbors = 50,
                                                       n_pcs = 100,
                                                     resolution = 0.1,
+                                                    min_dist = 0.5,
                                                      device = "cuda",
                                                      channel_names = None,
                                                      normalise = True):
@@ -815,7 +816,7 @@ class InstanSeg():
             rsc.pp.scale(adata)
             
         rsc.pp.neighbors(adata, n_neighbors=n_neighbors, n_pcs=n_pcs)
-        rsc.tl.umap(adata)
+        rsc.tl.umap(adata,min_dist=min_dist)
         rsc.tl.leiden(adata, resolution=resolution)
 
         # Create the UMAP plot

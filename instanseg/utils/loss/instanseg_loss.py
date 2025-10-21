@@ -2,9 +2,9 @@ import torch
 import numpy as np
 import pdb
 
+from einops import rearrange
 from typing import Tuple, List, Union
-from instanseg.utils.loss.lovasz_losses import binary_xloss
-from instanseg.utils.pytorch_utils import torch_fastremap, torch_onehot,fast_sparse_intersection_over_minimum_area, remap_values, fast_iou, fast_sparse_iou, eccentricity_batch, connected_components, flood_fill,fill_holes, expand_labels_map
+from instanseg.utils.pytorch_utils import torch_fastremap, torch_onehot,fast_sparse_intersection_over_minimum_area, remap_values, fast_iou, fast_sparse_iou, connected_components, flood_fill,fill_holes, expand_labels_map
 from instanseg.utils.tiling import _instanseg_padding, _recover_padding
 
 import torch.nn.functional as F
@@ -17,7 +17,6 @@ from instanseg.utils.utils import show_images
 from instanseg.utils.utils import timer
 
 integer_dtype = torch.int64
-
 
 
 def convert(prob_input: torch.Tensor, coords_input: torch.Tensor, size: Tuple[int, int],
@@ -167,29 +166,28 @@ def torch_peak_local_max_LEGACY(image: torch.Tensor, neighbourhood_size: int, mi
 
     return locs
 
-
-def centre_crop(centroids: torch.Tensor, window_size: int, h:int, w:int) -> torch.Tensor:
+#@torch.jit.script
+def centre_crop(centroids: torch.Tensor, window_size: int, h:int, w:int) -> Tuple[torch.Tensor, torch.Tensor]:
     """
     centres the crop around the centroid, ensuring that the crop does not exceed the image dimensions.
     """
     C = centroids.shape[0]
     centroids = centroids.clone()  # C,2
-    centroids[:,0] = centroids[:, 0].clamp(min=window_size //2 , max=h - window_size //2)
-    centroids[:, 1] = centroids[:,1].clamp(min=window_size //2, max=w - window_size //2)
-    window_slices = (centroids[:, None] + torch.tensor([[-1, -1], [1, 1]], device = centroids.device) * (window_size //2))
-
+    centroids[:, 0] = centroids[:, 0].clamp(min=window_size //2 , max=h - window_size //2)
+    centroids[:, 1] = centroids[:, 1].clamp(min=window_size //2, max=w - window_size //2)
+    window_slices = (centroids[:, None] + torch.tensor([[-1, -1], [1, 1]], device=centroids.device) * (window_size // 2))
 
     grid_x, grid_y = torch.meshgrid(
         torch.arange(window_size, device=centroids.device, dtype=centroids.dtype),
-        torch.arange(window_size, device=centroids.device, dtype=centroids.dtype), indexing="ij")
-    
-    mesh = torch.stack((grid_x, grid_y))
+        torch.arange(window_size, device=centroids.device, dtype=centroids.dtype),
+        indexing="ij"
+    )
 
-    mesh_grid = mesh.expand(C, 2, window_size, window_size)  # C,2,2*window_size,2*window_size
-    mesh_grid_flat = torch.flatten(mesh_grid, 2).permute(1, 0, -1)  # 2,C,2*window_size*2*window_size
-    idx = window_slices[:, 0].permute(1, 0)[:, :, None]
-    mesh_grid_flat = mesh_grid_flat + idx
-    mesh_grid_flat = torch.flatten(mesh_grid_flat, 1)  # 2,C*2*window_size*2*window_size
+    mesh = torch.stack((grid_x, grid_y))
+    mesh_grid = mesh.expand(C, 2, window_size, window_size)
+    mesh_grid_flat = torch.flatten(mesh_grid, 2).permute(1, 0, 2)
+    mesh_grid_flat = mesh_grid_flat + window_slices[:, 0].permute(1, 0)[:, :, None]
+    mesh_grid_flat = torch.flatten(mesh_grid_flat, 1)
 
     return mesh_grid_flat, window_slices
 
@@ -236,26 +234,6 @@ def compute_crops( x: torch.Tensor,
         x[holes] = mask_threshold #fill holes
 
     return x, iidd
-
-def get_crop_probs( x: torch.Tensor, 
-                  c: torch.Tensor, 
-                  sigma: torch.Tensor,
-                  centroids_idx: torch.Tensor,
-                  feature_engineering,
-                  object_classifier,  
-                  window_size: int = 128):
-
-    h, w = x.shape[-2:]
-    C = c.shape[0]
-
-
-    mesh_grid_flat,window_slices = centre_crop(centroids_idx, window_size, h, w)
-    x = feature_engineering(x, c, sigma, window_size //2 , mesh_grid_flat).reshape(C, -1, window_size, window_size)
-
-    x = object_classifier(x)  # C,1
-
-
-    return x
 
 
 
@@ -461,47 +439,6 @@ class ConvProbabilityNet(nn.Module):
         return output
     
 
-class SimpleCNN(nn.Module):
-    def __init__(self, input_channels, output_size=1):
-        super(SimpleCNN, self).__init__()
-        # First convolutional layer
-        self.conv1 = nn.Conv2d(in_channels=input_channels, out_channels=16, kernel_size=3, padding=1)
-        # Second convolutional layer
-        self.conv2 = nn.Conv2d(in_channels=16, out_channels=32, kernel_size=3, padding=1)
-        # Adaptive average pooling to ensure fixed-size output
-        self.adaptive_pool = nn.AdaptiveAvgPool2d((1, 1))
-        # Fully connected layer
-        self.fc1 = nn.Linear(in_features=32, out_features=output_size)
-
-    def forward(self, x):
-        # Apply first convolution, then ReLU activation, and pooling
-        x = F.relu(self.conv1(x))
-        x = F.max_pool2d(x, kernel_size=2)
-        # Apply second convolution, then ReLU activation, and pooling
-        x = F.relu(self.conv2(x))
-        x = F.max_pool2d(x, kernel_size=2)
-        # Apply adaptive pooling to get a fixed-size output
-        x = self.adaptive_pool(x)
-        # Remove extra dimensions
-        x = x.view(x.size(0), -1)
-        # Apply the fully connected layer
-        x = self.fc1(x)
-        return x
-    
-
-class MedianFilter(nn.Module):
-    def __init__(self, kernel_size: Tuple[int, int]):
-        from kornia.filters import MedianBlur
-        super(MedianFilter, self).__init__()
-        self.kernel_size = kernel_size
-        self.MedianBlur = MedianBlur(kernel_size)
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return self.MedianBlur(x)
-
-
-from einops import rearrange
-
 
 def feature_engineering(x: torch.Tensor, c: torch.Tensor, sigma: torch.Tensor, window_size: int,
                         mesh_grid_flat: torch.Tensor):
@@ -628,9 +565,6 @@ def feature_engineering_10(x: torch.Tensor, xxyy: torch.Tensor, c: torch.Tensor,
 
     return x
 
-
-
-
 def feature_engineering_generator(feature_engineering_function):
 
     if feature_engineering_function == "0" or feature_engineering_function == "7":
@@ -645,7 +579,6 @@ def feature_engineering_generator(feature_engineering_function):
     else:
         raise NotImplementedError("Feature engineering function",feature_engineering_function,"is not implemented")
 
-
 class InstanSeg(nn.Module):
 
     def __init__(self,
@@ -655,14 +588,11 @@ class InstanSeg(nn.Module):
                  binary_loss_fn_str: str = "lovasz_hinge", 
                  seed_loss_fn = "binary_xloss", 
                  cells_and_nuclei: bool = False, 
-                 to_centre: bool = True, 
-                 multi_centre: bool = False,
                  window_size = 256, 
                  feature_engineering_function = "0",
                  bg_weight = None,
-                 only_positive_labels = True,
-                 dim_coords = 2):
-        
+                 dim_coords = 2,
+                 dim_seeds = 1,):
         
         super().__init__()
         self.n_sigma = n_sigma
@@ -670,19 +600,16 @@ class InstanSeg(nn.Module):
         self.device = device
         self.dim_coords = dim_coords
 
-        self.dim_out = self.dim_coords + self.n_sigma + 1
+        self.dim_seeds = dim_seeds
+
+        self.dim_out = self.dim_coords + self.n_sigma + self.dim_seeds
         self.parameters_have_been_updated = False
 
         if cells_and_nuclei:
             self.dim_out = self.dim_out * 2
         self.cells_and_nuclei = cells_and_nuclei
-
-        self.to_centre = to_centre
-        self.multi_centre = multi_centre
         self.window_size = window_size
-        self.use_object_classifier = not only_positive_labels
         self.num_instance_cap = 50
-        self.sort_by_eccentricity = False
         self.bg_weight = bg_weight
 
         self.feature_engineering, self.feature_engineering_width = feature_engineering_generator(feature_engineering_function)
@@ -699,46 +626,25 @@ class InstanSeg(nn.Module):
                 return lovasz_hinge((pred.squeeze(1)), gt,per_image = True)
 
         elif binary_loss_fn_str == "binary_xloss":
-            from instanseg.utils.loss.lovasz_losses import binary_xloss
             self.binary_loss_fn = torch.nn.BCEWithLogitsLoss()
+
         elif binary_loss_fn_str == "dicefocal_loss":
             from monai.losses import DiceFocalLoss
-            
             binary_loss_fn_ = DiceFocalLoss(sigmoid=True)
             def binary_loss_fn(pred, gt, **kwargs):
                 l = binary_loss_fn_(pred[None,:,0], gt.unsqueeze(0)) * 1.5
                 return l
         elif binary_loss_fn_str == "dice_loss":
             from monai.losses import DiceLoss
-            
             binary_loss_fn_ = DiceLoss(sigmoid=True)
             def binary_loss_fn(pred, gt, **kwargs):
                 l = binary_loss_fn_(pred[None,:,0], gt.unsqueeze(0)) * 1.5
                 return l
 
-
         elif binary_loss_fn_str == "general_dice_loss":
             from monai.losses import GeneralizedDiceLoss
             def binary_loss_fn(pred, gt):
                 return GeneralizedDiceLoss(sigmoid=True)(pred, gt.unsqueeze(1))
-            
-
-        elif binary_loss_fn_str == "cross_entropy":
-            from torch.nn import NLLLoss
-            assert self.window_size == 256, "Cross entropy loss only works with window size 256"
-            assert self.num_instance_cap is None, "Cross entropy loss only works with num_instance_cap = None"
-            
-            self.l_fn = NLLLoss()
-            self.m = nn.LogSoftmax(dim=1)
-            
-            def binary_loss_fn(pred, gt, sigma):
-                pred = torch.cat([sigma[None,None],pred])
-                gt = torch.cat(((gt.sum(0)==0)[None],gt))
-                target = gt.argmax(0)[None]
-                pred = pred.squeeze(1).unsqueeze(0)
-                pred = self.m(pred)
-                return self.l_fn(pred,target.long()) * 7
-            
         else:
             raise NotImplementedError("Binary loss function",binary_loss_fn,"is not implemented")
         self.binary_loss_fn = binary_loss_fn
@@ -782,6 +688,22 @@ class InstanSeg(nn.Module):
                     return loss.mean()
                 
             self.seed_loss = seed_loss
+
+        elif seed_loss_fn in ["distance_and_binary_loss"]:
+            distance_loss = torch.nn.MSELoss(reduction='none')
+            binary_loss = torch.nn.BCEWithLogitsLoss(reduction='none')
+            from instanseg.utils.pytorch_utils import instance_wise_edt
+            def seed_loss(x,y, mask = None):
+                seed_map = x[0][None]
+                binary_map = x[1][None]
+
+                edt = (instance_wise_edt(y.float(), edt_type= 'edt')[None] - 0.5) * 15 #This is to mimick the range of CELoss
+                loss = (distance_loss(seed_map,edt) * (y>0)).mean() + binary_loss(binary_map, (y > 0).float()).mean()
+    
+                return loss
+            
+            self.seed_loss = seed_loss
+
         else:
             raise NotImplementedError("Seedloss function",seed_loss_fn,"is not implemented")
 
@@ -792,11 +714,7 @@ class InstanSeg(nn.Module):
                 self.pixel_classifier = model.pixel_classifier
             except:
                 self.pixel_classifier = model.model.pixel_classifier  # This happens when there is an adaptornet
-            
-            try:
-                self.object_classifier = model.object_classifier
-            except:
-                pass
+        
             return model
         else:
             if MLP_input_dim is None:
@@ -807,11 +725,6 @@ class InstanSeg(nn.Module):
             else:
                 model.pixel_classifier = ConvProbabilityNet( MLP_input_dim, width = MLP_width)
             self.pixel_classifier = model.pixel_classifier.to(self.device)
-
-            if self.use_object_classifier:
-
-                model.object_classifier = SimpleCNN(MLP_input_dim, output_size = 1)
-                self.object_classifier = model.object_classifier.to(self.device)
 
             return model
         
@@ -841,13 +754,11 @@ class InstanSeg(nn.Module):
 
             instances_batch = instances
 
-            if not self.to_centre:
+            spatial_emb_batch = (torch.sigmoid((prediction_b[:, 0: self.dim_coords]))-0.5) * 8 + xxyy
 
-                spatial_emb_batch = (torch.sigmoid((prediction_b[:, 0: self.dim_coords]))-0.5) * 8 + xxyy
-            else:
-                spatial_emb_batch = (prediction_b[:, 0: self.dim_coords]) + xxyy
             sigma_batch = prediction_b[:, self.dim_coords: self.dim_coords + self.n_sigma]  # n_sigma x h x w
-            seed_map_batch = prediction_b[:, self.dim_coords + self.n_sigma: self.dim_coords + self.n_sigma + 1]  # 1 x h x w
+            seed_map_batch = prediction_b[:, - self.dim_seeds:]  # 1 x h x w
+
 
             for b in range(0, batch_size):
 
@@ -869,12 +780,7 @@ class InstanSeg(nn.Module):
                 else:
                     mask = None
 
-                if self.use_object_classifier:
-                   if (instance == 0).all():
-                       continue
-                   mask = instance > 0
-                   #show_images([instance,mask,seed_map])
-
+            
                 seed_loss_tmp = self.seed_loss(seed_map,instance, mask = mask)
 
                 seed_loss += seed_loss_tmp
@@ -897,63 +803,26 @@ class InstanSeg(nn.Module):
 
                     if self.num_instance_cap is not None: #This is to cap the number of objects to avoid OOM errors.
                          if self.num_instance_cap < onehot_labels.shape[0]:
-                            if self.sort_by_eccentricity:
-                                eccentricities = eccentricity_batch(onehot_labels.float())
-                                idx = eccentricities.argsort(descending = True)[:self.num_instance_cap]
-                            else:
-                                idx = torch.randperm(onehot_labels.shape[0])[:self.num_instance_cap]
+                            idx = torch.randperm(onehot_labels.shape[0])[:self.num_instance_cap]
                             onehot_labels = onehot_labels[idx]
 
 
-                    if self.multi_centre:
-                
-                        if self.use_object_classifier:
+                    seed_map_tmp = torch.sigmoid(seed_map[0]) #note seed_map may have 2 channels, we keep the first one.
 
-                            seed_map_tmp = torch.sigmoid(seed_map)
 
-                            centroids = torch_peak_local_max(seed_map_tmp.squeeze() * (onehot_labels.sum(0) == 0), neighbourhood_size = 3, minimum_value = 0.5).T
-                            if self.to_centre:
-                                centres = xxyy[:,centroids[0],centroids[1]].detach().T
-                            else:
-                                centres = spatial_emb[:,centroids[0],centroids[1]].detach().T
+                    centroids = torch_peak_local_max(seed_map_tmp.squeeze() * onehot_labels.sum(0), neighbourhood_size = 3, minimum_value = 0.5).T
 
-                            idx = torch.randperm(centroids.shape[1])[:self.num_instance_cap]
-                    
-                            centres_neg = centres[idx]
-                            centroids_neg = centroids[:,idx]
+                    centres = spatial_emb[:,centroids[0],centroids[1]].detach().T
 
-                            centroids_neg = centroids_neg.T
+                    idx = torch.randperm(centroids.shape[1])[:self.num_instance_cap]
+            
+                    centres = centres[idx]
+                    centroids = centroids[:,idx]
 
-                        seed_map_tmp = torch.sigmoid(seed_map)
-                        centroids = torch_peak_local_max(seed_map_tmp.squeeze() * onehot_labels.sum(0), neighbourhood_size = 3, minimum_value = 0.5).T
-                        if self.to_centre:
-                            centres = xxyy[:,centroids[0],centroids[1]].detach().T
-                        else:
-                            centres = spatial_emb[:,centroids[0],centroids[1]].detach().T
+                    instance_labels = onehot_labels[:,centroids[0],centroids[1]].float().argmax(0)
+                    onehot_labels = onehot_labels[instance_labels]
+                    centroids = centroids.T
 
-                        idx = torch.randperm(centroids.shape[1])[:self.num_instance_cap]
-                
-                        centres = centres[idx]
-                        centroids = centroids[:,idx]
-
-                        instance_labels = onehot_labels[:,centroids[0],centroids[1]].float().argmax(0)
-                        onehot_labels = onehot_labels[instance_labels]
-                        centroids = centroids.T
-
-                    else:
-                        if self.to_centre:
-
-                            seed_map_min = seed_map.min()
-           
-                            seed_map_tmp = (seed_map - seed_map.min()).detach()
-                            centres = xxyy.flatten(1).T[((seed_map_tmp * onehot_labels).flatten(1)).argmax(1)]  # location at max seed (used in postprocessing)
-                            seed_map = seed_map_tmp + seed_map_min
-                        else:
-                            seed_map_tmp = seed_map - seed_map.min()
-                            centres = spatial_emb.flatten(1).T[((seed_map_tmp * onehot_labels).flatten(1)).argmax(1)].detach()  # embedding at max seed (used in postprocessing)
-                            
-                        centroids = (torch.sum(((xxyy[:2] * onehot_labels.unsqueeze(1))).flatten(2),dim=2)/onehot_labels.flatten(1).sum(1)[:,None] )* (256 / 64) #coordinates of centre of mass
-                        centroids = torch.stack((centroids[:, 1], centroids[:, 0])).T
 
                     if len(centroids) == 0:
                         loss += w_seed * seed_loss
@@ -969,16 +838,6 @@ class InstanSeg(nn.Module):
                                                  pixel_classifier=self.pixel_classifier,
                                                  window_size = window_size)
                     
-                    if self.use_object_classifier:
-                        if centres_neg.shape[0] > 0:
-
-                            centres = torch.cat((centres,centres_neg),dim=0)
-                            centroids = torch.cat((centroids,centroids_neg),dim=0)
-                            labels = torch.cat((torch.ones(centres.shape[0] - centres_neg.shape[0]),torch.zeros(centres_neg.shape[0]))).to(self.device)
-
-                            pred = get_crop_probs(spatial_emb, centres, sigma, centroids,feature_engineering = self.feature_engineering,object_classifier=self.object_classifier,window_size = window_size)
-                            
-                            loss += torch.nn.BCEWithLogitsLoss()(pred,labels[:,None])
 
                     crop = onehot_labels.squeeze(1)[coords[0], coords[1], coords[2]].reshape(-1,window_size, window_size)
                     instance_loss = instance_loss + self.binary_loss_fn(dist,crop.float(), sigma = sigma[0])
@@ -1005,9 +864,10 @@ class InstanSeg(nn.Module):
     def postprocessing(self, prediction: Union[torch.Tensor, np.ndarray],
                         mask_threshold: float = 0.53,
                         peak_distance: int = 4,
-                        seed_threshold: float = 0.8,
+                        seed_threshold: float = 0.5,
                         overlap_threshold: float = 0.5,
-                        mean_threshold: float = 0.1,
+                        mean_threshold: float = -10000,
+                        fg_threshold: float = 0.5, #not used in default instanseg
                         window_size: int = 128,
                         min_size = 10,
                         device=None,
@@ -1026,14 +886,16 @@ class InstanSeg(nn.Module):
             classifier = self.pixel_classifier
 
         if self.parameters_have_been_updated:
-            mask_threshold = self.params['mask_threshold']
-            peak_distance = self.params['peak_distance']
-            seed_threshold = self.params['seed_threshold']
-            overlap_threshold = self.params['overlap_threshold']
-            if "min_size" in self.params:
-                min_size = self.params['min_size']
-            if "mean_threshold" in self.params:
-                mean_threshold = self.params['mean_threshold']
+            for key in self.params:
+                setattr(self, key, self.params[key])
+            # mask_threshold = self.params['mask_threshold']
+            # peak_distance = self.params['peak_distance']
+            # seed_threshold = self.params['seed_threshold']
+            # overlap_threshold = self.params['overlap_threshold']
+            # if "min_size" in self.params:
+            #     min_size = self.params['min_size']
+            # if "mean_threshold" in self.params:
+            #     mean_threshold = self.params['mean_threshold']
 
 
         if isinstance(prediction, np.ndarray):
@@ -1059,41 +921,36 @@ class InstanSeg(nn.Module):
 
                 height, width = prediction_i.size(1), prediction_i.size(2)
 
-                ##torch.cuda.synchronize()
-
                 xxyy = generate_coordinate_map(mode = "linear", spatial_dim = self.dim_coords, height = height, width = width, device = device)
 
-                #torch.cuda.synchronize()
-
-                if not self.to_centre:
-                    fields = (torch.sigmoid(prediction_i[0:self.dim_coords])-0.5) * 8
-                else:
-                    fields = prediction_i[0:self.dim_coords]
+                fields = (torch.sigmoid(prediction_i[0:self.dim_coords])-0.5) * 8
 
                 sigma = prediction_i[self.dim_coords:self.dim_coords + self.n_sigma]
-                #mask_map = torch.sigmoid(prediction_i[self.dim_coords + self.n_sigma])
 
-                mask_map = ((prediction_i[self.dim_coords + self.n_sigma]) / 15) + 0.5
+                if self.dim_seeds == 1:
+                    mask_map = ((prediction_i[-1]) / 15) + 0.5
+                    binary_map = mask_map
+                else:
+                    binary_map = torch.sigmoid(prediction_i[-1])
+                    mask_map = (prediction_i[-2] / 15).clone() + 0.5
+
+                    mask_map[~(binary_map > fg_threshold)] = 0  # Set seed_map to 0 where binary_map is False
+
 
                 if (mask_map > mask_threshold).max() == 0:  # no foreground pixels
                     label = torch.zeros(mask_map.shape, dtype=int, device=mask_map.device).squeeze()
                     labels.append(label)
                     continue
 
-                #torch.cuda.synchronize()
-
                 if precomputed_seeds is None:
                     local_centroids_idx = torch_peak_local_max(mask_map, neighbourhood_size=int(peak_distance), minimum_value=seed_threshold)
                 else:
                     local_centroids_idx = precomputed_seeds
 
-                #torch.cuda.synchronize()
-
+            
                 fields = fields + xxyy
-                if self.to_centre:
-                    fields_at_centroids = xxyy[:, local_centroids_idx[:, 0], local_centroids_idx[:, 1]]
-                else:
-                    fields_at_centroids = fields[:, local_centroids_idx[:, 0], local_centroids_idx[:, 1]]
+
+                fields_at_centroids = fields[:, local_centroids_idx[:, 0], local_centroids_idx[:, 1]]
 
                 if local_centroids_idx.shape[0] > max_seeds:
                     print("Too many seeds, skipping", local_centroids_idx.shape[0])
@@ -1112,23 +969,6 @@ class InstanSeg(nn.Module):
                     labels.append(label)
                     continue
 
-
-                if self.use_object_classifier:
-                    preds = get_crop_probs(fields, 
-                                           fields_at_centroids.T, 
-                                           sigma, 
-                                           local_centroids_idx,
-                                           feature_engineering = self.feature_engineering,
-                                           object_classifier=self.object_classifier,
-                                           window_size = window_size)
-                    
-
-                    
-                    t_p = (preds > 0).squeeze(1)
-                    fields_at_centroids = fields_at_centroids[:,t_p]
-                    local_centroids_idx = local_centroids_idx[t_p]
-
-                #torch.cuda.synchronize()
                 crops, coords = compute_crops(fields, 
                                                 fields_at_centroids.T, 
                                                 sigma, 
@@ -1139,7 +979,6 @@ class InstanSeg(nn.Module):
                                                 cleanup_fragments= cleanup_fragments,
                                                 window_size=window_size) # about 65% of the time
                 
-                #torch.cuda.synchronize()
                 coords = coords[1:] # The first channel are just channel indices, not required here.
 
                 if return_intermediate_objects:
@@ -1160,17 +999,16 @@ class InstanSeg(nn.Module):
 
             crops = torch.sigmoid(crops) 
       
-
             label = merge_sparse_predictions(crops, 
                                             coords, 
-                                            mask_map, 
+                                            binary_map, 
                                             size=(C,h, w),
                                             mask_threshold=mask_threshold, 
                                             window_size=window_size,
                                             min_size=min_size, 
                                             overlap_threshold=overlap_threshold,
                                             mean_threshold=mean_threshold).int() #about 30% of the time
-
+            
             labels.append(label.squeeze())
 
 
@@ -1305,7 +1143,7 @@ class InstanSeg_Torchscript(nn.Module):
                  pixel_size : float = 0, 
                  n_sigma: int = 2, 
                  dim_coords:int = 2, 
-                 to_centre: bool = True,
+                 dim_seeds: int = 1,
                  backbone_dim_in: int = 3,  
                  feature_engineering_function:str  = "0",
                  params = None):
@@ -1326,8 +1164,8 @@ class InstanSeg_Torchscript(nn.Module):
         self.cells_and_nuclei = cells_and_nuclei
         self.pixel_size = pixel_size
         self.dim_coords = dim_coords
+        self.dim_seeds = dim_seeds
         self.n_sigma = n_sigma
-        self.to_centre = to_centre
         self.feature_engineering, self.feature_engineering_width = feature_engineering_generator(feature_engineering_function)
         self.params = params or {}
         self.index_dtype = torch.long #torch.int
@@ -1336,10 +1174,10 @@ class InstanSeg_Torchscript(nn.Module):
         self.default_min_size = self.params.get('min_size', 10)
         self.default_mask_threshold = self.params.get('mask_threshold', 0.53)
         self.default_peak_distance = int(self.params.get('peak_distance', 5))
-        self.default_seed_threshold = self.params.get('seed_threshold', 0.7)
+        self.default_seed_threshold = self.params.get('seed_threshold', 0.1)
         self.default_overlap_threshold = self.params.get('overlap_threshold', 0.3)
         self.default_mean_threshold = self.params.get('mean_threshold', 0.0)
-        self.default_window_size = self.params.get('window_size', 32)
+        self.default_window_size = self.params.get('window_size', 32) #32
         self.default_cleanup_fragments = self.params.get('cleanup_fragments', True)
         self.default_resolve_cell_and_nucleus = self.params.get('resolve_cell_and_nucleus', True)
 
@@ -1387,11 +1225,16 @@ class InstanSeg_Torchscript(nn.Module):
         torch.clamp_max_(x, 3) #Safety check, please normalize inputs properly!
         torch.clamp_min_(x, -2)
 
-        x, pad = _instanseg_padding(x, extra_pad=0)
+        x, pad = _instanseg_padding(x)#, min_dim = 1,extra_pad=0, ensure_square= True)
+
 
         with torch.no_grad():
+
+         #   original_shape = x.shape[2:]
+          #  x = torch.nn.functional.interpolate(x, size=(256, 256), mode='bilinear', align_corners=True)
+            
             x_full = self.fcn(x)
-    
+
             dim_out = x_full.shape[1]
 
             if self.cells_and_nuclei:
@@ -1418,15 +1261,24 @@ class InstanSeg_Torchscript(nn.Module):
 
                     xxyy = generate_coordinate_map(mode = "linear", spatial_dim = self.dim_coords, height = height, width = width, device = x.device)
 
-                    if not self.to_centre:
-                        fields = (torch.sigmoid(x[0:self.dim_coords])-0.5) * 8
-                    else:
-                        fields = x[0:self.dim_coords] 
+
+                    fields = (torch.sigmoid(x[0:self.dim_coords])-0.5) * 8
+
 
                     sigma = x[self.dim_coords:self.dim_coords + self.n_sigma]
 
                     #mask_map = torch.sigmoid(x[self.dim_coords + self.n_sigma]) #legacy
                     mask_map = ((x[self.dim_coords + self.n_sigma]) / 15) + 0.5 # inverse transform applied to edt during training.
+
+                    if self.dim_seeds == 1:
+                        mask_map = ((x[-1]) / 15) + 0.5
+                        binary_map = mask_map
+                    else:
+                        binary_map = torch.sigmoid(x[-1])
+                        mask_map = (x[-2] / 15).clone() + 0.5
+
+                        mask_map[~(binary_map > 0.5)] = 0  # Set seed_map to 0 where binary_map is False
+
 
                     if precomputed_seeds is None or precomputed_seeds.shape[0] == 0:
                         centroids_idx = torch_peak_local_max(mask_map, neighbourhood_size=peak_distance,
@@ -1436,10 +1288,7 @@ class InstanSeg_Torchscript(nn.Module):
 
                     fields = fields + xxyy
 
-                    if self.to_centre:
-                        fields_at_centroids = xxyy[:, centroids_idx[:, 0], centroids_idx[:, 1]]
-                    else:
-                        fields_at_centroids = fields[:, centroids_idx[:, 0], centroids_idx[:, 1]]
+                    fields_at_centroids = fields[:, centroids_idx[:, 0], centroids_idx[:, 1]]
 
                     x = fields
                     c = fields_at_centroids.T
@@ -1536,8 +1385,9 @@ class InstanSeg_Torchscript(nn.Module):
                     mean_mask_value = sum_mask_value / object_areas
                     objects_to_remove = ~torch.logical_and(mean_mask_value > mean_threshold, object_areas > min_size)
 
-                    #iou = fast_sparse_iou(sparse_onehot)
-                    iou = fast_sparse_intersection_over_minimum_area(sparse_onehot)
+                    iou = fast_sparse_iou(sparse_onehot)
+                 #   print(sparse_onehot.shape)
+                   # iou = fast_sparse_intersection_over_minimum_area(sparse_onehot)
 
                     remapping = find_connected_components((iou > overlap_threshold).to(self.index_dtype))
                     
@@ -1550,9 +1400,10 @@ class InstanSeg_Torchscript(nn.Module):
 
                     labels_list.append(labels.squeeze())
 
-                for lab in labels_list:
+                for i, lab in enumerate(labels_list):
                     if lab.is_mps:
-                        lab.to("cpu")
+                        labels_list[i] = lab.to("cpu")
+
 
                 if len(labels_list) == 1:
                     lab = labels_list[0][None, None]  # 1,1,H,W
@@ -1566,7 +1417,9 @@ class InstanSeg_Torchscript(nn.Module):
             
             lab = torch.stack(output_labels_list) # B,C,H,W
 
-        
+           # lab = torch.nn.functional.interpolate(lab, size=original_shape, mode='nearest')#, align_corners=True)
+           # lab = _recover_padding(lab, pad)
+
             return lab.to(torch.float32) # B,C,H,W
 
 

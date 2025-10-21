@@ -293,8 +293,8 @@ def connected_components(x: torch.Tensor, num_iterations: int = 32) -> torch.Ten
 
 def iou_heatmap(x: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
     """
-    x is H,W
-    y is H,W
+    x is 1,1,H,W
+    y is 1,1,H,W
     This function takes two labeled images and returns the intersection over union heatmap
     """
     if x.max() ==0 or y.max() == 0:
@@ -505,7 +505,7 @@ def _to_tensor_float32(image: Union[np.ndarray, torch.Tensor]) -> torch.Tensor:
     if isinstance(image, np.ndarray):      
         if image.dtype == np.uint16:
             image = image.astype(np.int32)
-        image = torch.from_numpy(image).float()
+        image = torch.from_numpy(image.astype(np.float32)).float()
     
     image = image.squeeze()
 

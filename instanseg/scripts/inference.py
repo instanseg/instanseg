@@ -67,6 +67,7 @@ def file_matches_requirement(root,file, exclude_str):
 prediction_tag = "_instanseg_prediction"
 
 def main():
+    global parser
     from instanseg import InstanSeg
 
     parser = parser.parse_args()
