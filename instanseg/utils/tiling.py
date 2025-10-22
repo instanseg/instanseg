@@ -333,7 +333,7 @@ def _recover_padding(x: torch.Tensor, pad: torch.Tensor):
 def _sliding_window_inference(input_tensor, 
                              predictor, 
                              window_size=(512, 512), 
-                             overlap = 80
+                             overlap = 80,
                              max_cell_size = 20, 
                              sw_device='cuda',
                              device='cpu', 
