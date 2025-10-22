@@ -237,12 +237,18 @@ def compute_crops( x: torch.Tensor,
 
 
 
-def find_connected_components(adjacency_matrix: torch.Tensor):
+def find_connected_components_legacy(adjacency_matrix: torch.Tensor, num_iterations: int = 10) -> torch.Tensor:
 
     M = (adjacency_matrix + torch.eye(adjacency_matrix.shape[0],
                                device=adjacency_matrix.device))  # https://math.stackexchange.com/questions/1106870/can-i-find-the-connected-components-of-a-graph-using-matrix-operations-on-the-gr
-    num_iterations = 10
+    num_iterations = 10#10
+
     out = torch.matrix_power(M, num_iterations)
+
+    if torch.isinf(out).any() or torch.isnan(out).any():
+        print("Warning: overflow detected in adjacency matrix. Too many seeds detected")
+
+    
     col = torch.arange(0, out.shape[0], device=out.device).view(-1, 1).expand(out.shape[0], out.shape[
         0])  # Just a column matrix with numbers from 0 to out.shape[0]
     out_col_idx = ((out > 1).int() - torch.eye(out.shape[0], device=out.device)) * col
@@ -255,8 +261,60 @@ def find_connected_components(adjacency_matrix: torch.Tensor):
                             dim=1)  # Maybe this can be avoided in the future by thresholding labels
     
     return remapping
-    
+@torch.jit.script
+def find_connected_components(adjacency_matrix: torch.Tensor, max_iterations: int = 100) -> torch.Tensor:
+    """
+    Find connected components using label propagation, compatible with TorchScript.
+    Args:
+        adjacency_matrix: Binary square tensor (n x n) representing the graph.
+        max_iterations: Maximum number of iterations to prevent infinite loops.
+    Returns:
+        remapping: Tensor (2 x (n+1)) where remapping[1][i] is the component label for node i (1-based).
+    """
+    # Validate input
+    if not torch.all((adjacency_matrix == 0) | (adjacency_matrix == 1)):
+        raise ValueError("Adjacency matrix must be binary (0s and 1s)")
+    if not torch.all(adjacency_matrix == adjacency_matrix.t()):
+        raise ValueError("Adjacency matrix must be symmetric (undirected graph)")
+    n = adjacency_matrix.shape[0]
+    if n == 0:
+        return torch.zeros(2, 1, device=adjacency_matrix.device, dtype=torch.long)
 
+    # Initialize labels as node indices (1-based)
+    labels = torch.arange(1, n + 1, device=adjacency_matrix.device, dtype=torch.long)
+    M = adjacency_matrix + torch.eye(n, device=adjacency_matrix.device)  # Include self-loops
+
+    # Get non-zero indices as [num_nonzero, 2] tensor
+    indices = torch.nonzero(M)  # Returns [row, col] pairs
+    if indices.size(0) == 0:
+        raise ValueError("Graph has no edges or self-loops; check input adjacency matrix")
+    row = indices[:, 0]
+    col = indices[:, 1]
+
+    # Label propagation
+    for i in range(max_iterations):
+        prev_labels = labels.clone()
+        min_labels = torch.full((n,), float('inf'), device=adjacency_matrix.device, dtype=torch.float)
+        min_labels.scatter_reduce_(0, row, labels[col].float(), reduce='amin')
+      #  if torch.any(~torch.isfinite(min_labels)):
+        #    raise RuntimeError("Non-finite values detected in label propagation; possible numerical issue")
+        new_labels = min_labels#.long()
+       # if torch.any(new_labels > torch.iinfo(torch.int64).max) or torch.any(new_labels < torch.iinfo(torch.int64).min):
+         #   raise RuntimeError("Label values exceed int64 range during conversion")
+        labels = torch.minimum(labels, new_labels)
+        if torch.equal(labels, prev_labels):
+            # print(f"Converged after {i+1} iterations")  # print not supported in TorchScript
+            break
+        if i == max_iterations - 1:
+            print(f"Warning: Maximum iterations ({max_iterations}) reached without convergence.")
+            pass  # Avoid print in TorchScript
+
+    # Create remapping tensor
+    node_indices = torch.arange(1, n + 1, device=adjacency_matrix.device, dtype=torch.long)
+    tentative_remapping = torch.stack((node_indices, labels))
+    remapping = torch.cat((torch.zeros(2, 1, device=adjacency_matrix.device, dtype=torch.long), tentative_remapping), dim=1)
+
+    return remapping
 
 def has_pixel_classifier_model(model):
     for module in model.modules():
@@ -320,8 +378,10 @@ def merge_sparse_predictions(x: torch.Tensor,
         #This can happen at the start of training. This can cause OOM errors and is never a good sign - may aswell abort.
         return labels
 
-   # iou = fast_sparse_iou(sparse_onehot)
-    iou = fast_sparse_intersection_over_minimum_area(sparse_onehot)
+    iou = fast_sparse_iou(sparse_onehot)
+   
+   # iou = fast_sparse_intersection_over_minimum_area(sparse_onehot)
+    
 
     remapping = find_connected_components((iou>overlap_threshold).float() )
 
@@ -367,12 +427,12 @@ def generate_coordinate_map(mode: str = "linear", spatial_dim: int = 2, height: 
             yy = torch.linspace(0, height * 64 / 256, height, device=device).view(1, -1, 1).expand(1, height, width)
             zz = torch.zeros_like(xx).expand(spatial_dim - 2,-1,-1)
             xxyy = torch.cat((xx, yy,zz), 0)
+        
         else:
             xxyy = torch.zeros((spatial_dim, height, width), device=device) #NOT IMPLEMENTED - THIS IS JUST A DUMMY VALUE
 
     else:
         xxyy = torch.zeros((spatial_dim, height, width), device=device) #NOT IMPLEMENTED - THIS IS JUST A DUMMY VALUE
-
 
     return xxyy
 
@@ -443,6 +503,7 @@ class ConvProbabilityNet(nn.Module):
 def feature_engineering(x: torch.Tensor, c: torch.Tensor, sigma: torch.Tensor, window_size: int,
                         mesh_grid_flat: torch.Tensor):
     
+    
     E = x.shape[0]
     h, w = x.shape[-2:]
     C = c.shape[0]
@@ -458,9 +519,9 @@ def feature_engineering(x: torch.Tensor, c: torch.Tensor, sigma: torch.Tensor, w
 
 
 
-
 def feature_engineering_slow(x: torch.Tensor, c: torch.Tensor, sigma: torch.Tensor, window_size: int,
                         mesh_grid_flat: torch.Tensor):
+
     
     E = x.shape[0]
     h, w = x.shape[-2:]
@@ -698,9 +759,15 @@ class InstanSeg(nn.Module):
                 binary_map = x[1][None]
 
                 edt = (instance_wise_edt(y.float(), edt_type= 'edt')[None] - 0.5) * 15 #This is to mimick the range of CELoss
-                loss = (distance_loss(seed_map,edt) * (y>0)).mean() + binary_loss(binary_map, (y > 0).float()).mean()
+                loss = (distance_loss(seed_map,edt) * (y>0)) + binary_loss(binary_map, (y > 0).float())
+
+                if mask is not None:
+                    mask = mask.float()
+                    masked_loss = loss * mask
+                    return masked_loss.sum() / mask.sum()
+                else:
+                    return loss.mean()
     
-                return loss
             
             self.seed_loss = seed_loss
 
@@ -837,6 +904,7 @@ class InstanSeg(nn.Module):
                                                  feature_engineering = self.feature_engineering,
                                                  pixel_classifier=self.pixel_classifier,
                                                  window_size = window_size)
+                    
                     
 
                     crop = onehot_labels.squeeze(1)[coords[0], coords[1], coords[2]].reshape(-1,window_size, window_size)
@@ -980,6 +1048,7 @@ class InstanSeg(nn.Module):
                                                 window_size=window_size) # about 65% of the time
                 
                 coords = coords[1:] # The first channel are just channel indices, not required here.
+
 
                 if return_intermediate_objects:
                     return crops, coords, mask_map
@@ -1157,10 +1226,13 @@ class InstanSeg_Torchscript(nn.Module):
             with torch.no_grad():
                 self.fcn = torch.jit.trace(model, torch.rand(1, backbone_dim_in, 256, 256))
 
+        #from instanseg.utils.models.CellposeSam import SAM_UNet_inference
+        #self.fcn = SAM_UNet_inference(self.fcn)
+
         try:
             self.pixel_classifier = model.pixel_classifier
         except:
-            self.pixel_classifier = model.model.pixel_classifier  # I think this is a pytorch version issue between 1.13.1 and 2.0.0
+            self.pixel_classifier = model.model.pixel_classifier
         self.cells_and_nuclei = cells_and_nuclei
         self.pixel_size = pixel_size
         self.dim_coords = dim_coords
@@ -1174,10 +1246,11 @@ class InstanSeg_Torchscript(nn.Module):
         self.default_min_size = self.params.get('min_size', 10)
         self.default_mask_threshold = self.params.get('mask_threshold', 0.53)
         self.default_peak_distance = int(self.params.get('peak_distance', 5))
-        self.default_seed_threshold = self.params.get('seed_threshold', 0.1)
+        self.default_seed_threshold = self.params.get('seed_threshold', 0.7)
         self.default_overlap_threshold = self.params.get('overlap_threshold', 0.3)
         self.default_mean_threshold = self.params.get('mean_threshold', 0.0)
-        self.default_window_size = self.params.get('window_size', 32) #32
+        self.default_fg_threshold = self.params.get('fg_threshold', 0.5)
+        self.default_window_size = self.params.get('window_size',32) #32
         self.default_cleanup_fragments = self.params.get('cleanup_fragments', True)
         self.default_resolve_cell_and_nucleus = self.params.get('resolve_cell_and_nucleus', True)
 
@@ -1191,6 +1264,7 @@ class InstanSeg_Torchscript(nn.Module):
                 seed_threshold: Optional[float] = None,
                 overlap_threshold: Optional[float] = None,
                 mean_threshold: Optional[float] = None,
+                fg_threshold: Optional[float] = None,
                 window_size: Optional[int] = None,
                 cleanup_fragments: Optional[bool] = None,
                 resolve_cell_and_nucleus: Optional[bool] = None,
@@ -1203,6 +1277,7 @@ class InstanSeg_Torchscript(nn.Module):
         seed_threshold = float(seed_threshold) if seed_threshold is not None else self.default_seed_threshold
         overlap_threshold = float(overlap_threshold) if overlap_threshold is not None else self.default_overlap_threshold
         mean_threshold = float(mean_threshold) if mean_threshold is not None else self.default_mean_threshold
+        fg_threshold = float(fg_threshold) if fg_threshold is not None else self.default_fg_threshold
         window_size = int(window_size) if window_size is not None else self.default_window_size
         cleanup_fragments = bool(cleanup_fragments) if cleanup_fragments is not None else self.default_cleanup_fragments
         resolve_cell_and_nucleus = bool(resolve_cell_and_nucleus) if resolve_cell_and_nucleus is not None else self.default_resolve_cell_and_nucleus
@@ -1217,6 +1292,7 @@ class InstanSeg_Torchscript(nn.Module):
         seed_threshold = args.get('seed_threshold', torch.tensor(seed_threshold)).item()
         overlap_threshold = args.get('overlap_threshold', torch.tensor(overlap_threshold)).item()
         mean_threshold = args.get('mean_threshold', torch.tensor(mean_threshold)).item()
+        fg_threshold = args.get('fg_threshold', torch.tensor(fg_threshold)).item()
         window_size = int(args.get('window_size', torch.tensor(float(window_size))).item())
         cleanup_fragments = args.get('cleanup_fragments', torch.tensor(cleanup_fragments)).item()
         resolve_cell_and_nucleus = args.get('resolve_cell_and_nucleus', torch.tensor(resolve_cell_and_nucleus)).item()
@@ -1225,14 +1301,13 @@ class InstanSeg_Torchscript(nn.Module):
         torch.clamp_max_(x, 3) #Safety check, please normalize inputs properly!
         torch.clamp_min_(x, -2)
 
-        x, pad = _instanseg_padding(x)#, min_dim = 1,extra_pad=0, ensure_square= True)
+
+        x, pad = _instanseg_padding(x, extra_pad = 0)
 
 
         with torch.no_grad():
 
-         #   original_shape = x.shape[2:]
-          #  x = torch.nn.functional.interpolate(x, size=(256, 256), mode='bilinear', align_corners=True)
-            
+
             x_full = self.fcn(x)
 
             dim_out = x_full.shape[1]
@@ -1277,7 +1352,7 @@ class InstanSeg_Torchscript(nn.Module):
                         binary_map = torch.sigmoid(x[-1])
                         mask_map = (x[-2] / 15).clone() + 0.5
 
-                        mask_map[~(binary_map > 0.5)] = 0  # Set seed_map to 0 where binary_map is False
+                        mask_map[~(binary_map > fg_threshold)] = 0  # Set seed_map to 0 where binary_map is False
 
 
                     if precomputed_seeds is None or precomputed_seeds.shape[0] == 0:
@@ -1380,23 +1455,12 @@ class InstanSeg_Torchscript(nn.Module):
                         device=x.device
                     )
 
-                    object_areas = torch.sparse.sum(sparse_onehot.to(torch.bool).float(), dim=(1,)).values()
-                    sum_mask_value = torch.sparse.sum((sparse_onehot * mask_map.flatten()[None]), dim=(1,)).values()
-                    mean_mask_value = sum_mask_value / object_areas
-                    objects_to_remove = ~torch.logical_and(mean_mask_value > mean_threshold, object_areas > min_size)
-
                     iou = fast_sparse_iou(sparse_onehot)
-                 #   print(sparse_onehot.shape)
                    # iou = fast_sparse_intersection_over_minimum_area(sparse_onehot)
 
                     remapping = find_connected_components((iou > overlap_threshold).to(self.index_dtype))
                     
                     labels = remap_values(remapping, labels)
-
-
-                    labels_to_remove = (torch.arange(0, len(objects_to_remove), device=objects_to_remove.device) + 1)[
-                        objects_to_remove]
-                    labels[torch.isin(labels, labels_to_remove)] = 0
 
                     labels_list.append(labels.squeeze())
 
@@ -1417,8 +1481,6 @@ class InstanSeg_Torchscript(nn.Module):
             
             lab = torch.stack(output_labels_list) # B,C,H,W
 
-           # lab = torch.nn.functional.interpolate(lab, size=original_shape, mode='nearest')#, align_corners=True)
-           # lab = _recover_padding(lab, pad)
 
             return lab.to(torch.float32) # B,C,H,W
 
