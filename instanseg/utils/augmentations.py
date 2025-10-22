@@ -31,17 +31,23 @@ def measure_time(f):
 
 
 def measure_average_instance_area(lab):
+    if lab.shape[0] == 2:
+        median_area = max(measure_average_instance_area(lab[1]),measure_average_instance_area(lab[0]))
+        return median_area
     if torch.is_tensor(lab):
-        if (len(torch.unique(lab) - 1)) > 0:
-            return torch.sum((lab > 0).float()) / (len(torch.unique(lab) - 1))
+        if lab.max() > 0:
+            fg = lab[lab > 0]
+            median_area = torch.median(torch.unique(fg, return_counts=True)[1])
+            return median_area.item()
         else:
             return 0
     else:
-        if (len(np.unique(lab) - 1)) > 0:
-            return np.sum((lab > 0)) / (len(np.unique(lab) - 1))
+        if lab.max() > 0:
+            fg = lab[lab > 0]
+            median_area = np.median(np.unique(fg, return_counts=True)[1])
+            return median_area
         else:
             return 0
-
 
 def resize_lab(lab, size, double_check=False):
     """This function resizes a label to required instance area. It does so by first measuring the average instance area and assumes instances are roughly circular"""
@@ -76,6 +82,24 @@ def generate_random_label_area(min=30, max=30):
     r = (r - mean) + 1
     r = np.clip(((r - mean) + 0.2) * 500, min, max)
     return r
+
+
+
+def resize_with_log_scale(lab, mean_diameter=30, min_scale=0.25, max_scale=4):
+    # Get the original cell diameter
+    original_diameter = 2 * np.sqrt(measure_average_instance_area(lab) / np.pi)  # Assuming circular cells
+    
+    # Generate a logarithmically distributed scale factor
+    log_min = np.log2(min_scale)
+    log_max = np.log2(max_scale)
+    scale_factor = 2 ** (random.uniform(log_min, log_max))
+    
+    # Calculate the target diameter and corresponding resize scale
+    target_diameter = mean_diameter * scale_factor
+    scale = target_diameter / original_diameter
+
+    return scale
+    
 
 
 
@@ -320,6 +344,36 @@ class Augmentations(object):
             print("AdjustContrast")
             show_images([orig, out], titles=["Original", "Transformed"])
         return out, labels
+    
+    def kornia_base_augmentations(self, image, labels=None, amount=0, metadata=None):
+        
+        import kornia
+
+       # orig = image.clone()
+        #get stats
+        min = torch.min(image)
+        max = torch.max(image)
+
+        image = image - min
+        image = image / (max - min + 0.001)
+
+        image  = torch.nn.Sequential(
+                kornia.augmentation.RandomLinearIllumination(gain = (0.1,0.4),p = 1),
+                kornia.augmentation.RandomPlasmaContrast(p=0.5),
+                kornia.augmentation.RandomSaltAndPepperNoise(),
+                kornia.augmentation.RandomMedianBlur(p = 0.2),
+                kornia.augmentation.RandomGaussianBlur((3, 3), (0.1, 2.0), p=0.2),
+                kornia.augmentation.RandomBoxBlur((3, 3), p=0.2),
+                kornia.augmentation.RandomSharpness(sharpness=1, p=0.5,),
+              #  kornia.augmentation.RandomInvert(max_val=1.0, p=0.1),
+                kornia.augmentation.RandomContrast(contrast=(1, 1.5),p = 0.5),
+                kornia.augmentation.RandomGamma(gamma=(0.5, .5), gain=(0.5, 1.5), p=0.5), 
+            )(image).squeeze(0)
+        
+        image = image * (max - min + 0.001) + min
+
+        return image, labels
+
     
     def flips(self, image, labels, amount=0, metadata=None):
 
@@ -670,17 +724,23 @@ class Augmentations(object):
         return image, labels, c_nuclei
 
     
-    def torch_rescale(self, image, labels=None, amount=0, current_pixel_size=None, requested_pixel_size=None, crop=True,
-                      random_seed=None, metadata=None, modality = None):
-
-    
+    def torch_rescale(self, image, 
+                      labels=None, 
+                      amount=0, 
+                      current_pixel_size=None, 
+                      requested_pixel_size=None, 
+                      crop=True,
+                      random_seed=None, 
+                      metadata=None,
+                      diameter_range = None, 
+                      modality = None):
+        
 
         if random_seed is not None:
             torch.manual_seed(random_seed)
 
         if labels is not None:
             assert image.shape[-2:] == labels.shape[-2:]
-
 
         shape = (torch.tensor(image.shape[-2:]) * (1 + ((torch.rand(1) - 0.5) * amount))).int().tolist()
 
@@ -696,17 +756,19 @@ class Augmentations(object):
             modality = "Brightfield"
         #    print("Modality not specified in metadata or in function call, assuming Brightfield")
 
-
         if current_pixel_size is not None and requested_pixel_size is not None:
             scale = (current_pixel_size / requested_pixel_size)
             shape = (torch.tensor(image.shape[-2:]) * scale).int().tolist()
 
+        if diameter_range is not None and labels is not None:
+            scale = resize_with_log_scale(labels, mean_diameter=diameter_range[0], min_scale=diameter_range[1], max_scale=diameter_range[2])
+            if scale == 0:
+                scale = 1
+            shape = (torch.tensor(image.shape[-2:]) * scale).int().tolist()
+
         resized_data = Resize(size=shape, antialias=True)(image)
 
-
-
         if labels is not None:
-
             resized_labels = Resize(size=shape, interpolation=torchvision.transforms.InterpolationMode.NEAREST)(labels)
 
         while self.shape is not None and np.any(np.array(resized_data[0].shape) < self.shape[0]) and crop:
@@ -714,7 +776,6 @@ class Augmentations(object):
             pad = torch.Tensor([pad, resized_data.shape[1], resized_data.shape[2]]).min().int() - 1
 
             
-
             resized_data = torch.nn.functional.pad(resized_data, (pad, pad, pad, pad), mode='constant',
                                                    value=image.max() if modality == "Brightfield" else resized_data.min())
 
@@ -774,6 +835,8 @@ class Augmentations(object):
             if meta is not None and "image_modality" in meta.keys():
                 if meta["image_modality"] in ["Brightfield", "Chromogenic"]:
                     observed_modality = "Brightfield"
+                    if min(image.squeeze().shape) != 3:
+                        observed_modality = "phase-contrast"
                 else:
                     observed_modality = meta["image_modality"]
             else:
@@ -800,8 +863,13 @@ class Augmentations(object):
                 c_nuclei = self.nuclei_channel
 
             if "pixel_size" in meta.keys():
-                pixel_size = meta["pixel_size"]
+                pixel_size = (meta["pixel_size"])
             else:
+                pixel_size = None
+            
+            if not isinstance((pixel_size),float):
+                import warnings
+                warnings.warn(f"Pixel size {pixel_size} is not a float {type(pixel_size)}, check metadata")
                 pixel_size = None
 
         if meta is not None and "channel_names" in meta.keys():
@@ -847,9 +915,13 @@ class Augmentations(object):
                                                                                           metadata=metadata)
 
                 elif augmentation == "torch_rescale":
-                    _, requested_pixel_size, amount = values
+                    _, requested_pixel_size, diameter_range = values
+                    if not (isinstance(diameter_range, tuple) and len(diameter_range) == 3):
+                        diameter_range = None
+                        
                     image, labels = self.torch_rescale(image, labels, current_pixel_size=None,
-                                                       requested_pixel_size=requested_pixel_size, amount=amount,
+                                                       requested_pixel_size=requested_pixel_size, 
+                                                       diameter_range=diameter_range,
                                                        metadata=metadata)
 
                 elif augmentation == "colourize":
@@ -875,6 +947,7 @@ class Augmentations(object):
                                                           metadata=metadata)  # This will only catch single channel images fed to a multi channel network and duplicate the channel if required.
 
         if image.var() > 1e2:
+            import warnings
             image = torch.clip(image, min=-1, max=5)
             warnings.warn("Warning, variance of image is very high, check augmentations")
 

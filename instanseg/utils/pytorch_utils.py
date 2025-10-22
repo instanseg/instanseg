@@ -10,6 +10,7 @@ def remap_values(remapping: torch.Tensor, x: torch.Tensor) -> torch.Tensor:
     remapping: 2,N      Make sure the remapping is 1 to 1, and there are no loops (i.e. 1->2, 2->3, 3->1). Loops can be removed using graph based connected components algorithms (see instanseg postprocessing for an example)
     x: any shape
     """
+
     sorted_remapping = remapping[:, remapping[0].argsort()]
     index = torch.bucketize(x.ravel(), sorted_remapping[0])
     return sorted_remapping[1][index].reshape(x.shape)
@@ -29,10 +30,14 @@ def remap_values(remapping: torch.Tensor, x: torch.Tensor) -> torch.Tensor:
 def torch_fastremap(x: torch.Tensor) -> torch.Tensor:
     if x.max() == 0:
         return x
+    if x.min() > 0:
+        add_one = 1
+    else:
+        add_one = 0
     unique_values = torch.unique(x, sorted=True)
     new_values = torch.arange(len(unique_values), dtype=x.dtype, device=x.device)
     remapping = torch.stack((unique_values, new_values))
-    return remap_values(remapping, x)
+    return remap_values(remapping, x) + add_one
 
 
 
@@ -62,6 +67,11 @@ def fast_iou(onehot: torch.Tensor, threshold: float = 0.5) -> torch.Tensor:
 def fast_sparse_iou(sparse_onehot: torch.Tensor) -> torch.Tensor:
 
     intersection = torch.sparse.mm(sparse_onehot, sparse_onehot.T).to_dense()
+
+    if torch.isnan(intersection).any() or torch.isinf(intersection).any():
+        print("Warning: Intersection contains NaN or Inf values. This may indicate an issue with the input sparse tensor.")
+    
+
     sparse_sum = torch.sparse.sum(sparse_onehot, dim=(1,))[None].to_dense()
     union = sparse_sum.T + sparse_sum - intersection
     return intersection / union
@@ -78,6 +88,9 @@ def fast_sparse_intersection_over_minimum_area(sparse_onehot: torch.Tensor) -> t
     """
     # Compute intersection
     intersection = torch.sparse.mm(sparse_onehot, sparse_onehot.T).to_dense()
+
+    if torch.isnan(intersection).any() or torch.isinf(intersection).any():
+        print("Warning: Intersection contains NaN or Inf values. This may indicate an issue with the input sparse tensor.")
     
     # Compute the area (sum of ones for each row)
     sparse_sum = torch.sparse.sum(sparse_onehot, dim=(1,)).to_dense()
@@ -293,8 +306,8 @@ def connected_components(x: torch.Tensor, num_iterations: int = 32) -> torch.Ten
 
 def iou_heatmap(x: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
     """
-    x is H,W
-    y is H,W
+    x is 1,1,H,W
+    y is 1,1,H,W
     This function takes two labeled images and returns the intersection over union heatmap
     """
     if x.max() ==0 or y.max() == 0:
@@ -313,7 +326,6 @@ def iou_heatmap(x: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
     map = onehot.max(1)[0]
 
     return map
-
 
 
 def centroids_from_lab(lab: torch.Tensor):
@@ -394,43 +406,6 @@ def get_masked_patches(lab: torch.Tensor, image: torch.Tensor, patch_size: int =
 
     return image_patches,mask_patches  # N,C,patch_size,patch_size
 
-def feature_extractor():
-    import torch
-    from torchvision.models.resnet import ResNet
-    from torchvision.models.resnet import ResNet18_Weights
-    import torch.nn as nn
-    from typing import Type, Union, List, Optional, Any
-    from torchvision.models.resnet import BasicBlock, Bottleneck, WeightsEnum
-
-    class ResNetNoInitialDownsize(ResNet):
-        def __init__(self, *args, **kwargs):
-            super().__init__(*args, **kwargs)
-            self.conv1 = nn.Conv2d(3, 64, kernel_size=7, stride=1, padding=3, bias=False)
-
-    def _resnet_custom(
-            resnet_constructor,
-            block: Type[Union[BasicBlock, Bottleneck]],
-            layers: List[int],
-            weights: Optional[WeightsEnum],
-            progress: bool,
-            **kwargs: Any,
-    ) -> ResNet:
-        # if weights is not None:
-        #     _ovewrite_named_param(kwargs, "num_classes", len(weights.meta["categories"]))
-
-        model = resnet_constructor(block, layers, **kwargs)
-
-        if weights is not None:
-            model.load_state_dict(weights.get_state_dict(progress=progress))
-
-        return model
-
-    weights = ResNet18_Weights.verify(ResNet18_Weights.IMAGENET1K_V1)
-    # weights = None
-    model = _resnet_custom(ResNetNoInitialDownsize, BasicBlock, [2, 2, 2, 2], weights, progress=True)
-
-    return model
-
 
 
 def eccentricity_batch(mask_tensor):
@@ -502,6 +477,30 @@ def _to_ndim(x: torch.Tensor, n: int) -> torch.Tensor:
         raise ValueError(f"Input tensor has shape {x.shape}, which is not compatible with the desired dimension {n}.")
     return x
 
+def _to_ndim_numpy(x: np.ndarray, n: int) -> np.ndarray:
+    """
+    Ensure that the input NumPy array has the desired number of dimensions.
+    If the input array has fewer dimensions, it will be unsqueezed.
+    If the input array has more dimensions, it will be squeezed.
+    If the input array has the desired number of dimensions, it will be returned as is.
+    
+    Args:
+        x (np.ndarray): The input NumPy array.
+        n (int): The desired number of dimensions.
+        
+    Returns:
+        np.ndarray: The input NumPy array with the desired number of dimensions.
+    """
+    if x.ndim == n:
+        return x
+    if x.ndim > n:
+        x = x.squeeze()
+    x = x[(None,) * (n - x.ndim)]
+    if x.ndim != n:
+        raise ValueError(f"Input tensor has shape {x.shape}, which is not compatible with the desired dimension {n}.")
+    return x
+
+
 def _to_tensor_float32(image: Union[np.ndarray, torch.Tensor]) -> torch.Tensor:
     """
     Convert the input image to a PyTorch tensor with float32 data type.
@@ -519,7 +518,7 @@ def _to_tensor_float32(image: Union[np.ndarray, torch.Tensor]) -> torch.Tensor:
     if isinstance(image, np.ndarray):      
         if image.dtype == np.uint16:
             image = image.astype(np.int32)
-        image = torch.from_numpy(image).float()
+        image = torch.from_numpy(image.astype(np.float32)).float()
     
     image = image.squeeze()
 

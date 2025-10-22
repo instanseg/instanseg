@@ -21,7 +21,7 @@ InstanSeg is a pytorch-based cell and nucleus segmentation pipeline for fluoresc
 
 ## InstanSeg has its own QuPath extension!
 
-InstanSeg is introduced in the [QuPath pre-release v0.6.0-rc2](https://github.com/qupath/qupath/releases/tag/v0.6.0-rc2), so you can start using InstanSeg immediately. You can find the QuPath extension source code [in its GitHub repository](https://github.com/qupath/qupath-extension-instanseg).
+InstanSeg can be found in the latest [QuPath release candidate](https://github.com/qupath/qupath/releases/), so you can start using InstanSeg immediately. You can find the QuPath extension source code [in its GitHub repository](https://github.com/qupath/qupath-extension-instanseg).
 
 ## How to cite InstanSeg:
 

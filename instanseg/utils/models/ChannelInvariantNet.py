@@ -8,11 +8,9 @@ from collections.abc import Sequence
 
 import pdb
 
-
 from instanseg.utils.utils import show_images
 
 from einops import rearrange, repeat
-
 
 
 
@@ -176,6 +174,10 @@ def initialize_AdaptorNet(model,adaptornet=None, adaptor_net_str = "1",**kwargs)
                 model.AdaptorNet=ChannelInvariantNet(**kwargs)
             elif adaptor_net_str == "1_ablated":
                 model.AdaptorNet=ChannelInvariantNet(aggregation= "no_aggregation",**kwargs)
+            elif adaptor_net_str.lower() == "InstanSeg_Unet".lower():
+                from instanseg.utils.models.InstanSeg_UNet import InstanSeg_UNet
+                model.AdaptorNet=InstanSeg_UNet(in_channels = 3, out_channels=3) #hard coded. 
+
         return model
     
 class _AdaptorNetWrapper(torch.nn.Module):

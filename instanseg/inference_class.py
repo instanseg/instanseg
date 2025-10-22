@@ -7,8 +7,15 @@ from pathlib import Path, PosixPath
 from tiffslide import TiffSlide
 import zarr
 import os
-from instanseg.utils.pytorch_utils import _to_tensor_float32, _to_ndim
-
+from instanseg.utils.pytorch_utils import _to_tensor_float32
+pixel_size_precision = 0.01
+def _to_ndim(x, *args, **kwargs):
+    from instanseg.utils.pytorch_utils import _to_ndim as _to_ndim_pytorch
+    from instanseg.utils.pytorch_utils import _to_ndim_numpy
+    if isinstance(x, torch.Tensor):
+        return _to_ndim_pytorch(x, *args, **kwargs)
+    elif isinstance(x, np.ndarray):
+        return _to_ndim_numpy(x, *args, **kwargs)
 
 
 class InstanSeg():
@@ -45,25 +52,31 @@ class InstanSeg():
         self.medium_image_threshold = 10000 * 10000 #max number of image pixels that could be loaded in RAM.
         self.prediction_tag = "_instanseg_prediction"
 
-    def read_image(self, image_str: str) -> Union[Tuple[str, float], Tuple[np.ndarray, float]]:
+    def read_image(self, image_str: str, processing_method = "auto") -> Union[Tuple[str, float], Tuple[np.ndarray, float]]:
         """
         Read an image file from disk.
         :param image_str: The path to the image.
+        :param processing_method: The processing method to use. Options are "auto", "small", "medium", "wsi". If "auto", the method will be chosen based on the size of the image.
         :return: The image array if it can be safely read (or the path to the image if it cannot) and the pixel size in microns.
         """
         if self.prefered_image_reader == "tiffslide":
+
             from tiffslide import TiffSlide
             slide = TiffSlide(image_str)
             img_pixel_size = slide.properties['tiffslide.mpp-x']
             width,height = slide.dimensions[0], slide.dimensions[1]
             num_pixels = width * height
-            if num_pixels < self.medium_image_threshold:
+
+            eval_function_str = self._get_eval_function_to_use(num_pixels, processing_method)
+
+            if eval_function_str in ["small","medium"]:
                 image_array = slide.read_region((0, 0), 0, (width, height), as_array=True)
             else:
                 return image_str, img_pixel_size
             
         elif self.prefered_image_reader == "skimage.io":
             from skimage.io import imread
+            assert processing_method != "wsi", "skimage.io does not support whole slide images."
             image_array = imread(image_str)
             img_pixel_size = None
 
@@ -72,10 +85,26 @@ class InstanSeg():
             slide = BioImage(image_str)
             img_pixel_size = slide.physical_pixel_sizes.X
             num_pixels = np.cumprod(slide.shape)[-1]
-            if num_pixels < self.medium_image_threshold:
+            eval_function_str = self._get_eval_function_to_use(num_pixels, processing_method)
+            if eval_function_str in ["small","medium"]:
                 image_array = slide.get_image_data().squeeze()
             else:
                 return image_str, img_pixel_size
+            
+        elif self.prefered_image_reader == "bioformats":
+            from bioio import BioImage
+            import bioio_bioformats
+            slide = BioImage(image_str, reader=bioio_bioformats.Reader)
+            channel_names = slide.channel_names
+            img_pixel_size = slide.physical_pixel_sizes.X
+            num_pixels = np.cumprod(slide.shape)[-1]
+
+            eval_function_str = self._get_eval_function_to_use(num_pixels, processing_method)
+            if eval_function_str in ["small","medium"]:
+                image_array = slide.data.squeeze()
+            else:
+                return image_str, img_pixel_size
+
         else:
             raise NotImplementedError(f"Image reader {self.prefered_image_reader} is not implemented.")
         
@@ -129,7 +158,18 @@ class InstanSeg():
         print("Could not read pixel size from image metadata.")
         
         return None
+    
+    def _get_eval_function_to_use(self,num_pixels, processing_method = "auto") -> str:
 
+        if processing_method != "auto":
+            assert processing_method in ["small", "medium", "wsi"], f"Processing method {processing_method} is not supported."
+            return processing_method
+        if num_pixels < self.small_image_threshold:
+            return "small"
+        elif num_pixels < self.medium_image_threshold:
+            return "medium"
+        else:
+            return "wsi"
 
     def read_slide(self, image_str: str):
         """
@@ -151,7 +191,7 @@ class InstanSeg():
         else:
             raise NotImplementedError(f"Image reader {self.prefered_image_reader} is not implemented for whole slide images.")
         return slide
-    
+
     def _to_tensor(self, image: Union[np.ndarray, torch.Tensor]) -> torch.Tensor:
         return _to_tensor_float32(image)
     
@@ -172,6 +212,7 @@ class InstanSeg():
              save_output: bool = False,
              save_overlay: bool = False,
              save_geojson: bool = False,
+             processing_method: str = "auto", #auto, small, medium, wsi
              **kwargs) -> Union[torch.Tensor, List[torch.Tensor], None]:
         """
         Evaluate the input image or list of images using the InstanSeg model.
@@ -180,6 +221,7 @@ class InstanSeg():
         :param save_output: Controls whether the output is saved to disk (see :func:`save_output <instanseg.Instanseg.save_output>`).
         :param save_overlay: Controls whether the output is saved to disk as an overlay (see :func:`save_output <instanseg.Instanseg.save_output>`).
         :param save_geojson: Controls whether the geojson output labels are saved to disk (see :func:`save_output <instanseg.Instanseg.save_output>`).
+        :param processing_method: The processing method to use. Options are "auto", "small", "medium", "wsi". If "auto", the method will be chosen based on the size of the image.
         :param kwargs: Passed to other eval methods, eg :func:`save_output <instanseg.Instanseg.eval_small_image>`, :func:`save_output <instanseg.Instanseg.eval_medium_image>`, :func:`save_output <instanseg.Instanseg.eval_whole_slide_image>` 
         :return: A torch.Tensor of outputs if the input is a path to a single image, or a list of such outputs if the input is a list of paths, or None if the input is a whole slide image.
         """
@@ -192,11 +234,17 @@ class InstanSeg():
         else:
             initial_type = "list"
             image_list = image
-        
+
         output_list = []
     
         for image in image_list:
-            image_array, img_pixel_size = self.read_image(image)
+            image_array, img_pixel_size = self.read_image(image, processing_method = processing_method)
+
+            if pixel_size is not None and img_pixel_size is not None:
+                if img_pixel_size != pixel_size:
+                    import warnings
+                    warnings.warn(f"Pixel size {img_pixel_size} from image metadata does not match pixel size {pixel_size} provided. Using {pixel_size}.")
+                    img_pixel_size = pixel_size
 
             if img_pixel_size is None and pixel_size is not None:
                 img_pixel_size = pixel_size
@@ -207,22 +255,29 @@ class InstanSeg():
             if not isinstance(image_array, str):
                 
                 num_pixels = np.cumprod(image_array.shape)[-1]
-                if num_pixels < self.small_image_threshold:
+
+                eval_function_str = self._get_eval_function_to_use(num_pixels, processing_method)
+
+                if eval_function_str == "small":
                     instances = self.eval_small_image(image = image_array, 
                                                        pixel_size = img_pixel_size, 
                                                        return_image_tensor=False, **kwargs)
-
-                else:
+                    output_list.append(instances)
+                    
+                
+                elif eval_function_str == "medium":
                     instances = self.eval_medium_image(image = image_array, 
                                                        pixel_size = img_pixel_size, 
                                                        return_image_tensor=False, **kwargs)
+                    output_list.append(instances)
+                
+                else:
+                    raise NotImplementedError(f"Processing method {eval_function_str} is not implemented for image array inputs.")
 
-                output_list.append(instances)
 
-                if save_output:
-                    self.save_output(image, instances, image_array = image_array, save_overlay = save_overlay, save_geojson = save_geojson)
-     
-                    
+                if save_output or save_overlay or save_geojson:
+                    self.save_output(image, instances, image_array = image_array, save_output = save_output, save_overlay = save_overlay, save_geojson = save_geojson)
+       
             else:
                 self.eval_whole_slide_image(image_array, pixel_size, save_geojson = save_geojson, **kwargs)
                 output_list.append(None)
@@ -238,6 +293,7 @@ class InstanSeg():
                     image_path: str, 
                     labels: torch.Tensor,
                     image_array: Optional[np.ndarray] = None,
+                    save_output: bool = True,
                     save_overlay = False,
                     save_geojson = False) -> None:
         """
@@ -245,10 +301,12 @@ class InstanSeg():
         :param image_path: The path to the image, and where outputs will be saved.
         :param labels: The output labels.
         :param image_array: The image in array format. Required to save overlay.
+        :param save_output: Save the labels to disk.
         :param save_overlay: Save the labels overlaid on the image.
         :param save_geojson: Save the labels as a GeoJSON feature collection.
         """
         import os
+        from skimage import io
 
         if isinstance(image_path, str):
             image_path = Path(image_path)
@@ -257,12 +315,11 @@ class InstanSeg():
 
         new_stem = image_path.stem + self.prediction_tag
 
-        from skimage import io
+        out_path = Path(image_path).parent / (new_stem + ".tiff")
 
-        if self.verbose:
-
-            out_path = Path(image_path).parent / (new_stem + ".tiff")
-            print(f"Saving output to {out_path}")
+        if save_output:
+            if self.verbose:
+                print(f"Saving output to {out_path}")
             io.imsave(out_path, labels.squeeze().astype(np.int32), check_contrast=False)
 
         if save_geojson:
@@ -276,24 +333,27 @@ class InstanSeg():
                 features = labels_to_features(labels[0,0],object_type = "detection")
 
             elif output_dimension == 2:
-             #   breakpoint()
                 features = labels_to_features(labels[0,0],object_type = "detection",classification="Nuclei")["features"] + labels_to_features(labels[0,1],object_type = "detection",classification = "Cells")["features"]
+            
             geojson = json.dumps(features)
 
             geojson_path = Path(image_path).parent / (new_stem + ".geojson")
             with open(os.path.join(geojson_path), "w") as outfile:
+                if self.verbose:
+                    print(f"Saving geojson to {geojson_path}")
                 outfile.write(geojson)
         
         if save_overlay:
 
+            out_path = Path(image_path).parent / (new_stem + "_overlay.tiff")
+
             if self.verbose:
-                out_path = Path(image_path).parent / (new_stem + "_overlay.tiff")
                 print(f"Saving overlay to {out_path}")
+
             assert image_array is not None, "Image array must be provided to save overlay."
             display = self.display(image_array, labels)
             
             io.imsave(out_path, display, check_contrast=False)
-
 
 
     def eval_small_image(self,
@@ -322,6 +382,10 @@ class InstanSeg():
         image = _to_tensor_float32(image)
 
         image = _to_ndim(image, 4)
+
+        if "channel_ids" in kwargs:
+            assert max(kwargs["channel_ids"]) <= image.shape[1], f"Number of channel ids {(kwargs['channel_ids'])} does not match number of channels in image {image.shape[1]}."
+            image = image[:,kwargs["channel_ids"]]
 
         original_shape = image.shape
 
@@ -352,7 +416,9 @@ class InstanSeg():
 
         with torch.amp.autocast('cuda'):
             instanseg_kwargs = _filter_kwargs(self.instanseg, kwargs)
-            instances = self.instanseg(image,target_segmentation = target_segmentation, **instanseg_kwargs)
+            instanseg_kwargs["target_segmentation"] = target_segmentation
+
+            instances = self.instanseg(image, **instanseg_kwargs)
 
         if pixel_size is not None and img_has_been_rescaled and rescale_output:  
             instances = interpolate(instances, size=original_shape[-2:], mode="nearest")
@@ -393,11 +459,17 @@ class InstanSeg():
         :return: A tensor corresponding to the output targets specified, as well as the input image if requested.
         """
 
-        from instanseg.utils.utils import percentile_normalize, _move_channel_axis, _filter_kwargs
+        from instanseg.utils.utils import percentile_normalize, _filter_kwargs
 
     
         image = _to_tensor_float32(image)
-        
+        image = _to_ndim(image, 4)
+
+        if "channel_ids" in kwargs:
+            assert max(kwargs["channel_ids"]) <= image.shape[1], f"Number of channel ids {(kwargs['channel_ids'])} does not match number of channels in image {image.shape[1]}."
+            image = image[:,kwargs["channel_ids"]]
+
+
         from instanseg.utils.tiling import _sliding_window_inference
         original_shape = image.shape
         original_ndim = image.dim()
@@ -416,8 +488,6 @@ class InstanSeg():
 
         image = _to_ndim(image, 3)
 
-       # breakpoint()
-        
         if normalise:
             image = percentile_normalize(image, subsampling_factor=normalisation_subsampling_factor)
             
@@ -434,6 +504,8 @@ class InstanSeg():
             target_segmentation = torch.tensor([1,1])
 
         instanseg_kwargs = _filter_kwargs(self.instanseg, kwargs)
+        instanseg_kwargs["target_segmentation"] = target_segmentation
+
 
         instances = _sliding_window_inference(image,
                                               self.instanseg,
@@ -442,8 +514,7 @@ class InstanSeg():
                                               batch_size= batch_size,
                                               output_channels = output_dimension,
                                               show_progress= self.verbose,
-                                              target_segmentation = target_segmentation,
-                                              **instanseg_kwargs).float()
+                                              instanseg_kwargs = instanseg_kwargs).float()
 
         instances = _to_ndim(instances, 4)
         image = _to_ndim(image, 4)
@@ -461,16 +532,16 @@ class InstanSeg():
             return instances.cpu(), image.cpu()
         else:
             return instances.cpu()
+
         
     def eval_whole_slide_image(self,
                                image: str,
                                pixel_size: Optional[float] = None, 
                                normalise: bool = True,
-                               normalisation_subsampling_factor: int = 10,
+                               normalisation_subsampling_factor: int = 1,
                                tile_size: int = 512,
-                               overlap: int = 100,
+                               overlap: int = 80,
                                detection_size: int = 20, 
-                               batch_size: int = 1,
                                save_geojson: bool = False,
                                use_otsu_threshold: bool = False,
                                **kwargs):
@@ -491,18 +562,23 @@ class InstanSeg():
             """
 
             memory_block_size = tile_size,tile_size
-            inference_tile_size = (tile_size,tile_size)
 
             from itertools import product
             from instanseg.utils.pytorch_utils import torch_fastremap, match_labels
             from pathlib import Path
             from tqdm import tqdm
             from instanseg.utils.tiling import _chops, _remove_edge_labels, _zarr_to_json_export
-            from instanseg.utils.utils import show_images
-            
+    
             instanseg = self.instanseg
 
-            image, img_pixel_size = self.read_image(image)
+            image, img_pixel_size = self.read_image(image, processing_method= "wsi")
+
+            if pixel_size is not None and img_pixel_size is not None:
+                if img_pixel_size != pixel_size:
+                    import warnings
+                    warnings.warn(f"Pixel size {img_pixel_size} from image metadata does not match pixel size {pixel_size} provided. Using {pixel_size}.")
+                    img_pixel_size = pixel_size
+
             slide = self.read_slide(image)
 
             n_dim = 2 if instanseg.cells_and_nuclei else 1
@@ -510,8 +586,6 @@ class InstanSeg():
 
             new_stem = Path(image).stem + self.prediction_tag
             file_with_zarr_extension = Path(image).parent / (new_stem + ".zarr")
-
-            
 
             if img_pixel_size is None or img_pixel_size > 1 or img_pixel_size < 0.1:
                 import warnings
@@ -521,11 +595,10 @@ class InstanSeg():
                 else:
                     raise ValueError("The image pixel size {} is not in microns.".format(img_pixel_size))
             
-                
             scale_factor = model_pixel_size/img_pixel_size
 
             dims = slide.dimensions
-            dims = (int(dims[1]/ scale_factor), int(dims[0]/scale_factor)) #The dimensions are opposite to numpy/torch/zarr dimensions.
+            dims = (round(dims[1]/ scale_factor), round(dims[0]/scale_factor)) #The dimensions are opposite to numpy/torch/zarr dimensions.
 
             pad2 = overlap + detection_size
             pad = overlap
@@ -552,45 +625,41 @@ class InstanSeg():
                 if valid_positions[counter] == 0:
                     continue
 
-            #  input_data = scene.read_block((int(window_j*scale_factor), int(window_i*scale_factor), int(shape[0]*scale_factor), int(shape[1]*scale_factor)), size = shape)
+            #  input_data = scene.read_block((round(window_j*scale_factor), round(window_i*scale_factor), round(shape[0]*scale_factor), round(shape[1]*scale_factor)), size = shape)
 
                 best_level = slide.get_best_level_for_downsample(scale_factor)
                 downsample_factor = slide.level_downsamples[best_level]
 
                 initial_pixel_size = img_pixel_size
-                itermediate_pixel_size = initial_pixel_size * downsample_factor
+                intermediate_pixel_size = initial_pixel_size * downsample_factor
                 final_pixel_size = model_pixel_size
 
-                intermediate_to_final = final_pixel_size/itermediate_pixel_size
-
-                if np.allclose(intermediate_to_final,1, 0.01): #if you change this value, you MUST modify the _rescale_to_pixel_size function.
-                    intermediate_to_final = 1
-                
+                intermediate_to_final = intermediate_pixel_size / final_pixel_size
+     
                 # Calculate the size of the region needed at the base level to get the desired output size
-                intermediate_shape = (int(shape[0] * intermediate_to_final), int(shape[1] * intermediate_to_final))
+                intermediate_shape = (round(shape[0] / intermediate_to_final), round(shape[1] / intermediate_to_final))
 
-                input_data = slide.read_region((int(window_j*scale_factor), int(window_i*scale_factor)), best_level, (int(intermediate_shape[0]) , int(intermediate_shape[1])), as_array=True)
+                input_data = slide.read_region((round(window_j*scale_factor), round(window_i*scale_factor)), best_level, (round(intermediate_shape[0]) , round(intermediate_shape[1])), as_array=True)
             
                 input_tensor = self._to_tensor(input_data)
 
-            
                 new_tile = self.eval_small_image(input_tensor,
-                                                  pixel_size = itermediate_pixel_size,
-                                                  tile_size = inference_tile_size[0],
-                                                  batch_size = batch_size,
-                                                  return_image_tensor = False,
+                                                  pixel_size = intermediate_pixel_size,
+                                                  return_image_tensor= False,
+                                                  rescale_output=False,
                                                   normalise = normalise,
-                                                  normalisation_subsampling_factor = normalisation_subsampling_factor,
                                                     **kwargs)
-                                                
-
-                if not np.allclose(intermediate_to_final,1, 0.01):
+                                
+                if new_tile.shape[-2:] != shape: #this only happens when the pixel size is close but not exactly the model pixel size.
+               #     print(new_tile.shape, shape[-2:])
                     from torch.nn.functional import interpolate
                     new_tile = interpolate(new_tile, size=shape[-2:], mode="nearest").int()[0]
-                
+
                 new_tile = _to_ndim(new_tile, 3)
 
                 num_iter = new_tile.shape[0]
+
+                edge_window = True
 
                 for n in range(num_iter):
                     
@@ -603,31 +672,29 @@ class InstanSeg():
                         ignore_list.append("bottom")
                     if j == len(chop_list[1])-1:
                         ignore_list.append("right")
+                
+                    if j == len(chop_list[0]) - 1:
+                        window_j_start = window_j + pad
+                    else:
+                        window_j_start = window_j
 
-                    if i == len(chop_list[0])-1 and j == len(chop_list[1])-1:
-                        tile1 = canvas[n, window_i + pad:window_i + shape[0], window_j + pad:window_j + shape[1]]
-                        tile2 = _remove_edge_labels(new_tile[n,pad:shape[0],pad: shape[1]], ignore = ignore_list)
+                    if i == len(chop_list[1]) - 1:
+                        window_i_start = window_i + pad
+                    else:
+                        window_i_start = window_i
 
-                    elif i == len(chop_list[0])-1:
-                        tile1 = canvas[n, window_i + pad:window_i + shape[0], window_j + pad:window_j + shape[1]]
-                        tile2 = _remove_edge_labels(new_tile[n,pad:shape[0],pad : shape[1]], ignore =ignore_list)
+                    if j == 0:
+                        window_j_start = window_j
 
-                    elif j == len(chop_list[1])-1:
-                        tile1 = canvas[n, window_i + pad:window_i + shape[0], window_j + pad:window_j + shape[1]]
-                        tile2 = _remove_edge_labels(new_tile[n,pad:shape[0],pad: shape[1]], ignore = ignore_list)
+                    if i == 0:
+                        window_i_start = window_i
 
-                    elif i == 0 and j == 0:
-                        tile1 = canvas[n, window_i  :window_i + shape[0], window_j :window_j + shape[1]]
-                        tile2 = _remove_edge_labels(new_tile[n, :shape[0], : shape[1]], ignore = ignore_list)
-                    elif i == 0:
-                        tile1 = canvas[n, window_i  :window_i + shape[0], window_j + pad :window_j + shape[1]]
-                        tile2 = _remove_edge_labels(new_tile[n, :shape[0],pad : shape[1]], ignore = ignore_list)
+                    if len(ignore_list) == 0:
+                        edge_window = False
 
-                    elif j == 0:
-                        tile1 = canvas[n, window_i  + pad:window_i + shape[0], window_j:window_j + shape[1]]
-                        tile2 = _remove_edge_labels(new_tile[n,pad :shape[0],: shape[1]], ignore = ignore_list)
-
-                    if j == 0 or i == 0 or j == len(chop_list[1])-1 or i == len(chop_list[0])-1:
+                    tile1 = canvas[n, window_i_start:window_i + shape[0], window_j_start:window_j + shape[1]]
+                    tile2 = _remove_edge_labels(new_tile[n, window_i_start - window_i:shape[0], window_j_start - window_j:shape[1]], ignore=ignore_list)
+                    if edge_window:
 
                         tile2 = torch_fastremap(tile2)
                         tile2[tile2>0] = tile2[tile2>0] + running_max
@@ -639,24 +706,14 @@ class InstanSeg():
 
                         running_max = max(running_max, tile1_torch.max())
 
-                        if i == len(chop_list[0])-1 and j == len(chop_list[1])-1:
-                            canvas[n, window_i + pad:window_i + shape[0], window_j + pad:window_j + shape[1]] = tile1_torch.numpy().astype(np.int32)
-                        elif i == len(chop_list[0])-1:
-                            canvas[n, window_i + pad:window_i + shape[0], window_j + pad:window_j + shape[1]] = tile1_torch.numpy().astype(np.int32)
-                        elif j == len(chop_list[1])-1:
-                            canvas[n, window_i + pad:window_i + shape[0], window_j + pad:window_j + shape[1]] = tile1_torch.numpy().astype(np.int32)
-                        elif i == 0 and j == 0:
-                            canvas[n, window_i  :window_i + shape[0], window_j :window_j + shape[1]] = tile1_torch.numpy().astype(np.int32)
-                        elif i == 0:
-                            canvas[n, window_i  :window_i + shape[0], window_j + pad :window_j + shape[1]] = tile1_torch.numpy().astype(np.int32)
-                        elif j == 0:
-                            canvas[n, window_i  + pad:window_i + shape[0], window_j:window_j + shape[1]] = tile1_torch.numpy().astype(np.int32)
+                        canvas[n, window_i_start:window_i + shape[0], window_j_start:window_j + shape[1]] = tile1_torch.numpy().astype(np.int32)  
 
                     else:
                         
                         tile1 = canvas[n, window_i + pad:window_i + shape[0] - pad, window_j + pad:window_j + shape[1] - pad]
                         tile2 = _remove_edge_labels(new_tile[n,pad:shape[0] -pad,pad: shape[1]-pad])
-                        
+
+
                         tile2 = torch_fastremap(tile2)
 
                         tile2[tile2>0] = tile2[tile2>0] + running_max
@@ -671,12 +728,13 @@ class InstanSeg():
 
             if save_geojson:
                 print("Exporting to geojson")
-                _zarr_to_json_export(file_with_zarr_extension, detection_size = detection_size, size = shape[0], scale = scale_factor, n_dim = n_dim)
+                _zarr_to_json_export(file_with_zarr_extension, 
+                                     detection_size = detection_size, size = shape[0], scale = scale_factor, n_dim = n_dim)
                     
-    
     def display(self,
                 image: torch.tensor,
-                instances: torch.Tensor) -> np.ndarray:
+                instances: torch.Tensor,
+                normalise: bool = True) -> np.ndarray:
         """
         Save the output of an InstanSeg model overlaid on the input.
         See :func:`save_image_with_label_overlay <instanseg.utils.save_image_with_label_overlay>` for more details and return types.
@@ -685,13 +743,15 @@ class InstanSeg():
         """
         from instanseg.utils.utils import save_image_with_label_overlay
 
+        instances = _to_ndim(instances, 4)
+ 
         if isinstance(image, torch.Tensor):
             image = image.cpu().detach().numpy()
 
-        im_for_display = _display_colourized(image.squeeze())
-
+        im_for_display = _display_colourized(image.squeeze(),normalise = normalise)
+ 
         output_dimension = instances.shape[1]
-
+ 
         if output_dimension ==1: #Nucleus or cell mask
             labels_for_display = instances[0,0] #Shape is 1,H,W
             image_overlay = save_image_with_label_overlay(im_for_display,lab=labels_for_display,return_image=True, label_boundary_mode="thick", label_colors=None,thickness=10,alpha=0.9)
@@ -700,34 +760,64 @@ class InstanSeg():
             cell_labels_for_display = instances[0,1] #Shape is 1,H,W
             image_overlay = save_image_with_label_overlay(im_for_display,lab=nuclei_labels_for_display,return_image=True, label_boundary_mode="thick", label_colors="red",thickness=10)
             image_overlay = save_image_with_label_overlay(image_overlay,lab=cell_labels_for_display,return_image=True, label_boundary_mode="inner", label_colors="green",thickness=1)
-
+ 
+        else:
+            raise ValueError(f"Output dimension {instances.shape} not supported")
         return image_overlay
-    
 
-    def _cluster_instances_by_mean_channel_intensity(self, image_tensor: torch.Tensor, labeled_output: torch.Tensor):
+    def _cluster_instances_by_mean_channel_intensity(self, image_tensor: torch.Tensor, 
+                                                     labeled_output: torch.Tensor,
+                                                     features: Optional[torch.Tensor] = None,
+                                                      n_neighbors = 50,
+                                                      n_pcs = 100,
+                                                    resolution = 0.1,
+                                                    min_dist = 0.5,
+                                                     device = "cuda",
+                                                     channel_names = None,
+                                                     normalise = True):
 
         #This is experimental code that is not yet implemented. You'll need to install rapids_singlecell, cuml and scanpy to run this code.
 
         from instanseg.utils.biological_utils import get_mean_object_features
         import fastremap
         import numpy as np
-        from instanseg.utils.utils import apply_cmap
+        from instanseg.utils.utils import apply_cmap, _choose_device
         from instanseg.utils.pytorch_utils import torch_fastremap
-        import rapids_singlecell as rsc
+        try:
+            import rapids_singlecell as rsc
+        except ImportError:
+            import warnings
+            warnings.warn("rapids_singlecell not installed. Not using GPU.")
+            import scanpy as rsc
+
         import scanpy as sc
         import matplotlib.pyplot as plt
+
+        device = _choose_device(device, verbose= False)
 
         labeled_output = _to_ndim(labeled_output, 4)
         image_tensor = _to_ndim(image_tensor, 3)
 
-        X_features = get_mean_object_features( image_tensor.to("cuda"), labeled_output.to("cuda"),)
+        if features is None:
+            X_features = get_mean_object_features( image_tensor.to(device), labeled_output.to(device),)
+        else:
+            X_features = features
 
         adata = sc.AnnData(X_features.cpu().numpy())
-        rsc.get.anndata_to_GPU(adata)
-        rsc.pp.scale(adata)
-        rsc.pp.neighbors(adata, n_neighbors=8, n_pcs=50)
-        rsc.tl.umap(adata)
-        rsc.tl.leiden(adata, resolution=0.1)
+        try:
+            rsc.get.anndata_to_GPU(adata)
+        except:
+            pass
+
+        if channel_names is not None:
+            adata.var_names = channel_names
+
+        if normalise:    
+            rsc.pp.scale(adata)
+            
+        rsc.pp.neighbors(adata, n_neighbors=n_neighbors, n_pcs=n_pcs)
+        rsc.tl.umap(adata,min_dist=min_dist)
+        rsc.tl.leiden(adata, resolution=resolution)
 
         # Create the UMAP plot
         fig, axes = plt.subplots(1, 2, figsize=(15, 7))
@@ -746,6 +836,8 @@ class InstanSeg():
         axes[1].axis('off')
         plt.subplots_adjust(wspace=0., hspace=0)
         plt.show()
+
+        return adata
 
 
 
@@ -778,12 +870,12 @@ def _find_non_empty_positions(mask, chop_list, tile_size, chopped_image_size, em
     valid_positions = []
 
     downsample_factor_mask = chopped_image_size[0] / mask.shape[0]
-    scaled_tile_size = int(round(tile_size / downsample_factor_mask,0))
+    scaled_tile_size = round(round(tile_size / downsample_factor_mask,0))
 
     for y,x in product((chop_list[0]),(chop_list[1])):
 
-        y = int(round(y / downsample_factor_mask,0))
-        x = int(round(x / downsample_factor_mask,0))
+        y = round(round(y / downsample_factor_mask,0))
+        x = round(round(x / downsample_factor_mask,0))
 
         if mask[y:y + scaled_tile_size, x:x + scaled_tile_size].max() > emptiness_threshold:
             valid_positions.append(1)
@@ -795,7 +887,8 @@ def _find_non_empty_positions(mask, chop_list, tile_size, chopped_image_size, em
 
 def _rescale_to_pixel_size(image: torch.Tensor, 
                            requested_pixel_size: float, 
-                           model_pixel_size: float) -> torch.Tensor:
+                           model_pixel_size: float,
+                           mode: str = "bilinear") -> torch.Tensor:
     
     original_dim = image.dim()
 
@@ -803,17 +896,20 @@ def _rescale_to_pixel_size(image: torch.Tensor,
 
     scale_factor = requested_pixel_size / model_pixel_size
 
-    if not np.allclose(scale_factor,1, 0.01): #if you change this value, you MUST modify the whole_slide_image function.
-        image = interpolate(image, scale_factor=scale_factor, mode="bilinear")
+    if not np.allclose(scale_factor,1, pixel_size_precision): #if you change this value, you MUST modify the whole_slide_image function.
+        image = interpolate(image, scale_factor=scale_factor, mode=mode)
 
     return _to_ndim(image, original_dim)
+
     
-
-def _display_colourized(mIF):
-    from instanseg.utils.utils import _move_channel_axis, generate_colors
-
+def _display_colourized(mIF, normalise = True):
+    from instanseg.utils.utils import _move_channel_axis, generate_colors, percentile_normalize
+ 
     mIF = _to_tensor_float32(mIF)
-    mIF = mIF / (mIF.max() + 1e-6)
+ 
+    if normalise:
+        mIF = percentile_normalize(mIF)
+        mIF = torch.clamp(mIF, 0, 1)
     if mIF.shape[0]!=3:
         colours = generate_colors(num_colors=mIF.shape[0])
         colour_render = (mIF.flatten(1).T @ torch.tensor(colours)).reshape(mIF.shape[1],mIF.shape[2],3)
@@ -822,5 +918,3 @@ def _display_colourized(mIF):
     colour_render = torch.clamp_(colour_render, 0, 1)
     colour_render = _move_channel_axis(colour_render,to_back = True).detach().numpy()*255
     return colour_render.astype(np.uint8)
-
-

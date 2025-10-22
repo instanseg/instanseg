@@ -1,6 +1,7 @@
 /instanseg/models/
 instanseg/datasets/
 instanseg/examples/*
+scratch_notebooks/
 !instanseg/examples/
 !instanseg/examples/HE_example.tif
 !instanseg/examples/Fluorescence_example.tif

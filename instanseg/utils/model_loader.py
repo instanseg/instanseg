@@ -96,6 +96,10 @@ def read_model_args_from_csv(path=r"../results/", folder=""):
         build_model_dictionary["only_positive_labels"] = bool(eval(build_model_dictionary["only_positive_labels"]))
     else:
         build_model_dictionary["only_positive_labels"] = True
+    if "dim_seeds" in build_model_dictionary.keys():
+        build_model_dictionary["dim_seeds"] = int(build_model_dictionary["dim_seeds"])
+    else:
+        build_model_dictionary["dim_seeds"] = 1
 
     return build_model_dictionary
 
@@ -121,19 +125,20 @@ def build_model_from_dict(build_model_dictionary, random_seed = None):
             multihead = build_model_dictionary["multihead"]
 
             if build_model_dictionary["cells_and_nuclei"]:
+                n_seeds = build_model_dictionary["dim_seeds"]
                 if not multihead:
                     from itertools import chain
-                    out_channels = [[build_model_dictionary["dim_coords"], build_model_dictionary["n_sigma"],1] for i in range(2)]
+                    out_channels = [[build_model_dictionary["dim_coords"], build_model_dictionary["n_sigma"],n_seeds] for i in range(2)]
                     out_channels = list(chain(*out_channels))
                 
                 else:
-                    out_channels = [[build_model_dictionary["dim_coords"], build_model_dictionary["n_sigma"],1] for i in range(2)]
-
+                    out_channels = [[build_model_dictionary["dim_coords"], build_model_dictionary["n_sigma"],n_seeds] for i in range(2)]
             else:
+                n_seeds = build_model_dictionary["dim_seeds"]
                 if not multihead:
-                    out_channels = [[build_model_dictionary["dim_coords"], build_model_dictionary["n_sigma"],1]]
+                    out_channels = [[build_model_dictionary["dim_coords"], build_model_dictionary["n_sigma"],n_seeds]]
                 else:
-                    out_channels = [[build_model_dictionary["dim_coords"]], [build_model_dictionary["n_sigma"]],[1]]
+                    out_channels = [[build_model_dictionary["dim_coords"]], [build_model_dictionary["n_sigma"]],[n_seeds]]
 
             model = InstanSeg_UNet(in_channels=dim_in, 
                             layers = np.array(build_model_dictionary["layers"])[::-1],
@@ -141,17 +146,21 @@ def build_model_from_dict(build_model_dictionary, random_seed = None):
                             norm  = build_model_dictionary["norm"], 
                             dropout=build_model_dictionary["dropprob"])
             
-    elif build_model_dictionary["model_str"].lower() == "segformer":
-        from instanseg.utils.models.SegFormer import SegFormer
-        print("Generating SegFormer")
-        model = SegFormer(in_channels=dim_in, out_channels=build_model_dictionary["dim_out"])
 
-    elif build_model_dictionary["model_str"].lower() == "cellsam":
-        from instanseg.utils.models.CellSam_VISTA import CellSamWrapper
-        print("Generating CellSam")
-        model = CellSamWrapper(auto_resize_inputs=True, network_resize_roi=[1024, 1024],
-                               checkpoint="/lustre/s1708347/sam_vit_b_01ec64.pth", return_features=False,
-                               dim_out=build_model_dictionary["dim_out"])
+    elif build_model_dictionary["model_str"].lower() == "cellposesam":
+        from instanseg.utils.models.CellposeSam import CellposeSam
+        print("Generating CellposeSam")
+        model = CellposeSam(nout=build_model_dictionary["dim_out"])
+    elif build_model_dictionary["model_str"].lower() == "sam_unet":
+        from instanseg.utils.models.CellposeSam import SAM_UNet
+        print("Generating SAM_UNet")
+        if build_model_dictionary["cells_and_nuclei"]:
+            out_channels = [[build_model_dictionary["dim_coords"], build_model_dictionary["n_sigma"],build_model_dictionary["dim_seeds"]] for i in range(2)]
+        else:
+            out_channels = [[build_model_dictionary["dim_coords"], build_model_dictionary["n_sigma"],build_model_dictionary["dim_seeds"]]]
+        model = SAM_UNet(in_channels=dim_in, out_channels=out_channels,
+                         layers=np.array(build_model_dictionary["layers"])[::-1],
+                         norm=build_model_dictionary["norm"], dropout=build_model_dictionary["dropprob"])
             
     else:
         model = build_monai_model(build_model_dictionary["model_str"], build_model_dictionary)
@@ -176,9 +185,6 @@ def remove_module_prefix_from_dict(dictionary):
 
 def has_pixel_classifier_state_dict(state_dict):
     return bool(sum(['pixel_classifier' in key for key in state_dict.keys()]))
-
-def has_object_classifier_state_dict(state_dict):
-    return bool(sum(['object_classifier' in key for key in state_dict.keys()]))
 
 def has_adaptor_net_state_dict(state_dict):
     return bool(sum(['AdaptorNet' in key for key in state_dict.keys()]))
@@ -214,7 +220,7 @@ def load_model_weights(model, device, folder, path=r"../models/", dict = None):
     if has_pixel_classifier_state_dict(model_dict['model_state_dict']) and not has_pixel_classifier_model(model):
         from instanseg.utils.loss.instanseg_loss import InstanSeg
 
-        method = InstanSeg(n_sigma=int(dict["n_sigma"]), feature_engineering_function= dict["feature_engineering"],dim_coords = dict["dim_coords"],only_positive_labels= dict["only_positive_labels"],device =device)
+        method = InstanSeg(n_sigma=int(dict["n_sigma"]), feature_engineering_function= dict["feature_engineering"],dim_coords = dict["dim_coords"],dim_seeds = dict["dim_seeds"],device =device)
         model = method.initialize_pixel_classifier(model, MLP_width=int(dict["mlp_width"]))
     
 

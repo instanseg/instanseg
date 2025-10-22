@@ -223,10 +223,10 @@ def get_mean_object_features(image: torch.Tensor, label: torch.Tensor) -> torch.
     if label.max() == 0:
         return torch.tensor([])
     label = label.squeeze()
-    from instanseg.utils.pytorch_utils import torch_sparse_onehot
+    
     sparse_onehot = torch_sparse_onehot(label, flatten=True)[0]
     out = torch.mm(sparse_onehot, image.flatten(1).T)  # object features
-    sums = torch.sparse.sum(sparse_onehot, dim=1).to_dense()  # object areas
+    sums = torch.sparse.sum(sparse_onehot, dim=(1,)).to_dense()  # object areas
     out = out / sums[None].T  # mean object features
     return out
 

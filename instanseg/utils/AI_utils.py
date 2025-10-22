@@ -241,9 +241,15 @@ def check_mean_grad(_model):
     losses = np.array([param.grad.norm().item() for name, param in _model.named_parameters() if param.grad is not None])
     return losses.mean()
 
-
-
-def optimize_hyperparameters(model,postprocessing_fn, data_loader = None, val_images = None, val_labels = None,max_evals = 50, verbose = False, threshold = [0.5, 0.7, 0.9], show_progressbar = True, device = None):
+def optimize_hyperparameters(model,postprocessing_fn,
+                              data_loader = None, 
+                              val_images = None, 
+                              val_labels = None,
+                              max_evals = 50, 
+                              verbose = False, 
+                              threshold = [0.5, 0.7, 0.9], 
+                              show_progressbar = True, 
+                              device = None):
 
 
     from instanseg.utils.metrics import _robust_average_precision
@@ -262,11 +268,12 @@ def optimize_hyperparameters(model,postprocessing_fn, data_loader = None, val_im
 
     space = {  # instanseg
         'mask_threshold': hp.uniform('mask_threshold', 0.3, 0.7),
-        'seed_threshold': hp.uniform('seed_threshold', 0.7, 1),
+        'seed_threshold': hp.uniform('seed_threshold', 0.3, 0.9),
+        'fg_threshold': hp.uniform('fg_threshold', 0.3, 0.7),
         #'overlap_threshold': hp.uniform('overlap_threshold', 0.1, 0.9),
         #'min_size': hp.uniform('min_size', 0, 30),
       #  'peak_distance': hp.uniform('peak_distance', 3, 10),
-        'mean_threshold': hp.uniform('mean_threshold', 0.0, 0.5)} #the max could be increased, but may cuase the method not to converge for some reason.
+        'mean_threshold': hp.uniform('mean_threshold', 0.0, 0.5)} #the max could be increased, but may cause the method not to converge for some reason.
     
     _model = model # copy.deepcopy(model)
     _model.eval()
