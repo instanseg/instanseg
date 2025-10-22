@@ -40,19 +40,19 @@ def set_export_paths():
 
 
 dataset_dict = {
-    "DSB_2018": ["CC 0","https://bbbc.broadinstitute.org/BBBC038"],
-    "CoNSeP": ["Apache 2.0","https://warwick.ac.uk/fac/cross_fac/tia/data/hovernet"],
-    "TNBC_2018": ["CC BY 4.0","https://zenodo.org/records/3552674"],
-    "MoNuSeg": ["CC BY NC 4.0","https://monuseg.grand-challenge.org/"],
-    "LyNSec": ["CC BY 4.0","https://zenodo.org/records/8065174"],
-    "LyNSeC": ["CC BY 4.0","https://zenodo.org/records/8065174"],
-    "NuInsSeg": ["CC BY 4.0","https://zenodo.org/records/10518968"],
-    "IHC_TMA": ["CC BY 4.0","https://zenodo.org/records/7647846"],
-    "CPDMI_2023": ["CC BY 4.0","https://www.nature.com/articles/s41597-023-02108-z"],
-    "cellpose": ["NC","https://www.cellpose.org/dataset"],
-    "TissueNet": ["Modified Apache, Non-Commercial", "https://datasets.deepcell.org/"],
-    "CIL": ["CC BY 3.0", "https://www.cellimagelibrary.org/images/CCDB_6843"],
-    "BSST265": ["CC0","https://www.ebi.ac.uk/biostudies/bioimages/studies/S-BSST265"],
+    "DSB_2018".lower(): ["CC 0","https://bbbc.broadinstitute.org/BBBC038"],
+    "CoNSeP".lower(): ["Apache 2.0","https://warwick.ac.uk/fac/cross_fac/tia/data/hovernet"],
+    "TNBC_2018".lower(): ["CC BY 4.0","https://zenodo.org/records/3552674"],
+    "MoNuSeg".lower(): ["CC BY NC 4.0","https://monuseg.grand-challenge.org/"],
+    "LyNSec".lower(): ["CC BY 4.0","https://zenodo.org/records/8065174"],
+    "NuInsSeg".lower(): ["CC BY 4.0","https://zenodo.org/records/10518968"],
+    "IHC_TMA".lower(): ["CC BY 4.0","https://zenodo.org/records/7647846"],
+    "CPDMI_2023".lower(): ["CC BY 4.0","https://www.nature.com/articles/s41597-023-02108-z"],
+    "cellpose".lower(): ["NC","https://www.cellpose.org/dataset"],
+    "TissueNet".lower(): ["Modified Apache, Non-Commercial", "https://datasets.deepcell.org/"],
+    "CIL".lower(): ["CC BY 3.0", "https://www.cellimagelibrary.org/images/CCDB_6843"],
+    "BSST265".lower(): ["CC0","https://www.ebi.ac.uk/biostudies/bioimages/studies/S-BSST265"],
+    
 }
 
 
@@ -74,6 +74,7 @@ def readme(model_name: str, model_dict: dict = None):
         
         if model_dict is not None and "source_dataset" in model_dict.keys():
             for dataset in (model_dict["source_dataset"]).replace("[","").replace("]","").replace("'","").split(", "):
+                dataset = dataset.lower()
                 if dataset in dataset_dict.keys():
                     f.write(f"- {dataset} \n")
                     f.write(f"  - License: {dataset_dict[dataset][0]} \n")
@@ -107,7 +108,9 @@ def export_bioimageio(torchsript: torch.jit._script.RecursiveScriptModule,
                       output_channel_names = None,
                       output_types = ["instance_segmentation"],
                       test: bool = True,
-                      version: str = None):
+                      version: str = None,
+                      pixel_size: float = None, #only give a value if the pixel size of the model metadata is not defined or incorrect.
+                      ):
     
     set_export_paths()
 
@@ -126,9 +129,13 @@ def export_bioimageio(torchsript: torch.jit._script.RecursiveScriptModule,
     except:
         raise Exception("Model configuration files could not be loaded")
     
-    print("Model pixel size: ", model_dict["pixel_size"])
-    model_pixel_size = model_dict["pixel_size"]
+    if pixel_size is not None:
+        model_pixel_size = pixel_size
+    else:
+        model_pixel_size = model_dict["pixel_size"]
 
+    print("Model pixel size: ", model_pixel_size)
+    
     torchsript.eval()
     device = _choose_device()
     torchsript.to(device)
@@ -345,7 +352,7 @@ def export_bioimageio(torchsript: torch.jit._script.RecursiveScriptModule,
                             size = DataDependentSize()),
             IndexOutputAxis(id = "n_classes",
                             description = "Number of classes",
-                            size = 1,),
+                            size = 3,),
             
         ]
 
@@ -370,7 +377,7 @@ def export_bioimageio(torchsript: torch.jit._script.RecursiveScriptModule,
                             size = DataDependentSize()),
             IndexOutputAxis(id = "logits",
                             description = "Logits for classes",
-                            size = 8,),
+                            size = 3,),
             
         ]
 
