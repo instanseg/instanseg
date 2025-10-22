@@ -423,12 +423,12 @@ def generate_coordinate_map(mode: str = "linear", spatial_dim: int = 2, height: 
             xxyy = torch.cat((xx, yy), 0)
 
         elif spatial_dim >= 3:
-                    xx = torch.linspace(0, width * 64 / 256, width, device=device).view(1, 1, -1).expand(1, height,width)
-                    yy = torch.linspace(0, height * 64 / 256, height, device=device).view(1, -1, 1).expand(1, height, width)
-                    zz = torch.zeros_like(xx).expand(spatial_dim - 2,-1,-1)
-                    xxyy = torch.cat((xx, yy,zz), 0)
+            xx = torch.linspace(0, width * 64 / 256, width, device=device).view(1, 1, -1).expand(1, height,width)
+            yy = torch.linspace(0, height * 64 / 256, height, device=device).view(1, -1, 1).expand(1, height, width)
+            zz = torch.zeros_like(xx).expand(spatial_dim - 2,-1,-1)
+            xxyy = torch.cat((xx, yy,zz), 0)
+        
         else:
-         
             xxyy = torch.zeros((spatial_dim, height, width), device=device) #NOT IMPLEMENTED - THIS IS JUST A DUMMY VALUE
 
     else:
@@ -521,8 +521,7 @@ def feature_engineering(x: torch.Tensor, c: torch.Tensor, sigma: torch.Tensor, w
 
 def feature_engineering_slow(x: torch.Tensor, c: torch.Tensor, sigma: torch.Tensor, window_size: int,
                         mesh_grid_flat: torch.Tensor):
-    
-    breakpoint()
+
     
     E = x.shape[0]
     h, w = x.shape[-2:]
