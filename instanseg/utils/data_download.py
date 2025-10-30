@@ -849,31 +849,47 @@ def load_CPDMI_Vectra(Segmentation_Dataset: dict):
             nuclei_mask_path=[path for path in files if "Crop_Dapi_Mask_Png" in str(path)]
             img_path=[path for path in files if "Crop_Cell_Tif" in str(path)] + [path for path in files if "Crop_Tif" in str(path)]
 
-            if len(cell_mask_path)==0:
-                print("No image found in",subsubfolder)
-                continue
-
             image=io.imread(img_path[0])
-            mask=io.imread(cell_mask_path[0])
 
-            if len(nuclei_mask_path)>0:
-                nuclei_mask=io.imread(nuclei_mask_path[0])
-                connected_nuclei = K.contrib.connected_components(torch.tensor(nuclei_mask[None]).bool().float(), num_iterations=150).int().numpy()
-                connected_nuclei = fastremap.renumber(connected_nuclei)[0].squeeze()
-                
-
-            if image.shape[-2:]!=mask.shape[-2:]:
-                print(image.shape,mask.shape, subfolder,subsubfolder)
-                
-                continue
-
-            connected = K.contrib.connected_components(torch.tensor(mask[None]).bool().float(), num_iterations=150).int().numpy()
-            connected = fastremap.renumber(connected)[0].squeeze()
-            connected = fastremap.refit(connected)
             item={}
             item['image']=image
-            
-            item['cell_masks']=connected
+
+            device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+
+            if len(cell_mask_path)>0:
+                cell_mask=io.imread(cell_mask_path[0])
+                connected_cells = K.contrib.connected_components(torch.tensor(cell_mask[None]).bool().float().to(device), num_iterations=150).int().cpu().numpy()
+                connected_cells = fastremap.renumber(connected_cells)[0].squeeze()
+                connected_cells = fastremap.refit(connected_cells)
+                item['cell_masks']=connected_cells
+
+                if image.shape[-2:]!=cell_mask.shape[-2:]:
+                   # print(image.shape,cell_mask.shape, subfolder,subsubfolder)
+                    #get offset from folder name
+                    (x,y) = [int(i) for i in str(cell_mask_path[0].parents[0]).split(")")[-1].split(",")]
+                  #  from instanseg.utils.utils import show_images
+                  #  show_images([image[-2,y : y + cell_mask.shape[0],x:x + cell_mask.shape[1]],cell_mask])
+                    item["image"] = image[:,y : y + cell_mask.shape[0],x:x + cell_mask.shape[1]]
+
+                
+            if len(nuclei_mask_path)>0:
+                nuclei_mask=io.imread(nuclei_mask_path[0])
+                connected_nuclei = K.contrib.connected_components(torch.tensor(nuclei_mask[None]).bool().float().to(device), num_iterations=150).int().cpu().numpy()
+                connected_nuclei = fastremap.renumber(connected_nuclei)[0].squeeze()
+                connected_nuclei = fastremap.refit(connected_nuclei)
+                item['nucleus_masks']=connected_nuclei
+                
+                if image.shape[-2:]!=nuclei_mask.shape[-2:]:
+                    print(image.shape,nuclei_mask.shape, subfolder,subsubfolder)
+
+                    from instanseg.utils.utils import show_images
+
+                    show_images([image[-2],nuclei_mask])
+                    1/0
+                    continue
+
+            assert "nucleus_masks" in item or "cell_masks" in item, print("No masks found in",subsubfolder)
 
             item["parent_dataset"]="CPDMI_2023"
             item['licence']="CC BY 4.0"
@@ -883,7 +899,6 @@ def load_CPDMI_Vectra(Segmentation_Dataset: dict):
             if str(subsubfolder).split("/")[-1] == "P13-10002(45819.10401)2250,500":
                 continue #this one is corrupted
 
-    
             with TiffFile(img_path[0]) as tif:
                 info_string=tif.imagej_metadata['Info']
                 info_string=info_string.split("MetaDataPhotometricInterpretation = Monochrome")
@@ -907,11 +922,6 @@ def load_CPDMI_Vectra(Segmentation_Dataset: dict):
             item['channel_names']=out_channels
             item['nuclei_channels']=[i for i,val in enumerate(out_channels) if "dapi" in val.lower()]
 
-
-            if len(nuclei_mask_path)>0:
-                connected_nuclei = fastremap.refit(connected_nuclei)
-
-                item['nucleus_masks']=connected_nuclei
 
             annotation=str(subsubfolder).split("/")[-1].replace("(","[").replace(")","]").replace(".",",") 
 
@@ -968,25 +978,48 @@ def load_CPDMI_Zeiss(Segmentation_Dataset: dict):
 
     subfolders = sorted([path for path in Path(Zeiss).iterdir() if path.is_dir()])
     items=[]
+
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+ 
     for subfolder in subfolders:
 
         files=sorted([path for path in Path(subfolder).iterdir() if path.is_file()])
         cell_mask_path=[path for path in files if "Crop_Cell_Mask_Png" in str(path)]
-        img_path=[path for path in files if "Crop_Cell_Tif" in str(path)] + [path for path in files if "Crop_Tif" in str(path)]
+        nuclei_mask_path=[path for path in files if "Crop_Dapi_Mask_Png" in str(path)]
+
+        img_path = sorted(
+            [path for path in files if "Crop_Cell_Tif" in str(path)] + 
+            [path for path in files if "Crop_Tif" in str(path)],
+            key=os.path.getsize
+        ) #sort by size to get the smallest image
+
+        if len(img_path) > 1:
+            print("deleting redundant image:",img_path[-1])
+            os.remove(img_path[-1])
+
+        cell_mask = io.imread(cell_mask_path[0])
+
+        if len(nuclei_mask_path)>0:
+            print("nuclei_mask_path",nuclei_mask_path)
+
+        if len(img_path) > 1:
+            for img in img_path:
+                image = io.imread(img)
+                if image.shape[-2:] == cell_mask.shape[-2:]:
+                    img_path = [img]
+                    break
 
         if len(cell_mask_path)==0:
             print("No image found in",subfolder)
             continue
-
         
         image=io.imread(img_path[0])
-        mask=io.imread(cell_mask_path[0])
+        cell_mask=io.imread(cell_mask_path[0])
 
-        if image.shape[-2:]!=mask.shape[-2:]:
-            print(image.shape,mask.shape, subfolder,subfolder)
-            continue
-
-        connected = K.contrib.connected_components(torch.tensor(mask[None]).bool().float(), num_iterations=150).int().numpy()
+        if image.shape[-2:]!=cell_mask.shape[-2:]:
+            print(image.shape,cell_mask.shape, subfolder)
+    
+        connected = K.contrib.connected_components(torch.tensor(cell_mask[None]).bool().float().to(device), num_iterations=150).cpu().int().numpy()
         connected = fastremap.renumber(connected)[0].squeeze().astype(np.int16)
 
         item={}
@@ -1076,7 +1109,9 @@ def load_CPDMI_CODEX(Segmentation_Dataset: dict):
             print("Dimension inconsistency",image.shape,mask.shape, subfolder,subfolder)
             continue
 
-        connected = K.contrib.connected_components(torch.tensor(mask[None]).bool().float(), num_iterations=150).int().numpy()
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+        connected = K.contrib.connected_components(torch.tensor(mask[None]).bool().float().to(device), num_iterations=150).int().cpu().numpy()
         connected = fastremap.renumber(connected)[0].squeeze().astype(np.int16)
         item={}
         item['image']=image
@@ -1100,14 +1135,14 @@ def load_CPDMI_CODEX(Segmentation_Dataset: dict):
         elif "Tnsl" in subfolder.name:
             item["tissue_type"]="Tonsil"
             item["tumor_type"]="Normal_Tissue"
-            item['channel_names']=['DAPI1', 'NA', 'NA', 'NA', 'DAPI2', 'NA', 'CD4', 'NA', 'API3', 'CD8', 'CD3e', 'CD20', 'DAPI4', 'Ki67', 'HLA-DR', 'DAPI5', 'NA', 'CD68', 'CD31', 'DAPI6', 'CD45RO', 'CD11c', 'NA', 'DAPI7', 'CD21', 'NA', 'NA', 'DAPI8', 'NA', 'NA', 'NA']
+            item['channel_names']=['DAPI1', 'NA', 'NA', 'NA', 'DAPI2', 'NA', 'CD4', 'NA', 'DAPI3', 'CD8', 'CD3e', 'CD20', 'DAPI4', 'Ki67', 'HLA-DR', 'DAPI5', 'NA', 'CD68', 'CD31', 'DAPI6', 'CD45RO', 'CD11c', 'NA', 'DAPI7', 'CD21', 'NA', 'NA', 'DAPI8', 'NA', 'NA', 'NA']
             item['nuclei_channels']=[0, 4, 12, 15, 19, 23, 27]
 
         item['filename']=img_path[0].stem
 
         items.append(item)
 
-    Segmentation_Dataset['Test']+=items
+    Segmentation_Dataset['Train']+=items
 
     return Segmentation_Dataset
 
@@ -1174,13 +1209,37 @@ def load_CellBinDB(Segmentation_Dataset: dict, verbose: bool = True) -> dict:
     cellbindb_dir = create_raw_datasets_dir("Nucleus_Segmentation", "CellBinDB")
 
 
-    if not (cellbindb_dir).exists():
-        print('wget -c -nH -np -r -R "index.html*" --cut-dirs 4 ftp://ftp.cngb.org/pub/CNSA/data5/CNP0006370/Other/')
 
-        #raise an error
-        raise Exception("Please download the CellBinDB dataset manually using the command above and place it in the directory")
-        
+    zip_file_path = cellbindb_dir / "CellBinDB.zip"
+
+    download_url = "https://zenodo.org/records/14312044/files/CellBinDB.zip?download=1"
+
+    if not zip_file_path.exists():
+        print("Downloading CellBinDB dataset...")
+        # Download the dataset using requests
+        if verbose:
+            print(f"Downloading dataset from {download_url} to {zip_file_path}...")
+        response = requests.get(download_url, stream=True)
+        response.raise_for_status()
+        with open(zip_file_path, 'wb') as f:
+            for chunk in response.iter_content(chunk_size=8192):
+                f.write(chunk)
+        if verbose:
+            print(f"Download completed.")
+
+        # Unzip the dataset
+        if verbose:
+            print(f"Unzipping dataset to {cellbindb_dir}...")
+        with zipfile.ZipFile(zip_file_path, 'r') as zip_ref:
+            zip_ref.extractall(cellbindb_dir)
+        if verbose:
+            print("Unzipping completed.")
+
+    cellbindb_dir = os.path.join(cellbindb_dir, "CellBinDB")
+
     dataset_path = sorted(Path(f"{cellbindb_dir}").iterdir())
+
+    print(f"Found {len(dataset_path)} tissue directories in CellBinDB dataset.")
 
     # Iterate over the dataset folders and files
     items = []
@@ -1230,14 +1289,51 @@ def load_CellBinDB(Segmentation_Dataset: dict, verbose: bool = True) -> dict:
 
 
 
-def load_neurips(Segmentation_Dataset: dict, verbose: bool = True) -> dict:
+import json
+import numpy as np
+from shapely.geometry import shape, Polygon
+from rasterio.features import rasterize
+from skimage.io import imsave
+from pathlib import Path
 
-    neurips_dir = create_raw_datasets_dir("Cell_Segmentation", "NeurIPS_CellSeg")
-    zip_file_path = neurips_dir / "Neurips.zip"
-    download_url = "https://zenodo.org/api/records/10719375/files-archive"
+def geojson_to_label_image(geojson_data: dict, image_shape: tuple):
+    # Prepare an empty label image
+    label_image = np.zeros(image_shape, dtype=np.uint16)
+    
+    # Initialize label counter
+    label_id = 1
+    
+    # Iterate over each feature in the GeoJSON data
+    for feature in geojson_data['features']:
+        # Parse the geometry to get a polygon
+        polygon_geom = shape(feature['geometry'])
+        
+        # Rasterize the polygon onto the label image
+        mask = rasterize(
+            [(polygon_geom, label_id)],
+            out_shape=image_shape,
+            fill=0,
+            default_value=label_id,
+            dtype=np.uint16
+        )
+        
+        # Add the mask to the label image
+        label_image[mask > 0] = mask[mask > 0]
+        label_id += 1  # Increment label ID for the next polygon
 
+    return label_image
+    
+
+def load_HPA_Segmentation(Segmentation_Dataset: dict, verbose: bool = True) -> dict:
+
+    import json
+    hpa_dir = create_raw_datasets_dir("Cell_Segmentation", "HPA")
+    zip_file_path = hpa_dir / "HPA_Segmentation.zip"
+    download_url = "https://zenodo.org/records/4430893/files/hpa_cell_segmentation_dataset_v2_512x512_4train_159test.zip?download=1"
+    
+    
     if not zip_file_path.exists():
-       # Download the dataset using requests
+        # Download the dataset using requests
         if verbose:
             print(f"Downloading dataset from {download_url} to {zip_file_path}...")
         response = requests.get(download_url, stream=True)
@@ -1246,22 +1342,372 @@ def load_neurips(Segmentation_Dataset: dict, verbose: bool = True) -> dict:
             for chunk in response.iter_content(chunk_size=8192):
                 f.write(chunk)
         if verbose:
-            print(f"Download completed.")
+            print("Download completed.")
+        
+        # Unzip the dataset
+        if verbose:
+            print(f"Unzipping dataset to {hpa_dir / 'HPA'}...")
+        with zipfile.ZipFile(zip_file_path, 'r') as zip_ref:
+            zip_ref.extractall(hpa_dir / 'HPA')
+        if verbose:
+            print("Unzipping completed.")
+        output_dir.mkdir(parents=True, exist_ok=True)
+    
+    # Traverse through each sample directory in the test folder
+    test_dir = hpa_dir / "HPA/hpa_dataset_v2" / "test"
+    train_dir = hpa_dir / "HPA/hpa_dataset_v2" / "train"
+    sample_dirs = [d for d in test_dir.iterdir() if d.is_dir()] + [d for d in train_dir.iterdir() if d.is_dir()]
+    
+    items = []
+    for sample_dir in tqdm(sample_dirs):
+        sample_name = sample_dir.name
+        # Load each image channel
+        channel_images = []
+        
+        # Define paths for each image channel
+        channels = [ "er.png", "microtubules.png", "nuclei.png", "protein.png"]
+        for channel in channels:
+            channel_path = sample_dir / channel
+            if channel_path.exists():
+                image = io.imread(channel_path)
+                channel_images.append(image)
 
-    # Unzip the dataset
-    if verbose:
-        print(f"Unzipping dataset to {neurips_dir}...")
-    with zipfile.ZipFile(zip_file_path, 'r') as zip_ref:
-        zip_ref.extractall(neurips_dir)
-        #unzip the new files:
-        for file in Path(neurips_dir).iterdir():
-            if file.suffix == ".zip":
-                with zipfile.ZipFile(file, 'r') as zip_ref:
-                    zip_ref.extractall(neurips_dir)
+        # Stack channels into a single multi-channel image
+        multi_channel_image = np.stack(channel_images)
+        
+        # Load annotation.json and convert to label image
+        annotation_path = sample_dir / "annotation.json"
+        with open(annotation_path, "r",encoding="utf-8-sig") as f:
+            annotation_data = json.load(f)
+        
+        # Create label image from JSON data
+        # Assuming JSON contains a list of labeled regions, e.g., {"cells": [{"label": 1, "coordinates": [...]}, ...]}
+        label_image = geojson_to_label_image(annotation_data, multi_channel_image.shape[-2:])
+
+        item = {}
+
+        susbsammpling = 2
+        image = multi_channel_image[:,::susbsammpling,::susbsammpling]
+        masks = label_image[::-susbsammpling,::susbsammpling]
+        item['cell_masks'] = masks
+        item['image'] = image
+        item["parent_dataset"] = "HPA"
+        item['licence'] = "CC BY 4.0"
+        item['pixel_size'] = 0.08 * susbsammpling
+        item['nuclei_channels'] = [2]  
+        item['channel_names'] = ["ER", "Microtubules", "Nuclei", "Protein"]
+        item['image_modality'] = "Fluorescence"
+        items.append(item)
+    
+    # Split dataset into training, validation, and test sets
+    np.random.seed(42)
+    np.random.shuffle(items)
+    Segmentation_Dataset['Train'] += items[:int(len(items) * 0.8)]
+    Segmentation_Dataset['Validation'] += items[int(len(items) * 0.8):int(len(items) * 0.9)]
+    Segmentation_Dataset['Test'] += items[int(len(items) * 0.9):]
+    
+    return Segmentation_Dataset
 
 
-    if verbose:
-        print("Unzipping completed.")
+def load_cellseg(Segmentation_Dataset: dict, verbose: bool = True, no_zip = False) -> dict:
+    import requests
+    import zipfile
+    from skimage import io
+    from pathlib import Path
+    import numpy as np
+    from skimage.transform import rescale
+    import tifffile
+    from tqdm import tqdm
 
+    cellseg_dir = create_raw_datasets_dir("Cell_Segmentation", "NeurIPS_CellSeg")
+
+    processed_cellseg_dir = create_processed_datasets_dir("cellseg_data")
+
+
+    def get_data(split):
+        out_path = processed_cellseg_dir / split
+
+        if split == "train":
+            zip_file_path = cellseg_dir / "Training-labeled.zip"
+            download_url = "https://zenodo.org/records/10719375/files/Training-labeled.zip?download=1"
+            neurips_path = cellseg_dir / "Training-labeled"
+        
+        elif split == "val":
+            zip_file_path = cellseg_dir / "Tuning.zip"
+            download_url = "https://zenodo.org/records/10719375/files/Tuning.zip?download=1"
+            neurips_path = cellseg_dir / "Tuning"
+
+        if not out_path.exists():
+            out_path.mkdir(parents=True, exist_ok=True)
+
+
+        if not zip_file_path.exists():
+            # Download the dataset using requests
+            if verbose:
+                print(f"Downloading dataset from {download_url} to {zip_file_path}...")
+            response = requests.get(download_url, stream=True)
+            response.raise_for_status()
+            with open(zip_file_path, 'wb') as f:
+                for chunk in response.iter_content(chunk_size=8192):
+                    f.write(chunk)
+            if verbose:
+                print(f"Download completed.")
+
+            # Unzip the dataset
+            if verbose:
+                print(f"Unzipping dataset to {cellseg_dir}...")
+            with zipfile.ZipFile(zip_file_path, 'r') as zip_ref:
+                zip_ref.extractall(cellseg_dir)
+            if verbose:
+                print("Unzipping completed.")
+
+
+        
+
+        files = sorted(os.listdir(os.path.join(neurips_path,"images")))
+
+        items = []
+
+        for i,file in enumerate(tqdm(files)):
+            image_path = os.path.join(neurips_path, "images", file)
+            mask_path = os.path.join(neurips_path, "labels", Path(file).stem + "_label.tiff")
+
+            image = io.imread(image_path)
+            mask = io.imread(mask_path)
+
+            if image.ndim == 2:
+                image = image[..., np.newaxis]
+
+            median_area = np.median(np.unique(mask[mask > 0],return_counts = True)[1])
+            median_diameter = np.sqrt(median_area / np.pi) * 2
+
+            target_diameter = 30
+
+            #resize image to target diameter
+            scale_factor = target_diameter / median_diameter
+
+            image_rescaled = rescale(image, scale=scale_factor, preserve_range=True, anti_aliasing=True, channel_axis=np.argmin(image.shape)).astype(image.dtype)
+            mask_rescaled = rescale(mask, scale=scale_factor, order = 0).astype(mask.dtype)
+
+        #  show_images(image_rescaled, mask_rescaled,)
+
+            item = {}
+
+            tifffile.imwrite(out_path / f"image_{i}.tif", image_rescaled)
+            tifffile.imwrite(out_path / f"cell_masks_{i}.tif", mask_rescaled)
+
+            relative_path_img = os.path.relpath(str(out_path / f"image_{i}.tif"), os.environ['INSTANSEG_DATASET_PATH'])
+            relative_path_cell = os.path.relpath(str(out_path / f"cell_masks_{i}.tif"), os.environ['INSTANSEG_DATASET_PATH'])
+
+            item['image'] = relative_path_img
+            item['cell_masks'] = relative_path_cell
+
+            item["parent_dataset"] = "cellseg"
+            item['licence'] = "cc by nc nd"
+            item['image_modality'] = "Fluorescence"
+            item['pixel_size'] = None  # In microns per pixel
+
+            items.append(item)
+        
+        return items
+
+    Segmentation_Dataset['Train'] += get_data("train")
+    Segmentation_Dataset['Validation'] += get_data("val")
+   
 
     return Segmentation_Dataset
+
+
+ 
+#### FROM CELLPOSE !!! ####
+ 
+def remove_overlaps(masks, medians, overlap_threshold=0.75):
+    """ replace overlapping mask pixels with mask id of closest mask
+        if mask fully within another mask, remove it
+        masks = Nmasks x Ly x Lx
+    """
+    cellpix = masks.sum(axis=0)
+    igood = np.ones(masks.shape[0], 'bool')
+    for i in masks.sum(axis=(1, 2)).argsort():
+        npix = float(masks[i].sum())
+        noverlap = float(masks[i][cellpix > 1].sum())
+        if noverlap / npix >= overlap_threshold:
+            igood[i] = False
+            cellpix[masks[i] > 0] -= 1
+            #print(cellpix.min())
+   # print(f'removing {(~igood).sum()} masks')
+    masks = masks[igood]
+    medians = medians[igood]
+    cellpix = masks.sum(axis=0)
+    overlaps = np.array(np.nonzero(cellpix > 1.0)).T
+    dists = ((overlaps[:, :, np.newaxis] - medians.T)**2).sum(axis=1)
+    tocell = np.argmin(dists, axis=1)
+    masks[:, overlaps[:, 0], overlaps[:, 1]] = 0
+    masks[tocell, overlaps[:, 0], overlaps[:, 1]] = 1
+ 
+    # labels should be 1 to mask.shape[0]
+    masks = masks.astype(int) * np.arange(1, masks.shape[0] + 1, 1, int)[:, np.newaxis,
+                                                                         np.newaxis]
+    masks = masks.sum(axis=0)
+    return masks
+ 
+def ann_to_masks(annotations, anns, overlap_threshold=0.75):
+    """ list of coco-format annotations with masks to single image"""
+    masks = []
+    k = 0
+    medians = []
+    for ann in anns:
+        mask = annotations.annToMask(ann)
+        masks.append(mask)
+        ypix, xpix = mask.nonzero()
+        medians.append(np.array([ypix.mean(), xpix.mean()]))
+        k += 1
+    masks = np.array(masks).astype('int')
+    medians = np.array(medians)
+    masks = remove_overlaps(masks, medians, overlap_threshold=overlap_threshold)
+    return masks
+ 
+def livecell_ann_to_masks(img_dir, annotation_file):
+    from pycocotools.coco import COCO
+ 
+    from glob import glob
+ 
+    from tifffile import imsave
+    img_dir_classes = glob(img_dir + '*/')
+    classes = [img_dir_class.split(os.sep)[-2] for img_dir_class in img_dir_classes]
+    #print(classes)
+ 
+    train_files = []
+    train_class_files = []
+    for cclass, img_dir_class in zip(classes, img_dir_classes):
+        train_files.extend(glob(img_dir_class + '*.tif'))
+        train_class_files.append(glob(img_dir_class + '*.tif'))
+ 
+    annotations = COCO(annotation_file)
+    imgIds = list(annotations.imgs.keys())
+ 
+    for train_class_file in train_class_files:
+        for i in tqdm(range(len(train_class_file))):
+            filename = train_class_file[i]
+ 
+            if not os.path.exists(os.path.splitext(filename)[0] + '_masks.tif'):
+                fname = os.path.split(filename)[-1]
+                loc = np.array([
+                    annotations.imgs[imgId]['file_name'] == fname for imgId in imgIds
+                ]).nonzero()[0]
+                if len(loc) > 0:
+                    imgId = imgIds[loc[0]]
+                    annIds = annotations.getAnnIds(imgIds=[imgId], iscrowd=None)
+                    anns = annotations.loadAnns(annIds)
+                    masks = ann_to_masks(annotations, anns, overlap_threshold=0.75)
+                    from instanseg.utils.utils import show_images
+                  #  show_images(masks,labels = [0])
+                    masks = masks.astype(np.uint16)
+                    maskname = os.path.splitext(filename)[0] + '_masks.tif'
+                    imsave(maskname, masks)
+                   # print(f'saved masks at {maskname}')
+#end of cellpose code ######
+ 
+def load_LIVECELL(Segmentation_Dataset: dict, verbose: bool = True) -> dict:
+ 
+    import tifffile
+ 
+    livecell_dir = create_raw_datasets_dir("Cell_Segmentation", "LIVECELL")
+ 
+ 
+    def download_and_extract(url, dest_path, extract_to, verbose=True):
+        if verbose:
+            print(f"Downloading dataset from {url} to {dest_path}...")
+        response = requests.get(url, stream=True)
+        response.raise_for_status()
+        with open(dest_path, 'wb') as f:
+            for chunk in response.iter_content(chunk_size=8192):
+                f.write(chunk)
+        if verbose:
+            print("Download completed.")
+ 
+        if extract_to.suffix == ".zip":
+            if verbose:
+                print(f"Unzipping dataset to {extract_to}...")
+            with zipfile.ZipFile(dest_path, 'r') as zip_ref:
+                zip_ref.extractall(extract_to)
+            if verbose:
+                print("Unzipping completed.")
+ 
+ 
+    if not (livecell_dir / "images.zip").exists():
+        download_and_extract("http://livecell-dataset.s3.eu-central-1.amazonaws.com/LIVECell_dataset_2021/images.zip", livecell_dir / "images.zip", livecell_dir)
+    if not (livecell_dir / "livecell_coco_train.json").exists():
+        download_and_extract("http://livecell-dataset.s3.eu-central-1.amazonaws.com/LIVECell_dataset_2021/annotations/LIVECell/livecell_coco_train.json", livecell_dir / "livecell_coco_train.json", livecell_dir)
+    if not (livecell_dir / "livecell_coco_test.json").exists():
+        download_and_extract("http://livecell-dataset.s3.eu-central-1.amazonaws.com/LIVECell_dataset_2021/annotations/LIVECell/livecell_coco_test.json", livecell_dir / "livecell_coco_test.json", livecell_dir)
+    if not (livecell_dir / "livecell_coco_val.json").exists():
+        download_and_extract("http://livecell-dataset.s3.eu-central-1.amazonaws.com/LIVECell_dataset_2021/annotations/LIVECell/livecell_coco_val.json", livecell_dir / "livecell_coco_val.json", livecell_dir)
+ 
+ 
+    livecell_ann_to_masks(str(livecell_dir / "images/livecell_train_val_images"), livecell_dir / "livecell_coco_train.json")
+    livecell_ann_to_masks(str(livecell_dir / "images/livecell_test_images"), livecell_dir / "livecell_coco_test.json")
+    livecell_ann_to_masks(str(livecell_dir / "images/livecell_train_val_images"), livecell_dir / "livecell_coco_val.json")
+ 
+ 
+    processed_livecell_dir = create_processed_datasets_dir("livecell_data")
+    train_files = []
+    test_files = []
+    for root, dirs, filenames in os.walk(livecell_dir):
+        for filename in filenames:
+            if filename.endswith(".tif"):
+              #  print(root,filename)
+                if str(root).endswith("livecell_train_val_images") and "masks" not in filename:
+                    train_files.append(os.path.join(root, filename))
+                elif str(root).endswith("livecell_test_images") and "masks" not in filename:
+                    test_files.append(os.path.join(root, filename))
+ 
+    print(f"Found {len(train_files)} training images and {len(test_files)} test images.")
+ 
+    def get_data(dataset):
+        out_path = processed_livecell_dir / dataset
+        if not out_path.exists():
+            out_path.mkdir(parents=True, exist_ok=True)
+ 
+        if dataset == "train":
+            imgs = train_files
+        elif dataset == "test":
+            imgs = test_files
+ 
+        items = []
+ 
+        for i,file in tqdm(enumerate(imgs)):
+            item = {}
+            image = io.imread(file)
+ 
+            from instanseg.utils.utils import show_images
+            mask = io.imread(file.replace(".tif", "_masks.tif"))
+ 
+        
+            tifffile.imwrite(out_path / f"image_{i}.tif", image)
+            tifffile.imwrite(out_path / f"cell_masks_{i}.tif", mask)
+ 
+            relative_path_img = os.path.relpath(str(out_path / f"image_{i}.tif"), os.environ['INSTANSEG_DATASET_PATH'])
+            relative_path_cell = os.path.relpath(str(out_path / f"cell_masks_{i}.tif"), os.environ['INSTANSEG_DATASET_PATH'])
+            
+            image = io.imread(file)
+            mask = io.imread(file.replace("input", "output"))
+            item['cell_masks'] = relative_path_cell
+            item['image'] = relative_path_img
+            item["parent_dataset"] = "LIVECELL"
+            item['licence'] = "CC BY-NC 4.0"
+            item['pixel_size'] = 1.2429  # In microns per pixel
+            item['image_modality'] = "Brightfield"
+            items.append(item)
+        return items
+ 
+    items = get_data("train")
+ 
+    np.random.seed(42)
+    np.random.shuffle(items)
+    Segmentation_Dataset['Train'] += items[:int(len(items) * 0.8)]
+    Segmentation_Dataset['Validation'] += items[int(len(items) * 0.8):]
+ 
+    Segmentation_Dataset['Test'] += get_data("test")
+    return Segmentation_Dataset
+ 

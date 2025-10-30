@@ -10,6 +10,7 @@ def remap_values(remapping: torch.Tensor, x: torch.Tensor) -> torch.Tensor:
     remapping: 2,N      Make sure the remapping is 1 to 1, and there are no loops (i.e. 1->2, 2->3, 3->1). Loops can be removed using graph based connected components algorithms (see instanseg postprocessing for an example)
     x: any shape
     """
+
     sorted_remapping = remapping[:, remapping[0].argsort()]
     index = torch.bucketize(x.ravel(), sorted_remapping[0])
     return sorted_remapping[1][index].reshape(x.shape)
@@ -29,10 +30,14 @@ def remap_values(remapping: torch.Tensor, x: torch.Tensor) -> torch.Tensor:
 def torch_fastremap(x: torch.Tensor) -> torch.Tensor:
     if x.max() == 0:
         return x
+    if x.min() > 0:
+        add_one = 1
+    else:
+        add_one = 0
     unique_values = torch.unique(x, sorted=True)
     new_values = torch.arange(len(unique_values), dtype=x.dtype, device=x.device)
     remapping = torch.stack((unique_values, new_values))
-    return remap_values(remapping, x)
+    return remap_values(remapping, x) + add_one
 
 
 
@@ -62,6 +67,11 @@ def fast_iou(onehot: torch.Tensor, threshold: float = 0.5) -> torch.Tensor:
 def fast_sparse_iou(sparse_onehot: torch.Tensor) -> torch.Tensor:
 
     intersection = torch.sparse.mm(sparse_onehot, sparse_onehot.T).to_dense()
+
+    if torch.isnan(intersection).any() or torch.isinf(intersection).any():
+        print("Warning: Intersection contains NaN or Inf values. This may indicate an issue with the input sparse tensor.")
+    
+
     sparse_sum = torch.sparse.sum(sparse_onehot, dim=(1,))[None].to_dense()
     union = sparse_sum.T + sparse_sum - intersection
     return intersection / union
@@ -78,6 +88,9 @@ def fast_sparse_intersection_over_minimum_area(sparse_onehot: torch.Tensor) -> t
     """
     # Compute intersection
     intersection = torch.sparse.mm(sparse_onehot, sparse_onehot.T).to_dense()
+
+    if torch.isnan(intersection).any() or torch.isinf(intersection).any():
+        print("Warning: Intersection contains NaN or Inf values. This may indicate an issue with the input sparse tensor.")
     
     # Compute the area (sum of ones for each row)
     sparse_sum = torch.sparse.sum(sparse_onehot, dim=(1,)).to_dense()

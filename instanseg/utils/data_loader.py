@@ -47,16 +47,23 @@ def _format_labels(item,target_segmentation):
                 labels = np.stack((item["nucleus_masks"], item["cell_masks"]))
             elif "nucleus_masks" in item.keys() and "cell_masks" not in item.keys():
                 labels = item['nucleus_masks']
-                labels = np.stack((labels, np.zeros_like(labels).astype(np.int32) - 1))
+                if isinstance(labels, np.ndarray):
+                    labels = labels.astype(np.int32)
+                else:
+                    labels = np.array(labels).astype(np.int32)
+                labels = np.stack((labels, np.zeros_like(labels) - 1))
             elif "nucleus_masks" not in item.keys() and "cell_masks" in item.keys():
                 labels = item['cell_masks']
-                labels = np.stack((np.zeros_like(labels).astype(np.int32) - 1, labels))
+                if isinstance(labels, np.ndarray):
+                    labels = labels.astype(np.int32)
+                else:
+                    labels = np.array(labels).astype(np.int32)
+                labels = np.stack((np.zeros_like(labels) - 1, labels))
             else:
                 raise NotImplementedError("No labels found")
     else:
         raise NotImplementedError("Target segmentation not recognized", target_segmentation)
-
-
+ 
     return labels
  
 
