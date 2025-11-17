@@ -10,7 +10,7 @@ authors = [
 ]
 description = "Package for instanseg-torch PyPi"
 readme = "README.md"
-requires-python = ">=3.10, <3.12"
+requires-python = ">=3.10, <3.13"
 classifiers = [
     "Programming Language :: Python :: 3",
     "License :: OSI Approved :: Apache Software License",
