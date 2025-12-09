@@ -94,7 +94,7 @@ from instanseg.utils.utils import show_images
 show_images(image_tensor,display, colorbar=False, titles = ["Normalized Image", "Image with segmentation"])
 ```
 
-### Setup Repository
+### Setup Repository (for training or development)
 
 For local development or to train your own models, follow these steps:
 
@@ -137,7 +137,7 @@ python -c "from instanseg import InstanSeg; print('InstanSeg installed successfu
 ```
 
 
-Verify CUDA is available:
+Verify CUDA is available (Optional, if your machine has a GPU):
 ```bash
 python -c "import torch; print('CUDA available:', torch.cuda.is_available())"
 ```
@@ -185,7 +185,7 @@ python inference.py --model_folder my_first_instanseg --image_path ../examples
 ```
 Replace "../examples" with the path to your images. If InstanSeg cannot read the image pixel size from the image metadata, the user is required to provide a --pixel_size parameter. InstanSeg provides (limited) support for whole slide images (WSIs). For more options and configurations, refer to the parser arguments in the inference.py file.
 
-### Model versioning
+### Model versioning (Ignore)
 
 Links to different model versions are stored in `instanseg/models/model-index.json`. When releasing new models, 
 you should add entries to this JSON file, optionally removing any previous versions that shouldn't be available in future versions.
