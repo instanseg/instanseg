@@ -32,6 +32,6 @@ jobs:
           python -c 'import instanseg'
           python -c 'from instanseg.utils.loss.lovasz_losses import binary_xloss'
           python -c 'from instanseg.utils.models.InstanSeg_UNet import DecoderBlock, EncoderBlock, conv_norm_act'
-      - name: pytest
+      - name: Run tests
         run: |
-          pytest
+          pytest tests/ -v
