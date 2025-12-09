@@ -4,7 +4,6 @@ from tqdm.auto import tqdm
 import torch
 from pathlib import Path
 import argparse
-import pdb
 
 parser = argparse.ArgumentParser()
 parser.add_argument("-i_p", "--image_path", type=str, default=r"../examples")
