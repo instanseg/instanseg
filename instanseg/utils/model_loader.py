@@ -161,6 +161,11 @@ def build_model_from_dict(build_model_dictionary, random_seed = None):
         model = SAM_UNet(in_channels=dim_in, out_channels=out_channels,
                          layers=np.array(build_model_dictionary["layers"])[::-1],
                          norm=build_model_dictionary["norm"], dropout=build_model_dictionary["dropprob"])
+    
+    elif build_model_dictionary["model_str"].lower() == "sam":
+        from instanseg.utils.models.sam import SAMFeatureExtractor
+        print("Generating SAMFeatureExtractor")
+        model = SAMFeatureExtractor(nout=build_model_dictionary["dim_out"])
             
     else:
         model = build_monai_model(build_model_dictionary["model_str"], build_model_dictionary)

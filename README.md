@@ -94,30 +94,53 @@ from instanseg.utils.utils import show_images
 show_images(image_tensor,display, colorbar=False, titles = ["Normalized Image", "Image with segmentation"])
 ```
 
-### GPU Version (CUDA) for Windows and Linux
-
-If you intend to use GPU acceleration and CUDA, follow these additional steps:
-
-4. Uninstall existing PyTorch and reinstall with CUDA support:
-    ```bash
-    micromamba remove pytorch torchvision monai
-    micromamba install pytorch==2.1.1 torchvision==0.16.1 monai=1.3.0 pytorch-cuda=12.1 -c conda-forge -c pytorch -c nvidia
-    pip install cupy-cuda12x
-    ```
-
-5. Check if CUDA is available:
-    ```bash
-    python -c "import torch; print('CUDA is available') if torch.cuda.is_available() else print('CUDA is not available')"
-    ```
-
-The repository may work with older versions of CUDA. For this replace "12.1" and "12" with the required version. 
-
 ### Setup Repository
 
-3. Build repository:
-    ```bash
-    pip install -e .
-    ```
+For local development or to train your own models, follow these steps:
+
+1. **Clone the repository**
+
+```bash
+git clone https://github.com/instanseg/instanseg.git
+cd instanseg
+```
+
+2. **Create a new environment** (recommended)
+
+```bash
+# Using mamba (faster) or conda
+mamba create -n instanseg-env python=3.11
+mamba activate instanseg-env
+```
+
+3. **Install in editable mode**
+
+For basic usage:
+```bash
+pip install -e .
+```
+
+For development with all training dependencies:
+```bash
+pip install -e ".[full]"
+```
+
+For development with test dependencies:
+```bash
+pip install -e ".[full,test]"
+```
+
+4. **Verify installation**
+
+```bash
+python -c "from instanseg import InstanSeg; print('InstanSeg installed successfully!')"
+```
+
+
+Verify CUDA is available:
+```bash
+python -c "import torch; print('CUDA available:', torch.cuda.is_available())"
+```
 
 ## Usage
 

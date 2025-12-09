@@ -45,7 +45,8 @@ def torch_onehot(x: torch.Tensor) -> torch.Tensor:
     # x is a labeled image of shape _,_,H,W returns a onehot encoding of shape 1,C,H,W
 
     if x.max() == 0:
-        return torch.zeros_like(x).reshape(1, 0, *x.shape[-2:])
+        # Create empty tensor with 0 channels directly (can't reshape non-empty to empty)
+        return torch.zeros((1, 0, *x.shape[-2:]), dtype=x.dtype, device=x.device)
     H, W = x.shape[-2:]
     x = x.view(-1, 1, H, W)
     x = x.squeeze().view(1, 1, H, W)
