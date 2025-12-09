@@ -1,14 +1,14 @@
 [
   {
     "name": "brightfield_nuclei",
-    "url": "https://github.com/instanseg/instanseg/releases/download/instanseg_models_v0.1.0/brightfield_nuclei.zip",
-    "version": "0.1.0",
+    "url": "https://github.com/instanseg/instanseg/releases/download/instanseg_models_v0.1.1/brightfield_nuclei.zip",
+    "version": "0.1.1",
     "license": "Apache-2.0"
   },
   {
     "name": "fluorescence_nuclei_and_cells",
-    "url": "https://github.com/instanseg/instanseg/releases/download/instanseg_models_v0.1.0/fluorescence_nuclei_and_cells.zip",
-    "version": "0.1.0",
+    "url": "https://github.com/instanseg/instanseg/releases/download/instanseg_models_v0.1.1/fluorescence_nuclei_and_cells.zip",
+    "version": "0.1.1",
     "license": "Apache-2.0"
   }
 ]
