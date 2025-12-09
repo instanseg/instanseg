@@ -61,8 +61,7 @@ def read_model_args_from_csv(path=r"../results/", folder=""):
     for key in ["dim_in", "n_sigma", "dim_out", "dim_coords"]:
         build_model_dictionary[key] = eval(str(build_model_dictionary[key])) if str(
             build_model_dictionary[key]) != "nan" else None
-    if "to_centre" in build_model_dictionary.keys():
-        build_model_dictionary["to_centre"] = eval(build_model_dictionary["to_centre"])
+
     if "dropprob" in build_model_dictionary.keys():
         build_model_dictionary["dropprob"] = float(build_model_dictionary["dropprob"])
     if "layers" in build_model_dictionary.keys():
