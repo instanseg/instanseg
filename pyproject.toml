@@ -10,53 +10,55 @@ authors = [
 ]
 description = "Package for instanseg-torch PyPi"
 readme = "README.md"
-requires-python = ">=3.10, <3.13"
+requires-python = ">=3.9"
 classifiers = [
     "Programming Language :: Python :: 3",
     "License :: OSI Approved :: Apache Software License",
     "Operating System :: OS Independent",
 ]
 
+# Core dependencies - minimal set for inference
 dependencies = [
-    "bioio>=1.5.0",
-    "bioio-ome-tiff>=1.1.0",
-    "colorcet>=3.0.1",
-    "einops>=0.7.0",
+    "einops>=0.6.0",
     "fastremap>=1.14.0",
-    "geojson>=3.1.0",
-    "matplotlib>=3.8.2",
-    "numpy",
-    "palettable>=3.3.3",
-    "rasterio>=1.3.9",
-    "scikit-image>=0.22.0",
-    "slideio>=2.6.2",
-    "tifffile>=2023.12.9",
-    "tiffslide>=2.5.1",
-    "torch>=2.1.1",
-    "tqdm>=4.66.1"
+    "matplotlib>=3.7.0",
+    "numpy>=1.24.0",
+    "scikit-image>=0.21.0",
+    "tifffile>=2023.9.0",
+    "tiffslide>=2.4.0",
+    "torch>=2.0.0",
+    "tqdm>=4.65.0",
 ]
 
 [project.scripts]
 inference = "instanseg.scripts.inference:main"
 
 [project.optional-dependencies]
+# Additional I/O backends and GeoJSON export
+io = [
+    "bioio>=1.0.0",
+    "bioio-ome-tiff>=1.0.0",
+    "geojson>=3.0.0",
+    "rasterio>=1.3.0",
+    "slideio>=2.6.0",
+]
 doc = [
     "sphinx~=7.4.5",
-    "sphinx-rtd-theme~=2.0.0"
+    "sphinx-rtd-theme~=2.0.0",
 ]
 test = [
     "pytest~=8.2.2",
     "coverage~=7.6.5",
-    "genbadge~=1.1.1"
+    "genbadge~=1.1.1",
 ]
+# Full installation for training and all features
 full = [
+    "instanseg-torch[io]",
     "bioimageio.core~=0.9.0",
     "bioimageio.spec~=0.5.5.4",
     "colorcet>=3.0.1",
     "cucim>=23.10.00; platform_system=='Linux'",
     "edt",
-    "einops>=0.7.0",
-    "fastremap>=1.14.0",
     "hyperopt>=0.2.7",
     "imagecodecs>=2024.1.1",
     "ipykernel>=6.28.0",
@@ -64,24 +66,17 @@ full = [
     "jupyterlab>=4.0.10",
     "kornia>=0.7.0",
     "line_profiler>=4.1.3",
-    "matplotlib>=3.8.2",
     "monai>=1.3.0",
-    "numba>=0.58.1",
     "onnx>=1.15.0",
     "opencv-python>=4.9.0",
-    "pip>=23.3.2",
-    "rasterio>=1.3.9",
-    "scikit-image>=0.22.0",
+    "palettable>=3.3.3",
     "scikit-learn>=1.3.2",
     "scipy>=1.11.4",
     "seaborn>=0.13.1",
-    "stardist>=0.8.5",
     "tensorboard>=2.17.0",
-    "tifffile>=2023.12.9",
     "tkinterdnd2>=0.4.2",
     "torchstain>=1.3.0",
-    "torchvision>=0.16.1",
-    "tqdm>=4.66.1"
+    "torchvision>=0.15.0",
 ]
 
 [tool.hatch.build]

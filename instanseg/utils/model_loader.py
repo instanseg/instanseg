@@ -61,8 +61,7 @@ def read_model_args_from_csv(path=r"../results/", folder=""):
     for key in ["dim_in", "n_sigma", "dim_out", "dim_coords"]:
         build_model_dictionary[key] = eval(str(build_model_dictionary[key])) if str(
             build_model_dictionary[key]) != "nan" else None
-    if "to_centre" in build_model_dictionary.keys():
-        build_model_dictionary["to_centre"] = eval(build_model_dictionary["to_centre"])
+
     if "dropprob" in build_model_dictionary.keys():
         build_model_dictionary["dropprob"] = float(build_model_dictionary["dropprob"])
     if "layers" in build_model_dictionary.keys():
@@ -161,6 +160,11 @@ def build_model_from_dict(build_model_dictionary, random_seed = None):
         model = SAM_UNet(in_channels=dim_in, out_channels=out_channels,
                          layers=np.array(build_model_dictionary["layers"])[::-1],
                          norm=build_model_dictionary["norm"], dropout=build_model_dictionary["dropprob"])
+    
+    elif build_model_dictionary["model_str"].lower() == "sam":
+        from instanseg.utils.models.sam import SAMFeatureExtractor
+        print("Generating SAMFeatureExtractor")
+        model = SAMFeatureExtractor(nout=build_model_dictionary["dim_out"])
             
     else:
         model = build_monai_model(build_model_dictionary["model_str"], build_model_dictionary)

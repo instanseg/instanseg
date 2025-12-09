@@ -94,30 +94,53 @@ from instanseg.utils.utils import show_images
 show_images(image_tensor,display, colorbar=False, titles = ["Normalized Image", "Image with segmentation"])
 ```
 
-### GPU Version (CUDA) for Windows and Linux
+### Setup Repository (for training or development)
 
-If you intend to use GPU acceleration and CUDA, follow these additional steps:
+For local development or to train your own models, follow these steps:
 
-4. Uninstall existing PyTorch and reinstall with CUDA support:
-    ```bash
-    micromamba remove pytorch torchvision monai
-    micromamba install pytorch==2.1.1 torchvision==0.16.1 monai=1.3.0 pytorch-cuda=12.1 -c conda-forge -c pytorch -c nvidia
-    pip install cupy-cuda12x
-    ```
+1. **Clone the repository**
 
-5. Check if CUDA is available:
-    ```bash
-    python -c "import torch; print('CUDA is available') if torch.cuda.is_available() else print('CUDA is not available')"
-    ```
+```bash
+git clone https://github.com/instanseg/instanseg.git
+cd instanseg
+```
 
-The repository may work with older versions of CUDA. For this replace "12.1" and "12" with the required version. 
+2. **Create a new environment** (recommended)
 
-### Setup Repository
+```bash
+# Using mamba (faster) or conda
+mamba create -n instanseg-env python=3.11
+mamba activate instanseg-env
+```
 
-3. Build repository:
-    ```bash
-    pip install -e .
-    ```
+3. **Install in editable mode**
+
+For basic usage:
+```bash
+pip install -e .
+```
+
+For development with all training dependencies:
+```bash
+pip install -e ".[full]"
+```
+
+For development with test dependencies:
+```bash
+pip install -e ".[full,test]"
+```
+
+4. **Verify installation**
+
+```bash
+python -c "from instanseg import InstanSeg; print('InstanSeg installed successfully!')"
+```
+
+
+Verify CUDA is available (Optional, if your machine has a GPU):
+```bash
+python -c "import torch; print('CUDA available:', torch.cuda.is_available())"
+```
 
 ## Usage
 
@@ -162,7 +185,7 @@ python inference.py --model_folder my_first_instanseg --image_path ../examples
 ```
 Replace "../examples" with the path to your images. If InstanSeg cannot read the image pixel size from the image metadata, the user is required to provide a --pixel_size parameter. InstanSeg provides (limited) support for whole slide images (WSIs). For more options and configurations, refer to the parser arguments in the inference.py file.
 
-### Model versioning
+### Model versioning (Ignore)
 
 Links to different model versions are stored in `instanseg/models/model-index.json`. When releasing new models, 
 you should add entries to this JSON file, optionally removing any previous versions that shouldn't be available in future versions.
