@@ -27,7 +27,10 @@ def _edge_mask(labels, ignore=[None]):
 
 
 def _remove_edge_labels(labels, ignore=[None]):
-    return labels * ~_edge_mask(labels, ignore=ignore)
+
+    remove_mask = ~_edge_mask(labels, ignore=ignore)
+
+    return (labels * remove_mask)
 
 
 
@@ -162,6 +165,32 @@ def _stitch(tiles: list, shape: tuple, chop_list: list, final_shape: tuple, offs
     return canvas
 
 
+def _stitch_mean(tiles: list, shape: tuple, chop_list: list, final_shape: tuple):
+    from instanseg.utils.pytorch_utils import _to_ndim
+
+    canvas = torch.zeros(final_shape, dtype=torch.float32, device = tiles[0].device)
+    canvas_weights = torch.zeros(final_shape, dtype=torch.float32, device = tiles[0].device)
+
+    H, W = shape
+    y = torch.linspace(-1, 1, steps=H, device=tiles[0].device)
+    x = torch.linspace(-1, 1, steps=W, device=tiles[0].device)
+    yy, xx = torch.meshgrid(y, x, indexing='ij')
+    sigma = 0.5  
+    gaussian_mask = torch.exp(-(xx**2 + yy**2) / (2 * sigma**2))
+    gaussian_mask = _to_ndim(gaussian_mask,canvas.ndim)
+
+    for i, window_i in enumerate(chop_list[0]):
+        for j, window_j in enumerate(chop_list[1]):
+            tile = tiles[i * len(chop_list[1]) + j]
+
+            weighted_tile = tile * gaussian_mask 
+            canvas[..., window_i:window_i+H, window_j:window_j+W] += weighted_tile
+            canvas_weights[..., window_i:window_i+H, window_j:window_j+W] += gaussian_mask
+
+    canvas_mean = canvas / (canvas_weights + 1e-8)  # avoid divide by zero
+
+    return canvas_mean
+
 def _zarr_to_json_export(path_to_zarr, detection_size = 30, size = 1024, scale = 1, n_dim = 1):
 
     import zarr
@@ -275,8 +304,8 @@ def _instanseg_padding(img: torch.Tensor, extra_pad: int = 0, min_dim: int = 16,
 
     if ensure_square and not is_square:
         pady = pady + bigger_dim - original_shape[-1]
-        padx = padx + bigger_dim - img.shape[-2]
-        print(padx, pady)
+        padx = padx + bigger_dim - original_shape[-2]
+       # print(padx, pady)
     
 
     return img, torch.stack((padx, pady))
@@ -304,7 +333,7 @@ def _recover_padding(x: torch.Tensor, pad: torch.Tensor):
 def _sliding_window_inference(input_tensor, 
                              predictor, 
                              window_size=(512, 512), 
-                             overlap = 80, 
+                             overlap = 80,
                              max_cell_size = 20, 
                              sw_device='cuda',
                              device='cpu', 
@@ -313,6 +342,11 @@ def _sliding_window_inference(input_tensor,
                              batch_size = 1,
                              instanseg_kwargs = None):
     
+
+    if 2 * (overlap + max_cell_size) >= min(input_tensor.shape[-2:]):
+        overlap = 0
+        max_cell_size = 0
+
     h,w = input_tensor.shape[-2:]
     window_size = (min(window_size[0], h), min(window_size[1], w))
     
@@ -324,16 +358,12 @@ def _sliding_window_inference(input_tensor,
 
  
     assert len(tile_list) > 0, "No tiles generated"
-    # print("Number of tiles: ", len(tile_list))
-  #  print("Shape of tiles: ", tile_list[0].shape)
-    # print("window size: ", window_size)
-    # print("input tensor shape: ", input_tensor.shape)
- 
+
     with torch.no_grad():
         with torch.amp.autocast("cuda"):
             batch_list = [torch.stack(tile_list[batch_size * i:batch_size * (i+1)]) for i in range(int(np.ceil(len(tile_list)/batch_size)))]
             label_list = torch.cat([predictor(tile.to(sw_device),**instanseg_kwargs).to(device) for tile in tqdm(batch_list, disable= not show_progress,leave = False, colour = "blue")])
- 
+
    
     lab = torch.cat([_stitch([lab[i] for lab in label_list],
                             shape=window_size,
