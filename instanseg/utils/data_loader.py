@@ -229,7 +229,7 @@ def _read_images_from_pth(data_path= "../datasets", dataset = "segmentation", da
     for _set in sets:
         print("Datasets available in ", _set)
         unique_values, counts = np.unique([item['parent_dataset'] for item in complete_dataset[_set]], return_counts=True)
-        print(set(zip(unique_values, counts)))
+        print(set((k.item(), v.item()) for k, v in zip(unique_values, counts)))
 
         data_dicts[_set] = []
         images_local = [get_image(item['image']) for item in complete_dataset[_set] if _keep_images(item, args)][:data_slice]
@@ -241,7 +241,7 @@ def _read_images_from_pth(data_path= "../datasets", dataset = "segmentation", da
 
         print("After filtering using:")
         unique_values, counts = np.unique([item['parent_dataset'] for item in data_dicts[_set][2]], return_counts=True)
-        print(set(zip(unique_values, counts)))
+        print(set((k.item(), v.item()) for k, v in zip(unique_values, counts)))
 
     if dummy:
         warnings.warn("Using same train and validation sets !")
