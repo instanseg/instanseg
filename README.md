@@ -3,7 +3,27 @@
   <img src="https://github.com/ThibautGoldsborough/instanseg_thibaut/blob/main/assets/instanseg_logo.png?raw=True" alt="Instanseg Logo" width="25%">
 </p>
 
-
+<p align="center">
+  <a href="https://pypi.org/project/instanseg-torch/">
+    <img src="https://img.shields.io/pypi/v/instanseg-torch?color=blue&label=PyPI" alt="PyPI version">
+  </a>
+  <a href="https://pypi.org/project/instanseg-torch/">
+    <img src="https://img.shields.io/pypi/dm/instanseg-torch?color=green&label=Downloads" alt="PyPI downloads">
+  </a>
+  <a href="https://github.com/instanseg/instanseg">
+    <img src="https://img.shields.io/github/stars/instanseg/instanseg?style=social" alt="GitHub stars">
+  </a>
+  <br>
+  <a href="https://github.com/instanseg/instanseg/actions/workflows/build.yml">
+    <img src="https://github.com/instanseg/instanseg/actions/workflows/build.yml/badge.svg" alt="Tests">
+  </a>
+  <a href="https://github.com/instanseg/instanseg/blob/main/LICENSE">
+    <img src="https://img.shields.io/github/license/instanseg/instanseg?color=orange" alt="License">
+  </a>
+  <a href="https://pypi.org/project/instanseg-torch/">
+    <img src="https://img.shields.io/pypi/pyversions/instanseg-torch" alt="Python versions">
+  </a>
+</p>
 
 ## Overview
 

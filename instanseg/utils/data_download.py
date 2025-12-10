@@ -4,12 +4,10 @@ from instanseg.utils.utils import _move_channel_axis
 import fastremap
 from tqdm import tqdm
 from skimage import io
-from pathlib import Path
 from scipy import ndimage
 import skimage
 import numpy as np
 import os
-
 import requests
 import zipfile
 
@@ -1289,42 +1287,40 @@ def load_CellBinDB(Segmentation_Dataset: dict, verbose: bool = True) -> dict:
 
 
 
-import json
-import numpy as np
-from shapely.geometry import shape, Polygon
-from rasterio.features import rasterize
-from skimage.io import imsave
-from pathlib import Path
-
-def geojson_to_label_image(geojson_data: dict, image_shape: tuple):
-    # Prepare an empty label image
-    label_image = np.zeros(image_shape, dtype=np.uint16)
-    
-    # Initialize label counter
-    label_id = 1
-    
-    # Iterate over each feature in the GeoJSON data
-    for feature in geojson_data['features']:
-        # Parse the geometry to get a polygon
-        polygon_geom = shape(feature['geometry'])
-        
-        # Rasterize the polygon onto the label image
-        mask = rasterize(
-            [(polygon_geom, label_id)],
-            out_shape=image_shape,
-            fill=0,
-            default_value=label_id,
-            dtype=np.uint16
-        )
-        
-        # Add the mask to the label image
-        label_image[mask > 0] = mask[mask > 0]
-        label_id += 1  # Increment label ID for the next polygon
-
-    return label_image
-    
 
 def load_HPA_Segmentation(Segmentation_Dataset: dict, verbose: bool = True) -> dict:
+
+    def geojson_to_label_image(geojson_data: dict, image_shape: tuple):
+
+        from shapely.geometry import shape
+        from rasterio.features import rasterize
+
+        # Prepare an empty label image
+        label_image = np.zeros(image_shape, dtype=np.uint16)
+        
+        # Initialize label counter
+        label_id = 1
+        
+        # Iterate over each feature in the GeoJSON data
+        for feature in geojson_data['features']:
+            # Parse the geometry to get a polygon
+            polygon_geom = shape(feature['geometry'])
+            
+            # Rasterize the polygon onto the label image
+            mask = rasterize(
+                [(polygon_geom, label_id)],
+                out_shape=image_shape,
+                fill=0,
+                default_value=label_id,
+                dtype=np.uint16
+            )
+            
+            # Add the mask to the label image
+            label_image[mask > 0] = mask[mask > 0]
+            label_id += 1  # Increment label ID for the next polygon
+
+        return label_image
+    
 
     import json
     hpa_dir = create_raw_datasets_dir("Cell_Segmentation", "HPA")

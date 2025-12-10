@@ -20,7 +20,7 @@ parser.add_argument('-source', '--source_dataset', default="all", type=str, help
 parser.add_argument("-m_f", "--model_folder", type=str, default=None, help = "Name of the model to resume training. This must be a folder inside model_path")
 parser.add_argument("-m_p", "--model_path", type=str, default=r"../models", help = "Path to the folder containing the models")
 parser.add_argument("-o_p", "--output_path", type=str, default=r"../models", help = "Path to the folder where the results will be saved")
-parser.add_argument("-e_s", "--experiment_str", type=str, default="my_first_instanSeg", help = "String to identify the experiment")
+parser.add_argument("-e_s", "--experiment_str", type=str, default="my_first_instanseg", help = "String to identify the experiment")
 parser.add_argument("-d", "--device", type=str, default=torch.device("cuda:0" if torch.cuda.is_available() else "cpu"))
 parser.add_argument('-num_workers', '--num_workers', default=3, type=int, help = "Number of CPU cores to use for data loading")
 parser.add_argument('-ci', '--channel_invariant', default=False, type=lambda x: (str(x).lower() == 'true'), help = "Whether to add a channel invariant model to the pipeline")
@@ -144,7 +144,8 @@ def main(model, loss_fn, train_loader, test_loader, num_epochs=1000, epoch_name=
             }, args.output_path / "model_weights.pth") 
 
 
-        print(str(dict_to_print).replace("{", "").replace("}", "").replace("'", ""))
+        # this is where the loss gets printed
+        print(", ".join(f"{k}: {v:.5g}" for k, v in dict_to_print.items()))
 
     return model, train_losses, test_losses, f1_list, f1_list_cells
 
@@ -332,7 +333,7 @@ def instanseg_training(segmentation_dataset: Dict = None, **kwargs):
         args.source_dataset = [i.lower() for i in args.source_dataset.replace("[","").replace("]","").replace("'","").split(",")]
         print(type(args.source_dataset), args.source_dataset)
     else:
-        args.source_dataset = args.source_dataset
+        args.source_dataset = args.source_dataset.lower()
 
 
     train_images, train_labels, train_meta, val_images, val_labels, val_meta = _read_images_from_pth(data_path = args.data_path, 
