@@ -1,5 +1,4 @@
 import os
-import pandas as pd
 from tqdm.auto import tqdm
 import torch
 from pathlib import Path
@@ -105,8 +104,6 @@ def main():
     for file in tqdm(files):
 
         print("Processing: ", file)
-
-        #breakpoint()
 
         _ = instanseg.eval(image=file,
                         pixel_size = parser.pixel_size,
