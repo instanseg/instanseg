@@ -4,7 +4,6 @@ import torch
 from torch import nn
 from torch.nn.functional import interpolate
 from pathlib import Path, PosixPath
-from tiffslide import TiffSlide
 import zarr
 import os
 from instanseg.utils.pytorch_utils import _to_tensor_float32
@@ -61,7 +60,12 @@ class InstanSeg():
         """
         if self.prefered_image_reader == "tiffslide":
 
-            from tiffslide import TiffSlide
+            try:
+                from tiffslide import TiffSlide
+            except Exception as e:
+                print(e)
+                raise ImportError("tiffslide is not installed. Please use an installed image reader or run `pip install tiffslide>=2.4.0`")
+
             slide = TiffSlide(image_str)
             img_pixel_size = slide.properties['tiffslide.mpp-x']
             width,height = slide.dimensions[0], slide.dimensions[1]
@@ -75,25 +79,40 @@ class InstanSeg():
                 return image_str, img_pixel_size
             
         elif self.prefered_image_reader == "skimage.io":
-            from skimage.io import imread
+            try:
+                from skimage.io import imread
+            except Exception as e:
+                print(e)
+                raise ImportError("skimage.io is not installed. Please use an installed image reader or run `scikit-image>=0.21.0`")
+
             assert processing_method != "wsi", "skimage.io does not support whole slide images."
             image_array = imread(image_str)
             img_pixel_size = None
 
         elif self.prefered_image_reader == "bioio":
-            from bioio import BioImage
+            try:
+                from bioio import BioImage
+            except Exception as e:
+                print(e)
+                raise ImportError("bioio is not installed. Please use an installed image reader or run `pip install bioio>=1.0.0`")
+
             slide = BioImage(image_str)
             img_pixel_size = slide.physical_pixel_sizes.X
             num_pixels = np.cumprod(slide.shape)[-1]
-            eval_function_str = self._get_eval_function_to_use(num_pixels, processing_method)
-            if eval_function_str in ["small","medium"]:
-                image_array = slide.get_image_data().squeeze()
-            else:
-                return image_str, img_pixel_size
             
         elif self.prefered_image_reader == "bioformats":
-            from bioio import BioImage
-            import bioio_bioformats
+            try:
+                from bioio import BioImage
+                import bioio_bioformats
+            except Exception as e:
+                print(e)
+                raise ImportError("bioio and bioio_bioformats are not installed. \
+                     Please use an installed image reader or run: \
+                    `pip install bioio>=1.0.0` \
+                    and `pip install bioio-bioformats>=0.9.0` \
+                    and  pip install bioio-ome-tiff>=1.0.0")
+                
+
             slide = BioImage(image_str, reader=bioio_bioformats.Reader)
             channel_names = slide.channel_names
             img_pixel_size = slide.physical_pixel_sizes.X
@@ -134,8 +153,9 @@ class InstanSeg():
         except Exception as e:
             print(e)
             pass
-        from bioio import BioImage
+        
         try:
+            from bioio import BioImage
             slide = BioImage(image_str)
             img_pixel_size = slide.physical_pixel_sizes.X
             if img_pixel_size is not None and img_pixel_size > 0 and img_pixel_size < 2:
@@ -143,8 +163,9 @@ class InstanSeg():
         except Exception as e:
             print(e)
             pass
-        import slideio
+
         try:
+            import slideio
             slide = slideio.open_slide(image_str, driver = "AUTO")
             scene  = slide.get_scene(0)
             img_pixel_size = scene.resolution[0] * 10**6
@@ -563,6 +584,7 @@ class InstanSeg():
 
             memory_block_size = tile_size,tile_size
 
+            import zarr
             from itertools import product
             from instanseg.utils.pytorch_utils import torch_fastremap, match_labels
             from pathlib import Path

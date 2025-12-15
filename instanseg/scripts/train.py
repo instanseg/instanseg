@@ -62,6 +62,7 @@ parser.add_argument('-mlp_w', '--mlp_width', default=5, type=int, help = "Width 
 parser.add_argument('-augmentation_type', '--augmentation_type', default="minimal", type=str, help = "'minimal' or 'heavy' or 'brightfield_only'")
 parser.add_argument('-adaptor_net', '--adaptor_net_str', default="1", type=str, help = "Adaptor net to use")
 parser.add_argument('-freeze', '--freeze_main_model', default=False, type=lambda x: (str(x).lower() == 'true'), help = "Whether to freeze the main model")
+parser.add_argument('-freeze_sam', '--freeze_sam', default=False, type=lambda x: (str(x).lower() == 'true'), help = "Whether to freeze the SAM weights")
 parser.add_argument('-f_e', '--feature_engineering', default="0", type=str, help = "Feature engineering function to use")
 parser.add_argument("-f","--f", default = None, type = str, help = "ignore, this is for jypyter notebook compatibility")
 parser.add_argument('-rng_seed', '--rng_seed', default=None, type=int, help = "Optional seed for the random number generator")

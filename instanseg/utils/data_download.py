@@ -466,6 +466,135 @@ def load_CoNSeP(Segmentation_Dataset: dict, verbose: bool = True) -> dict:
 
     return Segmentation_Dataset
 
+def load_DSB_2018(Segmentation_Dataset: dict, verbose: bool = True) -> dict:
+    """
+    Load the 2018 Data Science Bowl (DSB) nuclei segmentation dataset (BBBC038).
+    Downloads from Broad Bioimage Benchmark Collection.
+    https://bbbc.broadinstitute.org/BBBC038
+    
+    License: CC0
+    """
+    dsb_dir = create_raw_datasets_dir("Nucleus_Segmentation", "DSB_2018_BBBC038")
+    
+    # Download URLs from Broad Institute
+    base_url = "https://data.broadinstitute.org/bbbc/BBBC038/"
+    files_to_download = [
+        ("stage1_train.zip", "stage1_train"),
+        ("stage1_test.zip", "stage1_test"),
+    ]
+    
+    for zip_name, extract_name in files_to_download:
+        zip_file_path = dsb_dir / zip_name
+        extract_path = dsb_dir / extract_name
+        
+        if not extract_path.exists():
+            if not zip_file_path.exists():
+                download_url = base_url + zip_name
+                if verbose:
+                    print(f"Downloading {zip_name} from {download_url}...")
+                response = requests.get(download_url, stream=True)
+                response.raise_for_status()
+                with open(zip_file_path, 'wb') as f:
+                    for chunk in response.iter_content(chunk_size=8192):
+                        f.write(chunk)
+                if verbose:
+                    print(f"Download completed.")
+            
+            # Unzip the dataset
+            if verbose:
+                print(f"Unzipping {zip_name}...")
+            with zipfile.ZipFile(zip_file_path, 'r') as zip_ref:
+                zip_ref.extractall(dsb_dir)
+            if verbose:
+                print("Unzipping completed.")
+    
+    def is_grayscale(img):
+        """Check if image is grayscale (2D, single channel, or RGB with equal channels)."""
+        if img.ndim == 2:
+            return True
+        if img.ndim == 3 and img.shape[-1] == 1:
+            return True
+        if img.ndim == 3 and img.shape[-1] >= 3:
+            # Check if all RGB channels are equal (grayscale stored as RGB)
+            return np.allclose(img[:, :, 0], img[:, :, 1]) and np.allclose(img[:, :, 1], img[:, :, 2])
+        return False
+    
+    def combine_masks(masks_folder):
+        """Combine individual mask PNGs into a single labeled mask."""
+        mask_files = sorted([f for f in masks_folder.iterdir() if ".DS_Store" not in str(f)])
+        if not mask_files:
+            return None
+        
+        # Read first mask to get shape
+        first_mask = io.imread(str(mask_files[0]))
+        combined = np.zeros(first_mask.shape[:2], dtype=np.int32)
+        
+        for i, mask_file in enumerate(mask_files, start=1):
+            mask = io.imread(str(mask_file))
+            if mask.ndim == 3:
+                mask = mask[:, :, 0]
+            combined[mask > 0] = i
+        
+        return combined
+
+    # Process all sample folders (zip extracts directly into dsb_dir)
+    # Folders with masks are from training set, without masks are from test set
+    all_folders = sorted([f for f in dsb_dir.iterdir() if f.is_dir() and len(f.name) > 20])
+    
+    # Filter to only folders with masks (training data)
+    sample_folders = [f for f in all_folders if (f / "masks").exists()]
+    
+    items = []
+    for folder in tqdm(sample_folders, desc="Processing train"):
+        images_folder = folder / "images"
+        masks_folder = folder / "masks"
+        
+        if not images_folder.exists():
+            continue
+        
+        # Get image file
+        image_files = list(images_folder.iterdir())
+        if not image_files:
+            continue
+        
+        image = io.imread(str(image_files[0]))
+        
+        # Remove alpha channel if present
+        if image.ndim == 3 and image.shape[-1] == 4:
+            image = image[:, :, :3]
+        
+        # Determine modality based on grayscale vs color
+        modality = "Fluorescence" if is_grayscale(image) else "Brightfield"
+        
+        # Combine individual masks
+        combined_mask = combine_masks(masks_folder)
+        if combined_mask is None:
+            continue
+        
+        combined_mask, _ = fastremap.renumber(combined_mask, in_place=True)
+        
+        item = {}
+        item['nucleus_masks'] = fastremap.refit(combined_mask)
+        item['image'] = image
+        item["parent_dataset"] = "DSB_2018"
+        item['licence'] = "CC0"
+        item['pixel_size'] = None  # Variable pixel sizes in DSB
+        item['image_modality'] = modality
+        item['file_name'] = folder.name
+        items.append(item)
+
+    np.random.seed(42)
+    np.random.shuffle(items)
+    Segmentation_Dataset['Train'] += items[:int(len(items) * 0.8)]
+    Segmentation_Dataset['Validation'] += items[int(len(items) * 0.8):]
+
+    # Process Test Data (stage1_test - no masks available for public)
+    # Note: stage1_test doesn't have public ground truth masks
+    # We skip it or could use stage2_test_final if needed
+    
+    return Segmentation_Dataset
+
+
 def load_MoNuSeg(Segmentation_Dataset: dict, verbose: bool = True) -> dict:
     monuseg_dir = create_raw_datasets_dir("Nucleus_Segmentation", "MoNuSeg")
     zip_file_path = monuseg_dir / "MoNuSeg.zip"
