@@ -23,14 +23,14 @@ class InstanSeg():
     def __init__(self, 
                  model_type: Union[str,nn.Module] = "brightfield_nuclei", 
                  device: Optional[str] = None, 
-                 image_reader: str = "tiffslide",
+                 image_reader: str = "auto",
                  verbosity: int = 1 #0,1,2
                  ):
         
         """
         :param model_type: The type of model to use. If a string is provided, the model will be downloaded. If the model is not public, it will look for a model in your bioimageio folder. If an nn.Module is provided, this model will be used.
         :param device: The device to run the model on. If None, the device will be chosen automatically.
-        :param image_reader: The image reader to use. Options are "tiffslide", "skimage.io", "bioio", "AICSImageIO".
+        :param image_reader: The image reader to use. Options are "auto", "tiffslide", "skimage.io", "bioio", "AICSImageIO". If "auto", will use the first available reader.
         :param verbosity: The verbosity level. 0 is silent, 1 is normal, 2 is verbose.
         """
         from instanseg.utils.utils import download_model, _choose_device
@@ -45,10 +45,40 @@ class InstanSeg():
         self.inference_device = _choose_device(device, verbose= self.verbose)
         self.instanseg = self.instanseg.to(self.inference_device)
 
-        self.prefered_image_reader = image_reader
+        self.prefered_image_reader = self._resolve_image_reader(image_reader)
         self.small_image_threshold = 3 * 1500 * 1500 #max number of image pixels to be processed on GPU.
         self.medium_image_threshold = 10000 * 10000 #max number of image pixels that could be loaded in RAM.
         self.prediction_tag = "_instanseg_prediction"
+
+    def _resolve_image_reader(self, image_reader: str) -> str:
+        """Resolve 'auto' to an available image reader, or validate the specified one."""
+        if image_reader != "auto":
+            return image_reader
+        
+        # Try readers in order of preference
+        readers = ["tiffslide", "bioio", "skimage.io"]
+        for reader in readers:
+            if reader == "tiffslide":
+                try:
+                    from tiffslide import TiffSlide
+                    return "tiffslide"
+                except ImportError:
+                    continue
+            elif reader == "bioio":
+                try:
+                    import bioio
+                    return "bioio"
+                except ImportError:
+                    continue
+            elif reader == "skimage.io":
+                try:
+                    import skimage.io
+                    return "skimage.io"
+                except ImportError:
+                    continue
+        
+        # Fallback - skimage should always be available as it's a core dependency
+        return "skimage.io"
 
     def read_image(self, image_str: str, processing_method = "auto") -> Union[Tuple[str, float], Tuple[np.ndarray, float]]:
         """
@@ -98,7 +128,13 @@ class InstanSeg():
             slide = BioImage(image_str)
             img_pixel_size = slide.physical_pixel_sizes.X
             num_pixels = np.cumprod(slide.shape)[-1]
-            
+
+            eval_function_str = self._get_eval_function_to_use(num_pixels, processing_method)
+            if eval_function_str in ["small","medium"]:
+                image_array = slide.data.squeeze()
+            else:
+                return image_str, img_pixel_size
+
         elif self.prefered_image_reader == "bioformats":
             try:
                 from bioio import BioImage

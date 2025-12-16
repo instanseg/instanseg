@@ -23,6 +23,7 @@ __pycache__/
 *.py[cod]
 *$py.class
 *.log
+*.tox
 .ipynb_checkpoints
 **/__pycache__/
 **/.vs/
