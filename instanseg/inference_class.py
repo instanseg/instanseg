@@ -4,10 +4,9 @@ import torch
 from torch import nn
 from torch.nn.functional import interpolate
 from pathlib import Path, PosixPath
-import zarr
-import os
 from instanseg.utils.pytorch_utils import _to_tensor_float32
 pixel_size_precision = 0.01
+
 def _to_ndim(x, *args, **kwargs):
     from instanseg.utils.pytorch_utils import _to_ndim as _to_ndim_pytorch
     from instanseg.utils.pytorch_utils import _to_ndim_numpy
