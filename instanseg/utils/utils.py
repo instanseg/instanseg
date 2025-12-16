@@ -8,13 +8,10 @@ model loading, and device management.
 
 import json
 import os
-import warnings
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Optional, Union
-
 import fastremap
 import numpy as np
-import tifffile
 import torch
 
 if TYPE_CHECKING:
@@ -308,6 +305,7 @@ def export_to_torchscript(model_str: str, show_example: bool = False, output_dir
     device = 'cpu'
     from instanseg.utils.model_loader import load_model
     import math
+    import tifffile
 
     set_export_paths()
     output_dir = os.environ.get('INSTANSEG_TORCHSCRIPT_PATH')

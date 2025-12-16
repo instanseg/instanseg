@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "instanseg-torch"
-version = "0.0.9"
+version = "0.1.1"
 authors = [
   { name="Thibaut Goldsborough", email="thibaut.golds@gmail.com" },
 ]
@@ -19,15 +19,14 @@ classifiers = [
 
 # Core dependencies - minimal set for inference
 dependencies = [
+    "torch>=2.0.0",
     "einops>=0.6.0",
     "fastremap>=1.14.0",
     "matplotlib>=3.7.0",
     "numpy>=1.24.0",
-    "scikit-image>=0.21.0",
-    "tifffile>=2023.9.0",
-    "tiffslide>=2.4.0",
-    "torch>=2.0.0",
     "tqdm>=4.65.0",
+    "scikit-image>=0.21.0",
+    "requests>=2.0.0",
 ]
 
 [project.scripts]
@@ -41,15 +40,20 @@ io = [
     "geojson>=3.0.0",
     "rasterio>=1.3.0",
     "slideio>=2.6.0",
+    "tifffile>=2023.9.0",
+    "tiffslide>=2.4.0",
+    "zarr>=2.0.0,<3",  # tiffslide doesn't support zarr v3 yet
 ]
 doc = [
     "sphinx~=7.4.5",
     "sphinx-rtd-theme~=2.0.0",
 ]
 test = [
+    "instanseg-torch[io]",
     "pytest~=8.2.2",
     "coverage~=7.6.5",
     "genbadge~=1.1.1",
+    "bioio-tifffile>=1.0.0",
 ]
 # Full installation for training and all features
 full = [
@@ -86,3 +90,10 @@ exclude = ["scratch_notebooks/**","notebooks/**", "instanseg/examples/*", "asset
 [project.urls]
 Homepage = "https://github.com/instanseg/instanseg"
 Issues = "https://github.com/instanseg/instanseg/issues"
+
+[tool.tox]
+env_list = ["py3"]
+
+[tool.tox.env_run_base]
+extras = ["test"]
+commands = [["pytest", "tests/", "-v"]]

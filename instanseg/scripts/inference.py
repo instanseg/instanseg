@@ -1,5 +1,4 @@
 import os
-import pandas as pd
 from tqdm.auto import tqdm
 import torch
 from pathlib import Path
@@ -18,7 +17,7 @@ parser.add_argument("-ignore_segmented", "--ignore_segmented",default=False, typ
 parser.add_argument("-tile_size", "--tile_size", type=int, default= 512, help="tile size in pixels given to the model, only used for large images.")
 parser.add_argument("-batch_size", "--batch_size", type=int, default= 3, help="batch size, only useful for large images")
 parser.add_argument("-save_geojson", "--save_geojson", type=lambda x: (str(x).lower() == 'true'), default= False, help="Output geojson files of the segmentation")
-parser.add_argument("-image_reader", "--image_reader", type=str, default= "tiffslide", help='The image reader to use. Options are "tiffslide", "skimage.io", "bioio", "AICSImageIO""')
+parser.add_argument("-image_reader", "--image_reader", type=str, default= "auto", help='The image reader to use. Options are "auto", "tiffslide", "skimage.io", "bioio", "AICSImageIO". If "auto", will use the first available reader.')
 parser.add_argument("-use_otsu", "--use_otsu_threshold", type=lambda x: (str(x).lower() == 'true'), default= True, help="Use an Otsu Threshold on the WSI thumbnail to determine which channels to segment(ignored for images that are not WSIs)")
 
 parser.add_argument("-kwargs", "--kwargs", nargs="*", type=str, default={}, help="Additional keyword arguments in the form key=value", dest="kwargs_raw")
@@ -105,8 +104,6 @@ def main():
     for file in tqdm(files):
 
         print("Processing: ", file)
-
-        #breakpoint()
 
         _ = instanseg.eval(image=file,
                         pixel_size = parser.pixel_size,
