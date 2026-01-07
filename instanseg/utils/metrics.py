@@ -83,7 +83,6 @@ def matching_torch(t, p, thresholds):
         iou = torch.zeros([len(x[x>0].unique()),len(y[y>0].unique())])
 
     else:
-
         x_onehot, _ = torch_sparse_onehot(x, flatten=True)
         y_onehot, _ = torch_sparse_onehot(y, flatten=True)
         iou = fast_sparse_dual_iou(x_onehot, y_onehot)
@@ -189,6 +188,7 @@ def _robust_average_precision(labels, predicted, threshold):
             labels[i][labels[i] < 0] = 0 #sparse labels
             predicted[i][labels[i] < 0] = 0 
 
+
     if labels[0].shape[0] != 2: #cells or nuclei
         labels = [labels[i].detach().cpu().numpy().astype(np.int32) for i, l in enumerate(labels) if labels[i].min() >= 0 and labels[i].max() > 0]
         predicted = [predicted[i].detach().cpu().numpy().astype(np.int32) for i, l in enumerate(labels) if labels[i].min() >= 0 and labels[i].max() > 0]
@@ -203,8 +203,8 @@ def _robust_average_precision(labels, predicted, threshold):
     else:
         f1is = [] 
         for i, _ in enumerate(["nuclei", "cells"]):
-            labels_tmp = [(labels[j][i].detach().cpu().numpy())[0].astype(np.int32) for j, l in enumerate(labels) if labels[j][i].min() >= 0 and labels[j][i].max() > 0]
-            predicted_tmp = [(predicted[j][i].detach().cpu().numpy())[0].astype(np.int32) for j, l in enumerate(labels) if labels[j][i].min() >= 0 and labels[j][i].max() > 0]
+            labels_tmp = [(labels[j][i].detach().cpu().numpy()).squeeze().astype(np.int32) for j, l in enumerate(labels) if labels[j][i].min() >= 0 and labels[j][i].max() > 0]
+            predicted_tmp = [(predicted[j][i].detach().cpu().numpy()).squeeze().astype(np.int32) for j, l in enumerate(labels) if labels[j][i].min() >= 0 and labels[j][i].max() > 0]
 
             if len(labels_tmp)==0:
                 f1is.append(np.nan)
@@ -217,7 +217,6 @@ def _robust_average_precision(labels, predicted, threshold):
 
         return f1is
     
-
 
 def compute_and_export_metrics(gt_masks, pred_masks, output_path, target, return_metrics = False, show_progress = False, verbose = True):
     
