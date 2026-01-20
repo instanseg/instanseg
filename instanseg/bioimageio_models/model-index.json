@@ -10,5 +10,11 @@
     "url": "https://github.com/instanseg/instanseg/releases/download/instanseg_models_v0.1.1/fluorescence_nuclei_and_cells.zip",
     "version": "0.1.1",
     "license": "Apache-2.0"
+  },
+    {
+    "name": "single_channel_nuclei",
+    "url": "https://github.com/instanseg/instanseg/releases/download/instanseg_models_v0.1.2/single_channel_nuclei.zip",
+    "version": "0.1.2",
+    "license": "Apache-2.0"
   }
 ]
