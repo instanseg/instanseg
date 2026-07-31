@@ -215,16 +215,17 @@ def resolve_cell_and_nucleus_boundaries(lab: torch.Tensor, allow_unnucleated_cel
     return torch.stack((nuclei_labels, cell_labels)).unsqueeze(0)
 
 
-def get_mean_object_features(image: torch.Tensor, label: torch.Tensor) -> torch.Tensor:
+def get_mean_object_features(image: torch.Tensor, label: torch.Tensor, max_label: int = -1) -> torch.Tensor:
     # image is C,H,W
     # label is H,W
+    # max_label: highest label, useful if calculating mean features for different compartments
     # returns a tensor of size N,C for N objects and C channels
 
     if label.max() == 0:
         return torch.tensor([])
     label = label.squeeze()
     
-    sparse_onehot = torch_sparse_onehot(label, flatten=True)[0]
+    sparse_onehot = torch_sparse_onehot(label, flatten=True, max=max_label)[0]
     out = torch.mm(sparse_onehot, image.flatten(1).T)  # object features
     sums = torch.sparse.sum(sparse_onehot, dim=(1,)).to_dense()  # object areas
     out = out / sums[None].T  # mean object features
@@ -234,14 +235,13 @@ def get_mean_object_features(image: torch.Tensor, label: torch.Tensor) -> torch.
 def get_features_by_location(input_tensor: torch.Tensor, lab: torch.Tensor, to_numpy: bool = True) -> tuple:
     # input tensor is C,H,W
     # lab is 1,2,H,W where the first channel is nuclei and the second is whole cell
-
-    X_cell = get_mean_object_features(input_tensor, lab[0, 1])
-    X_nuclei = get_mean_object_features(input_tensor, lab[0, 0])
+    ## specify number of classes to ensure cell i matches nucleus i matches cytoplasm i
+    num_classes = int(torch.max(lab).item())
+    X_cell = get_mean_object_features(input_tensor, lab[0, 1], max_label=num_classes)
+    X_nuclei = get_mean_object_features(input_tensor, lab[0, 0], max_label=num_classes)
 
     cytoplasm_lab = (lab[0, 0] == 0).float() * lab[0, 1]
-    X_nuclei = get_mean_object_features(input_tensor, lab[0, 0])
-    X_cytoplasm = get_mean_object_features(input_tensor, cytoplasm_lab)
-
+    X_cytoplasm = get_mean_object_features(input_tensor, cytoplasm_lab, max_label=num_classes)
 
     if to_numpy:
         X_cell = X_cell.cpu().numpy()
