@@ -374,13 +374,21 @@ def _sliding_window_inference(input_tensor,
                         chop_list=tuple_index,
                         offset = overlap,
                         final_shape=(1, input_tensor.shape[1], input_tensor.shape[2])) 
+
+        resolve_cell_and_nucleus = instanseg_kwargs.get("resolve_cell_and_nucleus", True)
+        labels_are_matched = (
+            True if resolve_cell_and_nucleus is None else bool(resolve_cell_and_nucleus)
+        )
+
+        # Unresolved nuclear and cell outputs have independent tile-local label IDs.
+        nuclei_map_list = map_list if labels_are_matched else None
  
         lab_nuc, _ = _stitch([lab[0] for lab in label_list],
                                 shape=window_size,
                                 chop_list=tuple_index,
                                 offset = overlap,
                                 final_shape=(1, input_tensor.shape[1], input_tensor.shape[2]),
-                                map_list = map_list) 
+                                map_list = nuclei_map_list)
     
         lab = torch.cat([lab_nuc, lab], dim=0)
 
@@ -388,4 +396,3 @@ def _sliding_window_inference(input_tensor,
         raise ValueError(f'Unsupported number of output channels: {output_channels}.')
 
     return lab[None]  # 1,C,H,W
-

@@ -112,3 +112,37 @@ def test_tiling_cross_channel_mapping():
         nucleus = stitched_nuclei[0, y, x] 
         if nucleus:
             assert nucleus == cell, f"Nucleus {nucleus} inside cell {cell}."
+
+
+def test_sliding_window_inference_preserves_unresolved_nuclei():
+    """Unresolved nuclear and cell labels use independent tile-local IDs."""
+
+    import torch
+    from instanseg.utils.tiling import _sliding_window_inference
+
+    class IdentityPredictor(torch.nn.Module):
+        def forward(self, tiles, **kwargs):
+            return tiles
+
+    image = torch.zeros((2, 40, 40), dtype=torch.float32)
+    image[0, 5:7, 5:7] = 9
+    image[1, 4:8, 4:8] = 4
+    image[0, 18:22, 18:22] = 7
+    image[1, 17:23, 17:23] = 3
+
+    output = _sliding_window_inference(
+        image,
+        IdentityPredictor(),
+        window_size=(24, 24),
+        overlap=2,
+        max_cell_size=2,
+        sw_device="cpu",
+        device="cpu",
+        output_channels=2,
+        show_progress=False,
+        instanseg_kwargs={"resolve_cell_and_nucleus": False},
+    )
+
+    assert output.shape == (1, 2, 40, 40)
+    assert torch.equal(output[0, 0] > 0, image[0] > 0)
+    assert torch.equal(output[0, 1] > 0, image[1] > 0)
