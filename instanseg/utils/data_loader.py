@@ -273,7 +273,10 @@ def get_loaders(train_images_local, train_labels_local, val_images_local, val_la
                                               amount=args.transform_intensity,
                                               pixel_size=args.requested_pixel_size,
                                               mean_diameter=args.mean_object_diameter, 
-                                              augmentation_type=args.augmentation_type)
+                                              augmentation_type=args.augmentation_type,
+                                              dataset_channel_drop_probabilities=getattr(
+                                                  args, "dataset_channel_drop_probabilities", None
+                                              ))
 
     train_data = Segmentation_Dataset(train_images_local, 
                                       train_labels_local, 
