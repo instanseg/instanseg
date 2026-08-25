@@ -7,8 +7,17 @@ from torch import nn
 import torch
 import torch.optim as optim
 import argparse
+import json
 from pathlib import Path
 import pandas as pd
+
+from instanseg.utils.training_checkpoint import (
+    atomic_torch_save,
+    load_training_checkpoint,
+    make_training_checkpoint,
+    restore_rng_state,
+    validate_resume_config,
+)
 
 #torch.autograd.set_detect_anomaly(True) #For debugging cuda errors
 parser = argparse.ArgumentParser()
@@ -60,6 +69,8 @@ parser.add_argument('-dim_seeds', '--dim_seeds', default=1, type=int, help = "Nu
 parser.add_argument('-norm', '--norm', default="BATCH", type=str, help = "Norm layer to use: None, INSTANCE, INSTANCE_INVARIANT, BATCH")
 parser.add_argument('-mlp_w', '--mlp_width', default=5, type=int, help = "Width of the MLP hidden dim")
 parser.add_argument('-augmentation_type', '--augmentation_type', default="minimal", type=str, help = "'minimal' or 'heavy' or 'brightfield_only'")
+parser.add_argument('--dataset_channel_drop_probabilities', default=None, type=json.loads,
+                    help='JSON mapping from parent_dataset to independent per-channel drop probability')
 parser.add_argument('-adaptor_net', '--adaptor_net_str', default="1", type=str, help = "Adaptor net to use")
 parser.add_argument('-freeze', '--freeze_main_model', default=False, type=lambda x: (str(x).lower() == 'true'), help = "Whether to freeze the main model")
 parser.add_argument('-freeze_sam', '--freeze_sam', default=False, type=lambda x: (str(x).lower() == 'true'), help = "Whether to freeze the SAM weights")
@@ -69,26 +80,98 @@ parser.add_argument('-rng_seed', '--rng_seed', default=None, type=int, help = "O
 parser.add_argument('-use_deterministic', '--use_deterministic', default=False, type=lambda x: (str(x).lower() == 'true'), help = "Whether to use deterministic algorithms (default=False)")
 parser.add_argument('-tile', '--tile_size', default=256, type=int, help = "Tile sizes for the input images")
 parser.add_argument('-diam', '--mean_object_diameter', default=None, type=int, help = "Target diameter of the instances. Only use if pixel size is not available.")
+parser.add_argument('--resume_checkpoint', default=None, type=str,
+                    help='Path to latest_checkpoint.pth for a phase/epoch training restart')
 
 
-def main(model, loss_fn, train_loader, test_loader, num_epochs=1000, epoch_name='output_epoch'):
+RESUME_CONFIG_KEYS = (
+    "dataset", "source_dataset", "requested_pixel_size", "target_segmentation",
+    "channel_invariant", "batch_size", "length_of_epoch", "lr", "optimizer",
+    "model_str", "loss_function", "n_sigma", "weight", "layers", "clip",
+    "weight_decay", "dropprob", "transform_intensity", "dim_in", "bg_weight",
+    "binary_loss_fn", "seed_loss_fn", "cosineannealing", "hotstart_training",
+    "window_size", "multihead", "dim_coords", "dim_seeds", "norm", "mlp_width",
+    "augmentation_type", "dataset_channel_drop_probabilities", "adaptor_net_str",
+    "freeze_main_model", "feature_engineering", "tile_size", "mean_object_diameter",
+    "rng_seed",
+)
+
+
+def _normalize_checkpoint_value(value):
+    if isinstance(value, (Path, torch.device)):
+        return str(value)
+    if isinstance(value, tuple):
+        return [_normalize_checkpoint_value(item) for item in value]
+    if isinstance(value, list):
+        return [_normalize_checkpoint_value(item) for item in value]
+    if isinstance(value, dict):
+        return {str(key): _normalize_checkpoint_value(item) for key, item in value.items()}
+    return value
+
+
+def _training_config(args):
+    return {
+        key: _normalize_checkpoint_value(getattr(args, key))
+        for key in RESUME_CONFIG_KEYS
+    }
+
+
+def _restore_training_checkpoint(model, optimizer, scheduler, checkpoint_path, device, args):
+    checkpoint_path = Path(checkpoint_path).resolve()
+    if not checkpoint_path.is_file():
+        raise FileNotFoundError(f"Resume checkpoint does not exist: {checkpoint_path}")
+    resume_state = load_training_checkpoint(checkpoint_path, device=device)
+    validate_resume_config(resume_state["training_config"], _training_config(args))
+
+    model_state = resume_state["model_state_dict"]
+    saved_uses_data_parallel = any(key.startswith("module.") for key in model_state)
+    current_uses_data_parallel = isinstance(model, nn.DataParallel)
+    if saved_uses_data_parallel and not current_uses_data_parallel:
+        model_state = {
+            key.removeprefix("module."): value
+            for key, value in model_state.items()
+        }
+    elif current_uses_data_parallel and not saved_uses_data_parallel:
+        model_state = {f"module.{key}": value for key, value in model_state.items()}
+
+    model.load_state_dict(model_state, strict=True)
+    optimizer.load_state_dict(resume_state["optimizer_state_dict"])
+    saved_scheduler_state = resume_state.get("scheduler_state_dict")
+    if scheduler is None and saved_scheduler_state is not None:
+        raise ValueError("Checkpoint contains scheduler state but the current run has no scheduler")
+    if scheduler is not None:
+        if saved_scheduler_state is None:
+            raise ValueError("Current run uses a scheduler but the checkpoint does not")
+        scheduler.load_state_dict(saved_scheduler_state)
+    restore_rng_state(resume_state.get("rng_state"))
+    return resume_state
+
+
+def main(model, loss_fn, train_loader, test_loader, num_epochs=1000, epoch_name='output_epoch',
+         phase='main', start_epoch=0, resume_state=None):
     from instanseg.utils.AI_utils import optimize_hyperparameters, train_epoch, test_epoch
     global best_f1_score, device, method, iou_threshold, args, optimizer, scheduler
 
-    train_losses = []
-    test_losses = []
+    if resume_state is None:
+        train_losses = []
+        test_losses = []
+        best_f1_score = -1
+        f1_list = []
+        f1_list_cells = []
+    else:
+        train_losses = list(resume_state.get('train_losses', []))
+        test_losses = list(resume_state.get('test_losses', []))
+        best_f1_score = float(resume_state['best_f1_score'])
+        f1_list = list(resume_state.get('f1_list', []))
+        f1_list_cells = list(resume_state.get('f1_list_cells', []))
 
-    best_f1_score = -1
-    f1_list = []
-    f1_list_cells = []
-
-    for epoch in range(num_epochs):
+    for epoch in range(start_epoch, num_epochs):
 
         print("Epoch:", epoch)
 
         train_loss, train_time = train_epoch(model, device, train_loader, loss_fn, optimizer, args = args)
 
-        if epoch <= 5 and not args.model_folder:  # Training is just starting AND we are not loading a model
+        if epoch <= 5 and not args.model_folder and not args.resume_checkpoint:
             save_epoch_outputs = True
         else:
             save_epoch_outputs = False
@@ -132,23 +215,46 @@ def main(model, loss_fn, train_loader, test_loader, num_epochs=1000, epoch_name=
             scheduler.step()
 
                 
-        if f1_score > best_f1_score or save_epoch_outputs:
-            best_f1_score = np.maximum(f1_score, best_f1_score)
+        if f1_score > best_f1_score:
+            best_f1_score = float(f1_score)
+            print("Saving best model, best f1_score:", best_f1_score)
+            best_checkpoint = make_training_checkpoint(
+                model=model,
+                optimizer=optimizer,
+                scheduler=scheduler,
+                phase=phase,
+                epoch=epoch,
+                best_f1_score=best_f1_score,
+                train_losses=train_losses,
+                test_losses=test_losses,
+                f1_list=f1_list,
+                f1_list_cells=f1_list_cells,
+                training_config=_training_config(args),
+            )
+            atomic_torch_save(best_checkpoint, args.output_path / "best_model_weights.pth")
+            # Preserve the upstream filename used by model_loader and exported models.
+            atomic_torch_save(best_checkpoint, args.output_path / "model_weights.pth")
 
-            print("Saving model, best f1_score:", best_f1_score)
-
-            torch.save({
-                'f1_score': float(best_f1_score),
-                'epoch': int(epoch),
-                'model_state_dict': model.state_dict(),
-                'optimizer_state_dict': optimizer.state_dict(),
-            }, args.output_path / "model_weights.pth") 
+        latest_checkpoint = make_training_checkpoint(
+            model=model,
+            optimizer=optimizer,
+            scheduler=scheduler,
+            phase=phase,
+            epoch=epoch,
+            best_f1_score=best_f1_score,
+            train_losses=train_losses,
+            test_losses=test_losses,
+            f1_list=f1_list,
+            f1_list_cells=f1_list_cells,
+            training_config=_training_config(args),
+        )
+        atomic_torch_save(latest_checkpoint, args.output_path / "latest_checkpoint.pth")
 
 
         # this is where the loss gets printed
         print(", ".join(f"{k}: {v:.5g}" for k, v in dict_to_print.items()))
 
-    return model, train_losses, test_losses, f1_list, f1_list_cells
+    return model, train_losses, test_losses, f1_list, f1_list_cells, best_f1_score
 
 from typing import Dict
 def instanseg_training(segmentation_dataset: Dict = None, **kwargs):
@@ -161,6 +267,9 @@ def instanseg_training(segmentation_dataset: Dict = None, **kwargs):
             setattr(args, key, value)
         else:
             raise ValueError(f"Argument {key} not recognized")
+
+    if args.resume_checkpoint and args.model_folder:
+        raise ValueError("Use either --resume_checkpoint or --model_folder, not both")
 
        
     from instanseg.utils.utils import plot_average, _choose_device
@@ -353,6 +462,26 @@ def instanseg_training(segmentation_dataset: Dict = None, **kwargs):
 
     model.to(device)
 
+    resume_state = None
+    if args.resume_checkpoint:
+        resume_path = Path(args.resume_checkpoint).resolve()
+        resume_state = _restore_training_checkpoint(
+            model,
+            optimizer,
+            scheduler,
+            resume_path,
+            device,
+            args,
+        )
+        print(
+            "Resuming training state from",
+            resume_path,
+            "phase",
+            resume_state["phase"],
+            "completed epoch",
+            resume_state["epoch"],
+        )
+
     if args.save:
         if not os.path.exists(args.output_path):
             os.mkdir(args.output_path)
@@ -365,19 +494,43 @@ def instanseg_training(segmentation_dataset: Dict = None, **kwargs):
     
     iou_threshold = np.linspace(0.5, 1.0, 10)
 
-    if args.hotstart_training > 0:
+    resume_phase = None if resume_state is None else resume_state["phase"]
+    if args.hotstart_training > 0 and resume_phase != "main":
         hot_epochs = args.hotstart_training
         print("Hotstart for "+str(hot_epochs)+" epochs with binary_xloss and dice_loss")
         if args.seed_loss_fn != "distance_and_binary_loss":
             method.update_seed_loss("binary_xloss")
         method.update_binary_loss("dice_loss")
-        model, train_losses, test_losses, f1_list, f1_list_cells = main(model, loss_fn, train_loader, test_loader, num_epochs=hot_epochs, epoch_name='hotstart_epoch')
+        hotstart_resume_state = resume_state if resume_phase == "hotstart" else None
+        hotstart_start_epoch = 0 if hotstart_resume_state is None else hotstart_resume_state["epoch"] + 1
+        model, train_losses, test_losses, f1_list, f1_list_cells, _ = main(
+            model,
+            loss_fn,
+            train_loader,
+            test_loader,
+            num_epochs=hot_epochs,
+            epoch_name='hotstart_epoch',
+            phase='hotstart',
+            start_epoch=hotstart_start_epoch,
+            resume_state=hotstart_resume_state,
+        )
 
         print("Starting main training loop with",args.seed_loss_fn, "and", args.binary_loss_fn)
         method.update_seed_loss(args.seed_loss_fn)
         method.update_binary_loss(args.binary_loss_fn)
 
-    model, train_losses, test_losses, f1_list, f1_list_cells = main(model, loss_fn, train_loader, test_loader, num_epochs=num_epochs)
+    main_resume_state = resume_state if resume_phase == "main" else None
+    main_start_epoch = 0 if main_resume_state is None else main_resume_state["epoch"] + 1
+    model, train_losses, test_losses, f1_list, f1_list_cells, best_f1_score = main(
+        model,
+        loss_fn,
+        train_loader,
+        test_loader,
+        num_epochs=num_epochs,
+        phase='main',
+        start_epoch=main_start_epoch,
+        resume_state=main_resume_state,
+    )
 
     from instanseg.utils.model_loader import load_model
     model, model_dict = load_model(folder="", path=args.output_path) #Load model from checkpoint
@@ -405,6 +558,16 @@ def instanseg_training(segmentation_dataset: Dict = None, **kwargs):
         plt.ylim(0, 1)
         plt.savefig(args.output_path / "f1_metric.png")
         plt.close()
+
+    completion_record = {
+        "status": "complete",
+        "main_epochs": int(num_epochs),
+        "hotstart_epochs": int(args.hotstart_training),
+        "best_f1_score": float(best_f1_score),
+    }
+    completion_tmp = args.output_path / ".training_complete.json.tmp"
+    completion_tmp.write_text(json.dumps(completion_record, indent=2) + "\n")
+    os.replace(completion_tmp, args.output_path / "training_complete.json")
 
     if not args.on_cluster and args.experiment_str is None:
         experiment_str = "experiment"
