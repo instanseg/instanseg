@@ -16,6 +16,199 @@ def _to_ndim(x, *args, **kwargs):
         return _to_ndim_numpy(x, *args, **kwargs)
 
 
+def _wsi_edge_metadata(i, j, n_rows, n_cols, window_i, window_j, pad):
+    """Return edge-removal metadata for one row/column position in a WSI grid."""
+    ignore = []
+    if i == 0:
+        ignore.append("top")
+    if j == 0:
+        ignore.append("left")
+    if i == n_rows - 1:
+        ignore.append("bottom")
+    if j == n_cols - 1:
+        ignore.append("right")
+
+    window_i_start = window_i + pad if i == n_rows - 1 and i != 0 else window_i
+    window_j_start = window_j + pad if j == n_cols - 1 and j != 0 else window_j
+    return ignore, window_i_start, window_j_start, bool(ignore)
+
+
+def _acquired_tile_grid(reference, tile_shape):
+    """Mark native TIFF tiles containing at least one nonzero reference pixel."""
+    reference = np.asarray(reference)
+    if reference.ndim != 2:
+        raise ValueError(f"Expected a 2D reference channel, got {reference.shape}.")
+    tile_height, tile_width = map(int, tile_shape)
+    if tile_height <= 0 or tile_width <= 0:
+        raise ValueError(f"Invalid tile shape {tile_shape!r}.")
+    height, width = reference.shape
+    acquired = np.zeros(
+        ((height + tile_height - 1) // tile_height,
+         (width + tile_width - 1) // tile_width),
+        dtype=bool,
+    )
+    for tile_i, y0 in enumerate(range(0, height, tile_height)):
+        y1 = min(height, y0 + tile_height)
+        for tile_j, x0 in enumerate(range(0, width, tile_width)):
+            x1 = min(width, x0 + tile_width)
+            acquired[tile_i, tile_j] = bool(np.any(reference[y0:y1, x0:x1]))
+    return acquired
+
+
+def _uint16_histogram_for_acquired_tiles(image, acquired_tiles, tile_shape):
+    """Accumulate an exact uint16 histogram over complete acquired spatial tiles."""
+    image = np.asarray(image)
+    if image.ndim != 2 or image.dtype != np.uint16:
+        raise ValueError(f"Expected a 2D uint16 channel, got {image.shape} {image.dtype}.")
+    tile_height, tile_width = map(int, tile_shape)
+    expected_shape = (
+        (image.shape[0] + tile_height - 1) // tile_height,
+        (image.shape[1] + tile_width - 1) // tile_width,
+    )
+    if tuple(acquired_tiles.shape) != expected_shape:
+        raise ValueError(
+            f"Acquisition grid {acquired_tiles.shape} does not match expected {expected_shape}."
+        )
+
+    histogram = np.zeros(np.iinfo(np.uint16).max + 1, dtype=np.int64)
+    pixel_count = 0
+    for tile_i, y0 in enumerate(range(0, image.shape[0], tile_height)):
+        y1 = min(image.shape[0], y0 + tile_height)
+        for tile_j, x0 in enumerate(range(0, image.shape[1], tile_width)):
+            if not acquired_tiles[tile_i, tile_j]:
+                continue
+            x1 = min(image.shape[1], x0 + tile_width)
+            values = image[y0:y1, x0:x1]
+            histogram += np.bincount(values.ravel(), minlength=histogram.size)
+            pixel_count += values.size
+    return histogram, pixel_count
+
+
+def _percentile_from_histogram(histogram, percentile):
+    """Compute NumPy's linear percentile from a histogram of integer values."""
+    histogram = np.asarray(histogram, dtype=np.int64)
+    if histogram.ndim != 1 or np.any(histogram < 0):
+        raise ValueError("Histogram must be a one-dimensional array of nonnegative counts.")
+    if not 0 <= percentile <= 100:
+        raise ValueError(f"Percentile must be between 0 and 100, got {percentile}.")
+    count = int(histogram.sum())
+    if count == 0:
+        raise ValueError("Cannot calculate a percentile from an empty histogram.")
+
+    rank = (count - 1) * float(percentile) / 100.0
+    lower_rank = int(np.floor(rank))
+    upper_rank = int(np.ceil(rank))
+    cumulative = np.cumsum(histogram)
+    lower_value = int(np.searchsorted(cumulative, lower_rank + 1, side="left"))
+    upper_value = int(np.searchsorted(cumulative, upper_rank + 1, side="left"))
+    fraction = rank - lower_rank
+    return lower_value + (upper_value - lower_value) * fraction
+
+
+def _compute_global_wsi_normalization(
+    image_path,
+    channel_ids,
+    reference_channel_id,
+    percentiles=(0.1, 99.9),
+):
+    """Read one uint16 channel at a time and calculate fixed WSI normalization bounds."""
+    import tifffile
+
+    channel_ids = [int(value) for value in channel_ids]
+    if not channel_ids or len(channel_ids) != len(set(channel_ids)):
+        raise ValueError("channel_ids must be a nonempty list of unique channel indices.")
+    reference_channel_id = int(reference_channel_id)
+    if reference_channel_id not in channel_ids:
+        raise ValueError("reference_channel_id must be one of channel_ids.")
+    lower_percentile, upper_percentile = map(float, percentiles)
+    if not 0 <= lower_percentile < upper_percentile <= 100:
+        raise ValueError(f"Invalid normalization percentiles {percentiles!r}.")
+
+    with tifffile.TiffFile(str(image_path)) as handle:
+        series = handle.series[0]
+        level = series.levels[0]
+        pages = level.pages
+        if max(channel_ids) >= len(pages) or min(channel_ids) < 0:
+            raise IndexError(
+                f"channel_ids {channel_ids} exceed the {len(pages)} level-zero pages."
+            )
+        reference_page = pages[reference_channel_id]
+        reference = np.asarray(reference_page.asarray()).squeeze()
+        if reference.ndim != 2 or reference.dtype != np.uint16:
+            raise ValueError(
+                "Global WSI normalization currently requires 2D uint16 channel pages; "
+                f"got {reference.shape} {reference.dtype}."
+            )
+        tile_shape = (
+            int(reference_page.tilelength or min(512, reference.shape[0])),
+            int(reference_page.tilewidth or min(512, reference.shape[1])),
+        )
+        acquired_tiles = _acquired_tile_grid(reference, tile_shape)
+
+        bounds = []
+        channel_pixel_counts = []
+        for channel_id in channel_ids:
+            if channel_id == reference_channel_id:
+                channel = reference
+            else:
+                channel = np.asarray(pages[channel_id].asarray()).squeeze()
+            histogram, pixel_count = _uint16_histogram_for_acquired_tiles(
+                channel, acquired_tiles, tile_shape
+            )
+            lower = _percentile_from_histogram(histogram, lower_percentile)
+            upper = _percentile_from_histogram(histogram, upper_percentile)
+            bounds.append((float(lower), float(upper)))
+            channel_pixel_counts.append(int(pixel_count))
+            if channel_id != reference_channel_id:
+                del channel
+
+        source_shape = tuple(int(value) for value in reference.shape)
+        del reference
+
+    return {
+        "channel_ids": channel_ids,
+        "reference_channel_id": reference_channel_id,
+        "percentiles": [lower_percentile, upper_percentile],
+        "bounds": bounds,
+        "channel_pixel_counts": channel_pixel_counts,
+        "source_shape": list(source_shape),
+        "source_dtype": "uint16",
+        "source_tile_shape": list(tile_shape),
+        "acquisition_tiles": {
+            "rows": int(acquired_tiles.shape[0]),
+            "columns": int(acquired_tiles.shape[1]),
+            "included": int(np.count_nonzero(acquired_tiles)),
+            "excluded": int(acquired_tiles.size - np.count_nonzero(acquired_tiles)),
+        },
+    }
+
+
+def _normalise_selected_wsi_tile(input_data, channel_ids, bounds):
+    """Subset an HWC region before float conversion and apply fixed channel bounds."""
+    input_data = np.asarray(input_data)
+    if input_data.ndim != 3:
+        raise ValueError(f"Expected an HWC WSI region, got {input_data.shape}.")
+    channel_ids = [int(value) for value in channel_ids]
+    if min(channel_ids) < 0 or max(channel_ids) >= input_data.shape[-1]:
+        raise IndexError(
+            f"channel_ids {channel_ids} exceed tile channel dimension {input_data.shape[-1]}."
+        )
+    selected = input_data[..., channel_ids]
+    tensor = _to_tensor_float32(selected)
+    bounds_array = np.asarray(bounds, dtype=np.float32)
+    if bounds_array.shape != (len(channel_ids), 2):
+        raise ValueError(
+            f"Expected normalization bounds with shape {(len(channel_ids), 2)}, "
+            f"got {bounds_array.shape}."
+        )
+    lower = torch.as_tensor(bounds_array[:, 0], dtype=tensor.dtype)[:, None, None]
+    scale = torch.as_tensor(
+        np.maximum(1e-3, bounds_array[:, 1] - bounds_array[:, 0]),
+        dtype=tensor.dtype,
+    )[:, None, None]
+    return (tensor - lower) / scale
+
+
 class InstanSeg():
     """
     Main class for running InstanSeg.
@@ -729,38 +922,18 @@ class InstanSeg():
 
                 num_iter = new_tile.shape[0]
 
-                edge_window = True
-
                 for n in range(num_iter):
-                    
-                    ignore_list = []
-                    if i == 0:
-                        ignore_list.append("top")
-                    if j == 0:
-                        ignore_list.append("left")
-                    if i == len(chop_list[0])-1:
-                        ignore_list.append("bottom")
-                    if j == len(chop_list[1])-1:
-                        ignore_list.append("right")
-                
-                    if j == len(chop_list[0]) - 1:
-                        window_j_start = window_j + pad
-                    else:
-                        window_j_start = window_j
-
-                    if i == len(chop_list[1]) - 1:
-                        window_i_start = window_i + pad
-                    else:
-                        window_i_start = window_i
-
-                    if j == 0:
-                        window_j_start = window_j
-
-                    if i == 0:
-                        window_i_start = window_i
-
-                    if len(ignore_list) == 0:
-                        edge_window = False
+                    ignore_list, window_i_start, window_j_start, edge_window = (
+                        _wsi_edge_metadata(
+                            i,
+                            j,
+                            len(chop_list[0]),
+                            len(chop_list[1]),
+                            window_i,
+                            window_j,
+                            pad,
+                        )
+                    )
 
                     tile1 = canvas[n, window_i_start:window_i + shape[0], window_j_start:window_j + shape[1]]
                     tile2 = _remove_edge_labels(new_tile[n, window_i_start - window_i:shape[0], window_j_start - window_j:shape[1]], ignore=ignore_list)
@@ -800,6 +973,230 @@ class InstanSeg():
                 print("Exporting to geojson")
                 _zarr_to_json_export(file_with_zarr_extension, 
                                      detection_size = detection_size, size = shape[0], scale = scale_factor, n_dim = n_dim)
+
+    def eval_whole_slide_image_global_normalization(
+        self,
+        image: str,
+        channel_ids: List[int],
+        pixel_size: Optional[float] = None,
+        normalization_percentiles: Tuple[float, float] = (0.1, 99.9),
+        reference_channel_id: Optional[int] = None,
+        tile_size: int = 512,
+        overlap: int = 80,
+        detection_size: int = 20,
+        output_path: Optional[Union[str, Path]] = None,
+        overwrite: bool = False,
+        save_geojson: bool = False,
+        **kwargs,
+    ) -> Path:
+        """Evaluate a WSI with one fixed normalization transform per source channel.
+
+        Global normalization is calculated from complete acquired TIFF tiles while
+        reading only one full uint16 channel at a time. Spatial inference still uses
+        bounded regions. All source channels are read for each region, but
+        ``channel_ids`` are selected before conversion to float32.
+
+        The returned Zarr remains at the model pixel size, matching
+        :meth:`eval_whole_slide_image`. Nuclear and cell planes are stitched with
+        independent label counters and are not expected to share raw instance IDs.
+        """
+        import json
+        from itertools import product
+
+        import zarr
+        from tqdm import tqdm
+
+        from instanseg.utils.pytorch_utils import match_labels, torch_fastremap
+        from instanseg.utils.tiling import _chops, _remove_edge_labels, _zarr_to_json_export
+
+        if "channel_ids" in kwargs:
+            raise ValueError("Pass channel_ids only through the explicit method argument.")
+        if "normalise" in kwargs or "normalize" in kwargs:
+            raise ValueError(
+                "Tile-local normalization is disabled for global-normalized WSI inference."
+            )
+        channel_ids = [int(value) for value in channel_ids]
+        if not channel_ids or len(channel_ids) != len(set(channel_ids)):
+            raise ValueError("channel_ids must be a nonempty list of unique indices.")
+        if reference_channel_id is None:
+            reference_channel_id = channel_ids[0]
+
+        image, img_pixel_size = self.read_image(image, processing_method="wsi")
+        image_path = Path(image)
+        if pixel_size is not None:
+            if img_pixel_size is not None and not np.isclose(img_pixel_size, pixel_size):
+                import warnings
+
+                warnings.warn(
+                    f"Pixel size {img_pixel_size} from image metadata does not match "
+                    f"pixel size {pixel_size} provided. Using {pixel_size}."
+                )
+            img_pixel_size = pixel_size
+        if img_pixel_size is None or img_pixel_size > 1 or img_pixel_size < 0.1:
+            raise ValueError(
+                f"The image pixel size {img_pixel_size} is not a valid micron pixel size."
+            )
+
+        if output_path is None:
+            output_path = image_path.parent / (
+                image_path.stem + self.prediction_tag + "_global.zarr"
+            )
+        output_path = Path(output_path)
+        if output_path.exists() and not overwrite:
+            raise FileExistsError(
+                f"WSI prediction already exists: {output_path}. Pass overwrite=True to replace it."
+            )
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+
+        normalization = _compute_global_wsi_normalization(
+            image_path,
+            channel_ids,
+            int(reference_channel_id),
+            normalization_percentiles,
+        )
+        normalization.update(
+            {
+                "source_image": str(image_path),
+                "output_zarr": str(output_path),
+                "method": "global_uint16_histogram",
+            }
+        )
+        normalization_path = Path(str(output_path) + ".normalization.json")
+        normalization_path.write_text(json.dumps(normalization, indent=2) + "\n")
+
+        slide = self.read_slide(str(image_path))
+        instanseg = self.instanseg
+        n_dim = 2 if instanseg.cells_and_nuclei else 1
+        model_pixel_size = float(instanseg.pixel_size)
+        scale_factor = model_pixel_size / float(img_pixel_size)
+        dims = (
+            round(slide.dimensions[1] / scale_factor),
+            round(slide.dimensions[0] / scale_factor),
+        )
+
+        pad = int(overlap)
+        pad2 = int(overlap + detection_size)
+        shape = (int(tile_size), int(tile_size))
+        chop_list = _chops(dims, shape, overlap=2 * pad2)
+        chunk_shape = (1, shape[0], shape[1])
+        store = zarr.DirectoryStore(str(output_path))
+        canvas = zarr.zeros(
+            (n_dim, dims[0], dims[1]),
+            chunks=chunk_shape,
+            dtype=np.int32,
+            store=store,
+            overwrite=overwrite,
+        )
+        canvas.attrs.update(
+            {
+                "status": "in_progress",
+                "source_image": str(image_path),
+                "source_pixel_size_um": float(img_pixel_size),
+                "model_pixel_size_um": model_pixel_size,
+                "channel_ids": channel_ids,
+                "normalization": normalization,
+                "planes": ["nuclei", "cells"] if n_dim == 2 else ["instances"],
+            }
+        )
+
+        running_max = [0] * n_dim
+        best_level = slide.get_best_level_for_downsample(scale_factor)
+        downsample_factor = float(slide.level_downsamples[best_level])
+        intermediate_pixel_size = float(img_pixel_size) * downsample_factor
+        intermediate_to_final = intermediate_pixel_size / model_pixel_size
+        intermediate_shape = (
+            round(shape[0] / intermediate_to_final),
+            round(shape[1] / intermediate_to_final),
+        )
+
+        total = len(chop_list[0]) * len(chop_list[1])
+        positions = product(enumerate(chop_list[0]), enumerate(chop_list[1]))
+        for (i, window_i), (j, window_j) in tqdm(
+            positions,
+            total=total,
+            colour="green",
+            desc="Slide progress: ",
+            disable=not self.verbose,
+        ):
+            input_data = slide.read_region(
+                (round(window_j * scale_factor), round(window_i * scale_factor)),
+                best_level,
+                (int(intermediate_shape[1]), int(intermediate_shape[0])),
+                as_array=True,
+            )
+            input_tensor = _normalise_selected_wsi_tile(
+                input_data,
+                channel_ids,
+                normalization["bounds"],
+            )
+            new_tile = self.eval_small_image(
+                input_tensor,
+                pixel_size=intermediate_pixel_size,
+                return_image_tensor=False,
+                rescale_output=False,
+                normalise=False,
+                **kwargs,
+            )
+            if new_tile.shape[-2:] != shape:
+                new_tile = interpolate(new_tile, size=shape, mode="nearest").int()[0]
+            new_tile = _to_ndim(new_tile, 3)
+
+            for n in range(new_tile.shape[0]):
+                ignore_list, window_i_start, window_j_start, edge_window = (
+                    _wsi_edge_metadata(
+                        i,
+                        j,
+                        len(chop_list[0]),
+                        len(chop_list[1]),
+                        window_i,
+                        window_j,
+                        pad,
+                    )
+                )
+                if edge_window:
+                    canvas_slice = (
+                        slice(window_i_start, window_i + shape[0]),
+                        slice(window_j_start, window_j + shape[1]),
+                    )
+                    tile_slice = (
+                        slice(window_i_start - window_i, shape[0]),
+                        slice(window_j_start - window_j, shape[1]),
+                    )
+                    tile2 = _remove_edge_labels(
+                        new_tile[n][tile_slice], ignore=ignore_list
+                    )
+                else:
+                    canvas_slice = (
+                        slice(window_i + pad, window_i + shape[0] - pad),
+                        slice(window_j + pad, window_j + shape[1] - pad),
+                    )
+                    tile_slice = (
+                        slice(pad, shape[0] - pad),
+                        slice(pad, shape[1] - pad),
+                    )
+                    tile2 = _remove_edge_labels(new_tile[n][tile_slice])
+
+                tile2 = torch_fastremap(tile2)
+                tile2[tile2 > 0] += running_max[n]
+                tile1_torch = torch.tensor(
+                    np.array(canvas[(n, *canvas_slice)]), dtype=torch.int32
+                )
+                remapped = match_labels(tile1_torch, tile2, threshold=0.1)[1]
+                tile1_torch[remapped > 0] = remapped[remapped > 0].int()
+                running_max[n] = max(running_max[n], int(tile1_torch.max()))
+                canvas[(n, *canvas_slice)] = tile1_torch.numpy().astype(np.int32)
+
+        canvas.attrs["status"] = "complete"
+        canvas.attrs["max_label_by_plane"] = running_max
+        if save_geojson:
+            _zarr_to_json_export(
+                output_path,
+                detection_size=detection_size,
+                size=shape[0],
+                scale=scale_factor,
+                n_dim=n_dim,
+            )
+        return output_path
                     
     def display(self,
                 image: torch.tensor,

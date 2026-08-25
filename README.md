@@ -226,6 +226,15 @@ python inference.py --model_folder my_first_instanseg --image_path ../examples
 ```
 Replace "../examples" with the path to your images. If InstanSeg cannot read the image pixel size from the image metadata, the user is required to provide a --pixel_size parameter. InstanSeg provides (limited) support for whole slide images (WSIs). For more options and configurations, refer to the parser arguments in the inference.py file.
 
+For multiplexed uint16 OME-TIFFs, the experimental
+`eval_whole_slide_image_global_normalization(...)` method calculates one fixed
+percentile transform per selected source channel, then applies those bounds to
+every inference tile. It reads one complete channel at a time during the
+normalization prepass, selects `channel_ids` before each spatial tile is converted
+to float32, and writes model-resolution labels to Zarr. Completely zero native
+TIFF tiles in the chosen reference channel are excluded from the percentile
+histograms; acquired tiles retain all pixels, including zeros.
+
 ### Model versioning (Ignore)
 
 Links to different model versions are stored in `instanseg/models/model-index.json`. When releasing new models, 
