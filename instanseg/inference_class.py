@@ -1096,6 +1096,15 @@ class InstanSeg():
                 "channel_ids": channel_ids,
                 "normalization": normalization,
                 "planes": ["nuclei", "cells"] if n_dim == 2 else ["instances"],
+                "wsi_settings": {
+                    "tile_size": int(tile_size),
+                    "overlap": int(overlap),
+                    "detection_size": int(detection_size),
+                    "resolve_cell_and_nucleus": kwargs.get(
+                        "resolve_cell_and_nucleus",
+                        getattr(instanseg, "default_resolve_cell_and_nucleus", None),
+                    ),
+                },
             }
         )
 

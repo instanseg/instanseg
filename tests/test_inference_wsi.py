@@ -199,6 +199,12 @@ def test_global_normalized_wsi_writes_completed_two_plane_zarr(tmp_path):
     assert output.attrs["status"] == "complete"
     assert output.attrs["channel_ids"] == [2, 0]
     assert output.attrs["planes"] == ["nuclei", "cells"]
+    assert output.attrs["wsi_settings"] == {
+        "tile_size": 32,
+        "overlap": 2,
+        "detection_size": 2,
+        "resolve_cell_and_nucleus": None,
+    }
     assert np.count_nonzero(output[0]) > 0
     assert np.count_nonzero(output[1]) > 0
     assert (tmp_path / "prediction.zarr.normalization.json").is_file()
