@@ -139,9 +139,16 @@ def _compute_global_wsi_normalization(
                 "Global WSI normalization currently requires 2D uint16 channel pages; "
                 f"got {reference.shape} {reference.dtype}."
             )
+        reference_layout = getattr(reference_page, "keyframe", reference_page)
         tile_shape = (
-            int(reference_page.tilelength or min(512, reference.shape[0])),
-            int(reference_page.tilewidth or min(512, reference.shape[1])),
+            int(
+                getattr(reference_layout, "tilelength", None)
+                or min(512, reference.shape[0])
+            ),
+            int(
+                getattr(reference_layout, "tilewidth", None)
+                or min(512, reference.shape[1])
+            ),
         )
         acquired_tiles = _acquired_tile_grid(reference, tile_shape)
 
