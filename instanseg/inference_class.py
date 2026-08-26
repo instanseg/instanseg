@@ -446,6 +446,13 @@ class InstanSeg():
         :param image_str: The path to the image.
         """
         if self.prefered_image_reader == "tiffslide":
+            try:
+                from tiffslide import TiffSlide
+            except ImportError as exc:
+                raise ImportError(
+                    "tiffslide is required to read whole-slide images. "
+                    "Install it with `pip install tiffslide>=2.4.0`."
+                ) from exc
             slide = TiffSlide(image_str)
         # elif self.prefered_image_reader == "AICSImageIO":
         #     from aicsimageio import AICSImage

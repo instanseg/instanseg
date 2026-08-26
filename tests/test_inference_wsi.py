@@ -135,6 +135,18 @@ def test_global_normalization_reads_one_uint16_channel_and_ignores_empty_tiles(t
     )
 
 
+def test_read_slide_imports_tiffslide_without_external_module_patch(tmp_path):
+    image = np.ones((2, 32, 32), dtype=np.uint16)
+    path = tmp_path / "slide.ome.tif"
+    _write_test_ome(path, image)
+    inst = object.__new__(InstanSeg)
+    inst.prefered_image_reader = "tiffslide"
+
+    slide = inst.read_slide(str(path))
+
+    assert slide.dimensions == (32, 32)
+
+
 class _FakeSlide:
     def __init__(self, image):
         self.image = np.moveaxis(image, 0, -1)
