@@ -691,6 +691,10 @@ class Augmentations(object):
     
     def channel_suppress(self, image, labels=None, amount = None, metadata=None):
 
+        if isinstance(amount, dict):
+            parent_dataset = None if metadata is None else metadata.get("parent_dataset")
+            amount = amount.get(parent_dataset, 0.0)
+
         slice = torch.rand(image.shape[0]) < (1- amount)
 
         if torch.sum(slice) == 0:
@@ -882,7 +886,8 @@ class Augmentations(object):
             subcellular_location = ["N/A" for _ in range(image.shape[0])]
 
         metadata = {"image_modality": modality, "nuclei_channels": c_nuclei, "pixel_size": pixel_size,
-                    "subcellular_location": subcellular_location}
+                    "subcellular_location": subcellular_location,
+                    "parent_dataset": None if meta is None else meta.get("parent_dataset")}
 
         has_been_normalized = False
 

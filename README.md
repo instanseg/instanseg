@@ -188,6 +188,27 @@ python train.py -data segmentation_dataset.pth -source "[CPDMI_2023]" --num_epoc
 
 Each epoch should take approximately 1 to 3 minutes to complete (with mps or cuda support).
 
+Channel-invariant fluorescence training can apply dataset-specific independent
+channel suppression by passing a JSON mapping from `parent_dataset` to drop
+probability. Datasets omitted from the mapping retain all channels:
+
+```bash
+python train.py ... --dataset_channel_drop_probabilities '{"CPDMI_2023": 0.3, "TissueNet": 0.1}'
+```
+
+Training writes `latest_checkpoint.pth` atomically after every epoch while
+preserving the best-scoring weights in `best_model_weights.pth` and the
+backward-compatible `model_weights.pth`. Resume an interrupted run with the
+same training configuration by passing:
+
+```bash
+python train.py ... --resume_checkpoint /path/to/latest_checkpoint.pth
+```
+
+The resume checkpoint restores the model, optimizer, scheduler, metric history,
+random-number-generator state, training phase, and completed epoch. A successful
+run writes `training_complete.json` in the output directory.
+
 For more options and configurations, refer to the parser arguments in the train.py file.
 
 ### Testing Models
@@ -204,6 +225,15 @@ python test.py --model_folder my_first_instanseg -test_set Test --params best_pa
 python inference.py --model_folder my_first_instanseg --image_path ../examples
 ```
 Replace "../examples" with the path to your images. If InstanSeg cannot read the image pixel size from the image metadata, the user is required to provide a --pixel_size parameter. InstanSeg provides (limited) support for whole slide images (WSIs). For more options and configurations, refer to the parser arguments in the inference.py file.
+
+For multiplexed uint16 OME-TIFFs, the experimental
+`eval_whole_slide_image_global_normalization(...)` method calculates one fixed
+percentile transform per selected source channel, then applies those bounds to
+every inference tile. It reads one complete channel at a time during the
+normalization prepass, selects `channel_ids` before each spatial tile is converted
+to float32, and writes model-resolution labels to Zarr. Completely zero native
+TIFF tiles in the chosen reference channel are excluded from the percentile
+histograms; acquired tiles retain all pixels, including zeros.
 
 ### Model versioning (Ignore)
 

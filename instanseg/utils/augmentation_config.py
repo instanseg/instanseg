@@ -1,6 +1,26 @@
 import collections
 
-def get_augmentation_dict(dim_in,nuclei_channel,amount,pixel_size=0.5, augmentation_type="minimal", mean_diameter = None):
+def _validate_dataset_channel_drop_probabilities(dataset_channel_drop_probabilities):
+    if dataset_channel_drop_probabilities is None:
+        return None
+    if not isinstance(dataset_channel_drop_probabilities, dict):
+        raise ValueError("dataset_channel_drop_probabilities must be a dictionary")
+
+    validated = {}
+    for dataset, probability in dataset_channel_drop_probabilities.items():
+        if not isinstance(dataset, str):
+            raise ValueError("dataset_channel_drop_probabilities keys must be strings")
+        if isinstance(probability, bool) or not isinstance(probability, (int, float)):
+            raise ValueError(f"Channel drop probability for {dataset!r} must be numeric")
+        if not 0 <= probability <= 1:
+            raise ValueError(f"Channel drop probability for {dataset!r} must be between 0 and 1")
+        validated[dataset] = float(probability)
+
+    return validated
+
+
+def get_augmentation_dict(dim_in,nuclei_channel,amount,pixel_size=0.5, augmentation_type="minimal", mean_diameter = None,
+                          dataset_channel_drop_probabilities=None):
 
     """
     This function returns the augmentation dictionary for the training and test sets.
@@ -18,6 +38,9 @@ def get_augmentation_dict(dim_in,nuclei_channel,amount,pixel_size=0.5, augmentat
     """
 
     channel_invariance = (dim_in is None or dim_in <= 0)
+    dataset_channel_drop_probabilities = _validate_dataset_channel_drop_probabilities(
+        dataset_channel_drop_probabilities
+    )
 
     if mean_diameter is not None:
          mean_diameter_heavy = (mean_diameter,2**(-2),2**(2))
@@ -62,6 +85,11 @@ def get_augmentation_dict(dim_in,nuclei_channel,amount,pixel_size=0.5, augmentat
                 ])
             }
         }
+
+        if dataset_channel_drop_probabilities is not None:
+            augmentation_dict["train"]["Fluorescence"]["channel_suppress"] = [
+                1, dataset_channel_drop_probabilities
+            ]
 
 
     elif augmentation_type == "kornia_intensity":
@@ -148,7 +176,8 @@ def get_augmentation_dict(dim_in,nuclei_channel,amount,pixel_size=0.5, augmentat
                     ("RandGaussianNoise", [0.1, amount]),
                     ("HistogramNormalize", [0.1, amount]),
                     ("add_noisy_channels", [0.3, 5]),#Probability/ max total channels
-                    ("channel_suppress", [1, 0.3]),  #proba, supression_factor
+                    ("channel_suppress", [1, dataset_channel_drop_probabilities
+                                           if dataset_channel_drop_probabilities is not None else 0.3]),
                 ]) 
             },
             "test": {
@@ -613,6 +642,5 @@ markers_info_gpt = {
         "Application": "N/A"
     }
 }
-
 
 
