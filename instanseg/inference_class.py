@@ -1001,14 +1001,20 @@ class InstanSeg():
         output_path: Optional[Union[str, Path]] = None,
         overwrite: bool = False,
         save_geojson: bool = False,
+        batch_size: int = 1,
         **kwargs,
     ) -> Path:
         """Evaluate a WSI with one fixed normalization transform per source channel.
 
         Global normalization is calculated from complete acquired TIFF tiles while
         reading only one full uint16 channel at a time. Spatial inference still uses
-        bounded regions. All source channels are read for each region, but
-        ``channel_ids`` are selected before conversion to float32.
+        bounded regions. For CYX OME-TIFF pyramids, only ``channel_ids`` are
+        read for each region. Unsupported layouts use the existing TiffSlide
+        region reader. Selected channels are converted to float32 only after
+        the region has been subset.
+
+        Up to ``batch_size`` normalized regions are sent through the same
+        model-facing inference steps together; stitching remains sequential.
 
         The returned Zarr remains at the model pixel size, matching
         :meth:`eval_whole_slide_image`. Nuclear and cell planes are stitched with
@@ -1029,6 +1035,11 @@ class InstanSeg():
             raise ValueError(
                 "Tile-local normalization is disabled for global-normalized WSI inference."
             )
+        if isinstance(batch_size, bool) or not isinstance(batch_size, (int, np.integer)):
+            raise ValueError("batch_size must be a positive integer.")
+        batch_size = int(batch_size)
+        if batch_size < 1:
+            raise ValueError("batch_size must be a positive integer.")
         channel_ids = [int(value) for value in channel_ids]
         if not channel_ids or len(channel_ids) != len(set(channel_ids)):
             raise ValueError("channel_ids must be a nonempty list of unique indices.")
@@ -1132,39 +1143,115 @@ class InstanSeg():
             round(shape[1] / intermediate_to_final),
         )
 
-        total = len(chop_list[0]) * len(chop_list[1])
-        positions = product(enumerate(chop_list[0]), enumerate(chop_list[1]))
-        for (i, window_i), (j, window_j) in tqdm(
-            positions,
-            total=total,
-            colour="green",
-            desc="Slide progress: ",
-            disable=not self.verbose,
-        ):
-            input_data = slide.read_region(
-                (round(window_j * scale_factor), round(window_i * scale_factor)),
-                best_level,
-                (int(intermediate_shape[1]), int(intermediate_shape[0])),
-                as_array=True,
-            )
-            input_tensor = _normalise_selected_wsi_tile(
-                input_data,
-                channel_ids,
-                normalization["bounds"],
-            )
-            new_tile = self.eval_small_image(
-                input_tensor,
-                pixel_size=intermediate_pixel_size,
-                return_image_tensor=False,
-                rescale_output=False,
-                normalise=False,
-                **kwargs,
-            )
-            if new_tile.shape[-2:] != shape:
-                new_tile = interpolate(new_tile, size=shape, mode="nearest").int()[0]
-            new_tile = _to_ndim(new_tile, 3)
+        # TiffSlide remains authoritative for level selection, level dimensions,
+        # and base-level coordinate conversion. The tifffile/Zarr path is used
+        # only when the selected pyramid level is a simple CYX array.
+        import tifffile
 
-            for n in range(new_tile.shape[0]):
+        tiff_handle = None
+        zarr_store = None
+        source = None
+        try:
+            tiff_handle = tifffile.TiffFile(str(image_path))
+            try:
+                series = tiff_handle.series[0]
+                level = series.levels[best_level]
+                level_axes = getattr(level, "axes", None) or getattr(series, "axes", None)
+                level_width, level_height = slide.level_dimensions[best_level]
+
+                if level_axes == "CYX":
+                    zarr_store = series.aszarr(level=best_level)
+                    candidate = zarr.open(zarr_store, mode="r")
+                    candidate_shape = tuple(getattr(candidate, "shape", ()))
+                    if (
+                        getattr(candidate, "ndim", None) == 3
+                        and hasattr(candidate, "oindex")
+                        and candidate_shape[1:] == (level_height, level_width)
+                    ):
+                        source = candidate
+                    else:
+                        zarr_store.close()
+                        zarr_store = None
+            except (AttributeError, IndexError, KeyError, NotImplementedError, TypeError, ValueError):
+                # An unusual TIFF layout or unavailable Zarr representation is
+                # handled by the established TiffSlide path below.
+                if zarr_store is not None:
+                    zarr_store.close()
+                    zarr_store = None
+                source = None
+
+            def read_selected_region(location, size):
+                """Return one selected region as CYX, including TiffSlide padding."""
+                if source is None:
+                    region = slide.read_region(
+                        location,
+                        best_level,
+                        size,
+                        as_array=True,
+                    )
+                    return np.moveaxis(region[..., channel_ids], -1, 0)
+
+                base_x, base_y = map(int, location)
+                region_width, region_height = map(int, size)
+                # TiffSlide owns the level-zero-to-pyramid coordinate
+                # conversion. Keep the arithmetic fallback for test doubles
+                # and alternate compatible slide wrappers.
+                coordinate_transform = getattr(
+                    slide, "_read_region_loc_transform", None
+                )
+                if coordinate_transform is not None:
+                    read_x0, read_y0 = coordinate_transform(
+                        (base_x, base_y), best_level
+                    )
+                else:
+                    read_x0 = int(base_x / downsample_factor)
+                    read_y0 = int(base_y / downsample_factor)
+                read_x1 = read_x0 + region_width
+                read_y1 = read_y0 + region_height
+
+                in_bound = (
+                    0 <= read_x0
+                    and read_x1 <= level_width
+                    and 0 <= read_y0
+                    and read_y1 <= level_height
+                )
+                if in_bound:
+                    pad_x0 = pad_x1 = pad_y0 = pad_y1 = 0
+                else:
+                    pad_x0 = min(max(-read_x0, 0), region_width)
+                    pad_x1 = min(max(read_x1 - level_width, 0), region_width)
+                    pad_y0 = min(max(-read_y0, 0), region_height)
+                    pad_y1 = min(max(read_y1 - level_height, 0), region_height)
+                    read_x0 = min(max(read_x0, 0), level_width)
+                    read_x1 = min(max(read_x1, 0), level_width)
+                    read_y0 = min(max(read_y0, 0), level_height)
+                    read_y1 = min(max(read_y1, 0), level_height)
+
+                selected = np.asarray(
+                    source.oindex[
+                        channel_ids,
+                        slice(read_y0, read_y1),
+                        slice(read_x0, read_x1),
+                    ]
+                )
+                if (pad_x0, pad_x1, pad_y0, pad_y1) != (0, 0, 0, 0):
+                    selected = np.pad(
+                        selected,
+                        ((0, 0), (pad_y0, pad_y1), (pad_x0, pad_x1)),
+                        mode="constant",
+                        constant_values=0,
+                    )
+                return selected
+
+            def stitch_prediction(position, prediction):
+                """Stitch one model prediction in the established tile order."""
+                (i, window_i), (j, window_j) = position
+                if prediction.shape[-2:] != shape:
+                    prediction = interpolate(
+                        prediction[None], size=shape, mode="nearest"
+                    ).int()[0]
+                prediction = _to_ndim(prediction, 3)
+
                 ignore_list, window_i_start, window_j_start, edge_window = (
                     _wsi_edge_metadata(
                         i,
@@ -1185,9 +1272,6 @@ class InstanSeg():
                         slice(window_i_start - window_i, shape[0]),
                         slice(window_j_start - window_j, shape[1]),
                     )
-                    tile2 = _remove_edge_labels(
-                        new_tile[n][tile_slice], ignore=ignore_list
-                    )
                 else:
                     canvas_slice = (
                         slice(window_i + pad, window_i + shape[0] - pad),
@@ -1197,17 +1281,115 @@ class InstanSeg():
                         slice(pad, shape[0] - pad),
                         slice(pad, shape[1] - pad),
                     )
-                    tile2 = _remove_edge_labels(new_tile[n][tile_slice])
 
-                tile2 = torch_fastremap(tile2)
-                tile2[tile2 > 0] += running_max[n]
-                tile1_torch = torch.tensor(
-                    np.array(canvas[(n, *canvas_slice)]), dtype=torch.int32
+                for n in range(prediction.shape[0]):
+                    tile2 = _remove_edge_labels(
+                        prediction[n][tile_slice], ignore=ignore_list
+                    )
+                    tile2 = torch_fastremap(tile2)
+                    tile2[tile2 > 0] += running_max[n]
+                    tile1_torch = torch.tensor(
+                        np.array(canvas[(n, *canvas_slice)]), dtype=torch.int32
+                    )
+                    remapped = match_labels(tile1_torch, tile2, threshold=0.1)[1]
+                    tile1_torch[remapped > 0] = remapped[remapped > 0].int()
+                    running_max[n] = max(running_max[n], int(tile1_torch.max()))
+                    canvas[(n, *canvas_slice)] = tile1_torch.numpy().astype(np.int32)
+
+            pending_inputs = []
+            pending_positions = []
+
+            def flush_pending():
+                if not pending_inputs:
+                    return
+                # Preserve the existing rank-3 call for the default batch size.
+                if batch_size == 1:
+                    predictions = self.eval_small_image(
+                        pending_inputs[0],
+                        pixel_size=intermediate_pixel_size,
+                        return_image_tensor=False,
+                        rescale_output=False,
+                        normalise=False,
+                        **kwargs,
+                    )
+                else:
+                    # eval_small_image currently accepts only rank-2/3 input
+                    # through _to_tensor_float32. Reproduce its model-facing
+                    # steps here for the explicitly batched path without
+                    # changing that public method or the native WSI path.
+                    from instanseg.utils.utils import _filter_kwargs
+
+                    # Apply the same rank-3 input canonicalization that
+                    # eval_small_image() applies before adding the batch axis.
+                    model_input = torch.stack(
+                        [_to_tensor_float32(input_tile) for input_tile in pending_inputs]
+                    )
+                    model_input = _rescale_to_pixel_size(
+                        model_input,
+                        intermediate_pixel_size,
+                        instanseg.pixel_size,
+                    ).to(self.inference_device)
+                    target = kwargs.get("target", "all_outputs")
+                    if target != "all_outputs" and instanseg.cells_and_nuclei:
+                        assert target in ["nuclei", "cells"], (
+                            "Target must be 'nuclei', 'cells' or 'all_outputs'."
+                        )
+                        if target == "nuclei":
+                            target_segmentation = torch.tensor([1, 0])
+                        elif target == "cells":
+                            target_segmentation = torch.tensor([0, 1])
+                    else:
+                        target_segmentation = torch.tensor([1, 1])
+
+                    instanseg_kwargs = _filter_kwargs(instanseg, kwargs)
+                    instanseg_kwargs["target_segmentation"] = target_segmentation
+                    with torch.amp.autocast("cuda"):
+                        predictions = instanseg(model_input, **instanseg_kwargs)
+                    predictions = predictions.cpu()
+                predictions = _to_ndim(predictions, 4)
+                if predictions.shape[0] != len(pending_positions):
+                    raise ValueError(
+                        "Whole-slide inference returned a different number of "
+                        "predictions than input regions."
+                    )
+                for position, prediction in zip(pending_positions, predictions):
+                    stitch_prediction(position, prediction)
+                pending_inputs.clear()
+                pending_positions.clear()
+
+            total = len(chop_list[0]) * len(chop_list[1])
+            positions = product(enumerate(chop_list[0]), enumerate(chop_list[1]))
+            for (i, window_i), (j, window_j) in tqdm(
+                positions,
+                total=total,
+                colour="green",
+                desc="Slide progress: ",
+                disable=not self.verbose,
+            ):
+                input_data = read_selected_region(
+                    (round(window_j * scale_factor), round(window_i * scale_factor)),
+                    (int(intermediate_shape[1]), int(intermediate_shape[0])),
                 )
-                remapped = match_labels(tile1_torch, tile2, threshold=0.1)[1]
-                tile1_torch[remapped > 0] = remapped[remapped > 0].int()
-                running_max[n] = max(running_max[n], int(tile1_torch.max()))
-                canvas[(n, *canvas_slice)] = tile1_torch.numpy().astype(np.int32)
+                # The existing normalizer operates on HWC input. Transposing
+                # here retains its exact fixed-bound arithmetic while ensuring
+                # that only the selected CYX channels were converted to float32.
+                input_tensor = _normalise_selected_wsi_tile(
+                    np.moveaxis(input_data, 0, -1),
+                    list(range(len(channel_ids))),
+                    normalization["bounds"],
+                )
+                pending_inputs.append(input_tensor)
+                pending_positions.append(((i, window_i), (j, window_j)))
+                if len(pending_inputs) == batch_size:
+                    flush_pending()
+            flush_pending()
+        finally:
+            try:
+                if zarr_store is not None:
+                    zarr_store.close()
+            finally:
+                if tiff_handle is not None:
+                    tiff_handle.close()
 
         canvas.attrs["status"] = "complete"
         canvas.attrs["max_label_by_plane"] = running_max
