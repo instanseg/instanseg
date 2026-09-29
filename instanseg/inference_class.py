@@ -96,6 +96,7 @@ class InstanSeg():
     def read_image(self, image_str: str, processing_method = "auto") -> Union[Tuple[str, float], Tuple[np.ndarray, float]]:
         """
         Read an image file from disk.
+
         :param image_str: The path to the image.
         :param processing_method: The processing method to use. Options are "auto", "small", "medium", "wsi". If "auto", the method will be chosen based on the size of the image.
         :return: The image array if it can be safely read (or the path to the image if it cannot) and the pixel size in microns.
@@ -189,6 +190,7 @@ class InstanSeg():
     def read_pixel_size(self,image_str: str) -> float:
         """
         Read the pixel size from an image on disk.
+
         :param image_str: The path to the image.
         :return: The pixel size in microns.
         """
@@ -243,6 +245,7 @@ class InstanSeg():
     def read_slide(self, image_str: str):
         """
         Read a whole slide image from disk.
+
         :param image_str: The path to the image.
         """
         if self.prefered_image_reader == "tiffslide":
@@ -286,13 +289,14 @@ class InstanSeg():
              **kwargs) -> Union[torch.Tensor, List[torch.Tensor], None]:
         """
         Evaluate the input image or list of images using the InstanSeg model.
+
         :param image: The path to the image, or a list of such paths.
         :param pixel_size: The pixel size in microns.
-        :param save_output: Controls whether the output is saved to disk (see :func:`save_output <instanseg.Instanseg.save_output>`).
-        :param save_overlay: Controls whether the output is saved to disk as an overlay (see :func:`save_output <instanseg.Instanseg.save_output>`).
-        :param save_geojson: Controls whether the geojson output labels are saved to disk (see :func:`save_output <instanseg.Instanseg.save_output>`).
+        :param save_output: Controls whether the output is saved to disk (see :meth:`save_output`).
+        :param save_overlay: Controls whether the output is saved to disk as an overlay (see :meth:`save_output`).
+        :param save_geojson: Controls whether the geojson output labels are saved to disk (see :meth:`save_output`).
         :param processing_method: The processing method to use. Options are "auto", "small", "medium", "wsi". If "auto", the method will be chosen based on the size of the image.
-        :param kwargs: Passed to other eval methods, eg :func:`save_output <instanseg.Instanseg.eval_small_image>`, :func:`save_output <instanseg.Instanseg.eval_medium_image>`, :func:`save_output <instanseg.Instanseg.eval_whole_slide_image>` 
+        :param kwargs: Passed to other eval methods, e.g. :meth:`eval_small_image`, :meth:`eval_medium_image` or :meth:`eval_whole_slide_image`.
         :return: A torch.Tensor of outputs if the input is a path to a single image, or a list of such outputs if the input is a list of paths, or None if the input is a whole slide image.
         """
 
@@ -368,6 +372,7 @@ class InstanSeg():
                     save_geojson = False) -> None:
         """
         Save the output of InstanSeg to disk.
+
         :param image_path: The path to the image, and where outputs will be saved.
         :param labels: The output labels.
         :param image_array: The image in array format. Required to save overlay.
@@ -437,7 +442,7 @@ class InstanSeg():
         """
         Evaluate a small input image using the InstanSeg model.
         
-        :param image:: The input image(s) to be evaluated.
+        :param image: The input image(s) to be evaluated.
         :param pixel_size: The pixel size of the image, in microns. If not provided, it will be read from the image metadata.
         :param normalise: Controls whether the image is normalised.
         :param return_image_tensor: Controls whether the input image is returned as part of the output.
@@ -516,7 +521,7 @@ class InstanSeg():
         """
         Evaluate a medium input image using the InstanSeg model. The image will be split into tiles, and then inference and object merging will be handled internally.
         
-        :param image:: The input image(s) to be evaluated.
+        :param image: The input image(s) to be evaluated.
         :param pixel_size: The pixel size of the image, in microns. If not provided, it will be read from the image metadata.
         :param normalise: Controls whether the image is normalised.
         :param tile_size: The width/height of the tiles that the image will be split into.
@@ -624,7 +629,7 @@ class InstanSeg():
             :param pixel_size: The pixel size of the image, in microns. If not provided, it will be read from the image metadata.
             :param normalise: Controls whether the image is normalised.
             :param tile_size: The width/height of the tiles that the image will be split into.
-            :param overlap: The overlap (in pixels) betwene tiles.
+            :param overlap: The overlap (in pixels) between tiles.
             :param detection_size: The expected maximum size of detection objects.
             :param batch_size: The number of tiles to be run simultaneously.
             :param normalisation_subsampling_factor: The subsampling or downsample factor at which to calculate normalisation parameters.
@@ -809,8 +814,9 @@ class InstanSeg():
                 instances: torch.Tensor,
                 normalise: bool = True) -> np.ndarray:
         """
-        Save the output of an InstanSeg model overlaid on the input.
-        See :func:`save_image_with_label_overlay <instanseg.utils.save_image_with_label_overlay>` for more details and return types.
+        Return the output of an InstanSeg model overlaid on the input.
+        See :func:`~instanseg.utils.visualization.save_image_with_label_overlay` for more details and return types.
+
         :param image: The input image.
         :param instances: The output labels.
         """

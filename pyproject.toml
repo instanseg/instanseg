@@ -29,6 +29,17 @@ dependencies = [
     "requests>=2.0.0",
 ]
 
+[dependency-groups]
+# Docs are built from source with sphinx-autoapi, so the package itself isn't installed
+doc = [
+    "sphinx~=7.4.5",
+    "sphinx-autoapi~=3.6",
+    "furo>=2024.8.6",
+    "myst-parser>=3.0",
+    "sphinx-copybutton~=0.5",
+    "sphinx-design~=0.6",
+]
+
 [project.scripts]
 inference = "instanseg.scripts.inference:main"
 
@@ -48,10 +59,6 @@ io = [
     "tifffile>=2023.9.0,<2025.5.21; python_version<'3.12'",
     "tiffslide>=2.4.0,<4; python_version<'3.12'",
     "zarr>=2.16.0,<3; python_version<'3.12'",
-]
-doc = [
-    "sphinx~=7.4.5",
-    "sphinx-rtd-theme~=2.0.0",
 ]
 test = [
     "instanseg-torch[io]",

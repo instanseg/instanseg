@@ -46,8 +46,8 @@ def labels_to_features(lab: np.ndarray,
     :param classification: Optional classification added to output features.
     :param offset: Offset added to x coordinates of output features.
     :return: A GeoJSON FeatureCollection.
-    
-    Note: Requires 'rasterio' and 'geojson' packages. Install with: pip install instanseg-torch[io]
+
+    .. note:: Requires the ``rasterio`` and ``geojson`` packages. Install with ``pip install instanseg-torch[io]``.
     """
     try:
         import geojson
@@ -214,7 +214,8 @@ def _choose_device(device: str = None, verbose=True) -> str:
 
 def count_instances(labels: Union[np.ndarray, torch.Tensor]) -> int:
     """
-    Count the total number of labelled pixels in an input tensor.
+    Count the number of distinct non-zero labels (objects) in an input tensor.
+
     :param labels: The input tensor.
     :return: The total number of non-zero labels.
     """
