@@ -22,10 +22,11 @@ jobs:
       - name: Set up uv
         uses: astral-sh/setup-uv@v6
 
-      # sphinx-autoapi reads the source without importing it, so only the doc group is needed
+      # sphinx-autoapi reads the source without importing it, so only the doc group is needed.
+      # The doctree cache goes outside the published folder so it isn't deployed.
       - name: Build docs
         run: |
-          uv run --isolated --only-group doc --python 3.12 sphinx-build docs/ docs/build/html
+          uv run --isolated --only-group doc --python 3.12 sphinx-build -d docs/build/doctrees docs/ docs/build/html
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
