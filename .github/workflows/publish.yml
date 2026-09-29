@@ -1,28 +1,74 @@
-name: Publish to PyPI
+name: Release and publish to PyPI
+
+# Runs after the test workflow succeeds on main. If the version in pyproject.toml
+# has no matching v<version> tag yet, builds the package, uploads it to PyPI, and
+# creates a GitHub release with that tag. Pushes that don't bump the version are no-ops,
+# and model-weight releases (instanseg_models_*) no longer trigger a PyPI upload.
 
 on:
-  release:
-    types: [published]
+  workflow_run:
+    workflows: ["Python package"]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
 
 jobs:
-  build-and-publish:
+  release:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')
     runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
     steps:
-      - name: Check out repository
+      - name: Check out tested commit
         uses: actions/checkout@v4
+        with:
+          ref: ${{ env.SHA }}
 
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.10"
+          python-version: "3.12"
 
-      - name: Install build dependencies
-        run: pip install build
+      - name: Read version and check for existing tag
+        id: version
+        run: |
+          VERSION=$(python -c "import tomllib; print(tomllib.load(open('pyproject.toml', 'rb'))['project']['version'])")
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          if git ls-remote --exit-code --tags origin "refs/tags/v$VERSION" > /dev/null; then
+            echo "Tag v$VERSION already exists, nothing to release."
+            echo "release=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "New version v$VERSION, releasing."
+            echo "release=true" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Build package
-        run: python -m build
+        if: steps.version.outputs.release == 'true'
+        run: |
+          pip install build
+          python -m build
 
       - name: Publish to PyPI
+        if: steps.version.outputs.release == 'true'
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           password: ${{ secrets.PYPI_API_TOKEN }}
+          skip-existing: true # lets a failed run be re-run after PyPI succeeded
+
+      - name: Create GitHub release
+        if: steps.version.outputs.release == 'true'
+        run: |
+          gh release create "v${{ steps.version.outputs.version }}" dist/* \
+            --target "$SHA" \
+            --title "instanseg-torch release v${{ steps.version.outputs.version }}" \
+            --generate-notes
