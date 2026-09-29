@@ -9,7 +9,7 @@ model loading, and device management.
 import json
 import os
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Optional, Union
+from typing import TYPE_CHECKING, Any, List, Optional, Union
 import fastremap
 import numpy as np
 import torch
@@ -123,6 +123,25 @@ def _move_channel_axis(img: Union[np.ndarray, torch.Tensor], to_back: bool = Fal
         return img.movedim(ch, 0)
 
 
+def _torch_quantiles(x: torch.Tensor, qs: List[float]) -> List[torch.Tensor]:
+    """
+    Linearly interpolated quantiles (matching ``torch.quantile`` / ``np.percentile`` defaults).
+
+    Uses ``torch.sort`` rather than ``torch.quantile``, which raises on CUDA for inputs
+    with more than 2**24 elements on older PyTorch versions (see issue #146).
+    """
+    sorted_x = torch.sort(x.flatten()).values
+    n = sorted_x.numel()
+
+    def _interp(q: float) -> torch.Tensor:
+        index = (n - 1) * q
+        lower = int(index)
+        upper = min(lower + 1, n - 1)
+        return sorted_x[lower] + (index - lower) * (sorted_x[upper] - sorted_x[lower])
+
+    return [_interp(q) for q in qs]
+
+
 def percentile_normalize(img: Union[np.ndarray, torch.Tensor],
                          percentile: float = 0.1,
                          subsampling_factor: int = 1,
@@ -148,9 +167,7 @@ def percentile_normalize(img: Union[np.ndarray, torch.Tensor],
         for c in range(img.shape[-1]):
             im_temp = img[::subsampling_factor, ::subsampling_factor, c]
             if img.is_cuda or img.is_mps:
-                (p_min, p_max) = torch.quantile(im_temp,
-                                                torch.tensor([percentile / 100, (100 - percentile) / 100],
-                                                             device=im_temp.device))
+                (p_min, p_max) = _torch_quantiles(im_temp, [percentile / 100, (100 - percentile) / 100])
             else:
                 (p_min, p_max) = np.percentile(im_temp.cpu(), [percentile, 100 - percentile])
             img[:, :, c] = (img[:, :, c] - p_min) / max(epsilon, p_max - p_min)

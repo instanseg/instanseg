@@ -185,13 +185,16 @@ def _robust_average_precision(labels, predicted, threshold):
 
     for i in range(len(labels)):
         if labels[i].min() < 0 and not (labels[i] < 0).all():
-            labels[i][labels[i] < 0] = 0 #sparse labels
-            predicted[i][labels[i] < 0] = 0 
+            unlabelled = labels[i] < 0 #sparse labels
+            labels[i][unlabelled] = 0
+            predicted[i][unlabelled] = 0
 
 
     if labels[0].shape[0] != 2: #cells or nuclei
-        labels = [labels[i].detach().cpu().numpy().astype(np.int32) for i, l in enumerate(labels) if labels[i].min() >= 0 and labels[i].max() > 0]
-        predicted = [predicted[i].detach().cpu().numpy().astype(np.int32) for i, l in enumerate(labels) if labels[i].min() >= 0 and labels[i].max() > 0]
+        # Filter both lists with the same indices so labels and predictions stay paired.
+        keep = [i for i in range(len(labels)) if labels[i].min() >= 0 and labels[i].max() > 0]
+        labels = [labels[i].detach().cpu().numpy().astype(np.int32) for i in keep]
+        predicted = [predicted[i].detach().cpu().numpy().astype(np.int32) for i in keep]
 
         if len(labels)==0:
             return np.nan

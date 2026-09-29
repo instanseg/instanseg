@@ -246,6 +246,7 @@ class InstanSeg():
         :param image_str: The path to the image.
         """
         if self.prefered_image_reader == "tiffslide":
+            from tiffslide import TiffSlide
             slide = TiffSlide(image_str)
         # elif self.prefered_image_reader == "AICSImageIO":
         #     from aicsimageio import AICSImage
@@ -445,6 +446,7 @@ class InstanSeg():
         :param kwargs: Passed to pytorch.
         
         :return: A tensor corresponding to the output targets specified, as well as the input image if requested.
+            Tensors are returned on the device they were computed on (``self.inference_device`` for small images); call ``.cpu()`` if host memory is needed.
         """
         from instanseg.utils.utils import percentile_normalize, _filter_kwargs
 
@@ -496,9 +498,9 @@ class InstanSeg():
                 image = interpolate(image, size=original_shape[-2:], mode="bilinear")
 
         if return_image_tensor:
-            return instances.cpu(), image.cpu()
+            return instances, image
         else:
-            return instances.cpu()
+            return instances
 
     def eval_medium_image(self,
                           image: torch.Tensor, 
@@ -526,6 +528,7 @@ class InstanSeg():
         :param kwargs: Passed to pytorch.
         
         :return: A tensor corresponding to the output targets specified, as well as the input image if requested.
+            Tensors are returned on the device they were computed on (``self.inference_device`` for small images); call ``.cpu()`` if host memory is needed.
         """
 
         from instanseg.utils.utils import percentile_normalize, _filter_kwargs
@@ -598,9 +601,9 @@ class InstanSeg():
         image = _to_ndim(image, original_ndim)
 
         if return_image_tensor:
-            return instances.cpu(), image.cpu()
+            return instances, image
         else:
-            return instances.cpu()
+            return instances
 
         
     def eval_whole_slide_image(self,
@@ -683,8 +686,8 @@ class InstanSeg():
                 valid_positions = np.ones((len(chop_list[0])* len(chop_list[1])))
 
             chunk_shape = (n_dim,shape[0],shape[1])
-            store = zarr.DirectoryStore(file_with_zarr_extension) 
-            canvas = zarr.zeros((n_dim,dims[0],dims[1]), chunks=chunk_shape, dtype=np.int32, store=store, overwrite = True)
+            # zarr.open with mode="w" works on both zarr v2 and v3 (DirectoryStore was removed in v3).
+            canvas = zarr.open(str(file_with_zarr_extension), mode="w", shape=(n_dim,dims[0],dims[1]), chunks=chunk_shape, dtype=np.int32, fill_value=0)
 
             running_max = 0
 
@@ -718,7 +721,7 @@ class InstanSeg():
                                                   return_image_tensor= False,
                                                   rescale_output=False,
                                                   normalise = normalise,
-                                                    **kwargs)
+                                                    **kwargs).cpu()
                                 
                 if new_tile.shape[-2:] != shape: #this only happens when the pixel size is close but not exactly the model pixel size.
                #     print(new_tile.shape, shape[-2:])
