@@ -1,27 +1,49 @@
+name: Docs
+
 on:
+  push:
+    branches:
+      - main
+  pull_request:
   workflow_dispatch:
 
+# Only one deployment at a time; don't cancel a deployment that's in progress
+concurrency:
+  group: pages-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
-  docs:
+  build:
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
 
-      - name: Set up python
-        id: setup-python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.10"
-      - name: Install
-        run: |
-          pip install .[full,test,doc]
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v6
+
+      # sphinx-autoapi reads the source without importing it, so only the doc group is needed.
+      # The doctree cache goes outside the published folder so it isn't deployed.
       - name: Build docs
         run: |
-          sphinx-build docs/ docs/build/html
-      - name: Deploy
-        uses: peaceiris/actions-gh-pages@v3
-        if: github.ref == 'refs/heads/main'
+          uv run --isolated --only-group doc --python 3.12 sphinx-build -d docs/build/doctrees docs/ docs/build/html
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: docs/build/html
+          path: docs/build/html
+
+  deploy:
+    needs: build
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

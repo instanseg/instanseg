@@ -1,0 +1,4 @@
+/* Keep the sidebar logo from dominating the navigation */
+.sidebar-logo {
+  max-width: 55%;
+}
