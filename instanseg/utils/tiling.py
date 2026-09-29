@@ -266,12 +266,14 @@ def _zarr_to_json_export(path_to_zarr, detection_size = 30, size = 1024, scale =
   
 
             if len(features) > 0:
-                count+=1
                 geojson = json.dumps(features)
 
                 with open(os.path.join( output_path), "a") as outfile:
-                    outfile.write(geojson[1:-1] + ",")
-                    outfile.write('\n')
+                    # Separate batches with commas, without a trailing comma after the last one.
+                    if count > 0:
+                        outfile.write(',\n')
+                    outfile.write(geojson[1:-1])
+                count+=1
 
     with open(os.path.join( output_path), "a") as outfile:
         outfile.write(']')

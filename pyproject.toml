@@ -40,9 +40,14 @@ io = [
     "geojson>=3.0.0",
     "rasterio>=1.3.0",
     "slideio>=2.6.0",
-    "tifffile>=2023.9.0",
-    "tiffslide>=2.4.0",
-    "zarr>=2.0.0,<3",  # tiffslide doesn't support zarr v3 yet
+    # tiffslide>=4 moved to zarr v3, which (with matching tifffile releases) needs Python>=3.12.
+    # Older Pythons keep the zarr v2 stack; tifffile>=2025.5.21 dropped the zarr v2 API tiffslide<4 uses.
+    "tifffile>=2026.5.2; python_version>='3.12'",
+    "tiffslide>=4.0.0; python_version>='3.12'",
+    "zarr>=3.2,<4; python_version>='3.12'",
+    "tifffile>=2023.9.0,<2025.5.21; python_version<'3.12'",
+    "tiffslide>=2.4.0,<4; python_version<'3.12'",
+    "zarr>=2.16.0,<3; python_version<'3.12'",
 ]
 doc = [
     "sphinx~=7.4.5",
