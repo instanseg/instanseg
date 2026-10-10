@@ -263,11 +263,13 @@ def fast_dual_iou(onehot1: torch.Tensor, onehot2: torch.Tensor) -> torch.Tensor:
     return (intersection / union)[:C1, :C2]
 
 
-def torch_sparse_onehot(x: torch.Tensor, flatten: bool = False) -> Tuple[torch.Tensor, torch.Tensor]:
+def torch_sparse_onehot(x: torch.Tensor, flatten: bool = False, max: int = -1) -> Tuple[torch.Tensor, torch.Tensor]:
     # x is a labeled image of shape _,_,H,W returns a sparse tensor of shape C,H,W
     unique_values = torch.unique(x, sorted=True)
-    x = torch_fastremap(x)
-
+    if max == -1:
+        x = torch_fastremap(x)
+        max = x.max().int().item()
+        
     H, W = x.shape[-2], x.shape[-1]
 
 
@@ -280,7 +282,7 @@ def torch_sparse_onehot(x: torch.Tensor, flatten: bool = False) -> Tuple[torch.T
         x = x.reshape(H * W)
         xxyy = torch.nonzero(x > 0).squeeze(1)
         zz = x[xxyy] - 1
-        C = x.max().int().item()
+        C = max
 
        # print(C, H, W, type(C), type(H), type(W))
         sparse_onehot = torch.sparse_coo_tensor(torch.stack((zz, xxyy)).long(), (torch.ones_like(xxyy).float()),
